@@ -252,8 +252,9 @@ Rodar etapa final de seleção/otimização (GA + walk-forward) e gerar relatór
 - `ga_return_1y`, `ga_mdd_1y`, `ga_sharpe_1y`, `ga_trades_1y`, `ga_exposure_1y`
 - `buyhold_return_1y`
 - `test_return`, `test_mdd`, `test_sharpe`, `test_n_trades`
-- `next_day_filled`
-- `limit_price_next_day`, `best_buy_value`, `best_sell_value`, `entry_ref_price`
+- `next_day_filled`, `next_day_filled_buy`, `next_day_filled_sell`
+- `projected_buy_limit`, `projected_sell_limit`, `limit_price_next_day`
+- `best_buy_value`, `best_sell_value`, `entry_ref_price`
 - `stop_abs`, `take_abs`, `stop_pct`, `take_pct`
 - `buy_entry`, `buy_stop`, `buy_take`
 - `sell_entry`, `sell_stop`, `sell_take`
