@@ -2,6 +2,25 @@
 
 Este repositório contém notebooks que devem ser executados **em ordem** para gerar os artefatos finais.
 
+
+## Testes automatizados (GitHub Actions)
+
+Foi adicionada uma pipeline de testes em `.github/workflows/test.yml` focada em validar apenas o notebook `GA_stock.ipynb`:
+- existência do arquivo;
+- estrutura básica de notebook (`nbformat`, `cells`);
+- presença de pelo menos uma célula de código.
+- contrato de I/O do GA: simulação de leitura do `history_consolidated.csv` (schema mínimo) e geração dos arquivos de saída (`.xlsx` e `.csv`) em diretório temporário.
+- se existir `history_consolidated.csv` na raiz do repositório, o teste também valida o schema mínimo real do arquivo.
+- para evitar versionar arquivo grande (ex.: 165MB), o workflow aceita `secrets.HISTORY_CSV_URL` e baixa o CSV em tempo de execução do GitHub Actions.
+
+Para rodar localmente:
+
+```bash
+python -m unittest discover -s tests -p "test_*.py" -v
+```
+
+---
+
 ## Ordem obrigatória de execução
 
 1. **stock** → `Copy_of_STOCK_ETL_v2.ipynb`
