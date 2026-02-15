@@ -34,6 +34,9 @@ class TestGANotebook(unittest.TestCase):
         code_cells = [c for c in self.nb_data.get("cells", []) if c.get("cell_type") == "code"]
         self.assertGreater(len(code_cells), 0, f"Notebook sem células de código: {GA_NOTEBOOK}")
 
+    def test_ga_notebook_has_window_aggregation_helper(self):
+        self.assertIn("def aggregate_window_stats(stats_list", self.code_source)
+
     def test_ga_notebook_declares_input_output_paths(self):
         self.assertIn('HISTORY_CSV_PATH = "/content/drive/MyDrive/history_consolidated.csv"', self.code_source)
         self.assertIn('OUTPUT_DIR       = "/content/drive/MyDrive/"', self.code_source)
