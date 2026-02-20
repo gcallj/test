@@ -197,8 +197,7 @@ Consolidar REG + BIN + fundamentos e calcular score final de decisão.
 - Fundamentais (coletados no notebook).
 
 ### Arquivos gerados
-- `history_consolidated.csv`
-- `history_consolidated_parquet/` (dataset parquet particionado por ano)
+- `history_consolidated.parquet`
 
 ### Colunas do output consolidado (fixas: `FINAL_COLS`)
 - `Date`: data.
@@ -242,7 +241,7 @@ Consolidar REG + BIN + fundamentos e calcular score final de decisão.
 Rodar etapa final de seleção/otimização (GA + walk-forward) e gerar relatório/sinais.
 
 ### Input
-- `history_consolidated.csv` (usa `Date`, `ticker`, `price` e score, por padrão `EV_buy_fund_3`).
+- `history_consolidated.parquet` (usa `Date`, `ticker`, `price` e score, por padrão `EV_buy_fund_3`).
 
 ### Arquivos gerados e colunas
 
