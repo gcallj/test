@@ -128,6 +128,7 @@ class TestFinalNotebook(unittest.TestCase):
     def test_final_notebook_generates_parquet_output(self):
         self.assertIn('OUT_HIST_PARQUET = Path("/content/drive/MyDrive/history_consolidated.parquet")', self.code_source)
         self.assertIn("pq.ParquetWriter", self.code_source)
+        self.assertIn('out["split"] = out["split"].astype("string").fillna("" )'.replace(" ",""), self.code_source.replace(" ",""))
 
 
 if __name__ == "__main__":
