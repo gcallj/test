@@ -6,6 +6,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 GA_NOTEBOOK = "GA_stock.ipynb"
+FINAL_NOTEBOOK = "Final_stock_output.ipynb"
 REPO_HISTORY_CSV = ROOT / "history_consolidated.csv"
 REQUIRED_INPUT_COLS = {"Date", "ticker", "open", "high", "low", "close", "EV_buy_fund_3"}
 
@@ -38,7 +39,7 @@ class TestGANotebook(unittest.TestCase):
         self.assertIn("def aggregate_window_stats(stats_list", self.code_source)
 
     def test_ga_notebook_declares_input_output_paths(self):
-        self.assertIn('HISTORY_CSV_PATH = "/content/drive/MyDrive/history_consolidated.csv"', self.code_source)
+        self.assertIn('HISTORY_PARQUET_PATH = "/content/drive/MyDrive/history_consolidated.parquet"', self.code_source)
         self.assertIn('OUTPUT_DIR       = "/content/drive/MyDrive/"', self.code_source)
         self.assertIn("apply_PER_TICKER_WFGA_intraday__H{FWD_H}__APPLY{APPLY_DAYS}D__v2.xlsx", self.code_source)
         self.assertIn("apply_last_{APPLY_DAYS}d__H{FWD_H}__v2.csv", self.code_source)
@@ -111,6 +112,23 @@ class TestGANotebook(unittest.TestCase):
 
             self.assertTrue(out_xlsx.exists())
             self.assertTrue(out_apply_csv.exists())
+
+
+class TestFinalNotebook(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        with (ROOT / FINAL_NOTEBOOK).open("r", encoding="utf-8") as fp:
+            cls.nb_data = json.load(fp)
+        cls.code_source = "\n".join(
+            "".join(cell.get("source", []))
+            for cell in cls.nb_data.get("cells", [])
+            if cell.get("cell_type") == "code"
+        )
+
+    def test_final_notebook_generates_parquet_output(self):
+        self.assertIn('OUT_HIST_PARQUET = Path("/content/drive/MyDrive/history_consolidated.parquet")', self.code_source)
+        self.assertIn("pq.ParquetWriter", self.code_source)
+        self.assertIn('out["split"] = out["split"].astype("string").fillna("" )'.replace(" ",""), self.code_source.replace(" ",""))
 
 
 if __name__ == "__main__":
