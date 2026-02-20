@@ -128,6 +128,8 @@ class TestFinalNotebook(unittest.TestCase):
     def test_final_notebook_generates_parquet_output(self):
         self.assertIn('OUT_HIST_PARQUET = Path("/content/drive/MyDrive/history_consolidated.parquet")', self.code_source)
         self.assertIn("pq.ParquetWriter", self.code_source)
+        self.assertIn('reg_p = reg_p[reg_p["ticker"].isin(tickers_sa_set)]', self.code_source)
+        self.assertIn('df = df.dropna(subset=["open", "high", "low", "close"]).copy()', self.code_source)
         self.assertIn('out["split"] = out["split"].astype("string").fillna("" )'.replace(" ",""), self.code_source.replace(" ",""))
 
 
