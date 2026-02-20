@@ -130,6 +130,9 @@ class TestFinalNotebook(unittest.TestCase):
         self.assertIn("pq.ParquetWriter", self.code_source)
         self.assertIn('reg_p = reg_p[reg_p["ticker"].isin(tickers_sa_set)]', self.code_source)
         self.assertIn('df = df.dropna(subset=["open", "high", "low", "close"]).copy()', self.code_source)
+        self.assertIn("def open_parquet_dataset_with_retry", self.code_source)
+        self.assertIn("def dataset_to_table_with_retry", self.code_source)
+        self.assertIn("[warn] falha no scan inicial do REG", self.code_source)
         self.assertIn('out["split"] = out["split"].astype("string").fillna("" )'.replace(" ",""), self.code_source.replace(" ",""))
 
 
