@@ -64,7 +64,6 @@ for cell in nb['cells']:
             if skip:
                 if "results_summary.append({" in line:
                     skip = False
-                    new_source.append("\n")
                     new_source.append(line)
             else:
                 new_source.append(line)
