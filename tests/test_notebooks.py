@@ -3,10 +3,12 @@ import json
 import tempfile
 from pathlib import Path
 import unittest
+import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
 GA_NOTEBOOK = "GA_stock.ipynb"
 REPO_HISTORY_CSV = ROOT / "history_consolidated.csv"
+REPO_HISTORY_PARQUET = ROOT / "history_consolidated.parquet"
 REQUIRED_INPUT_COLS = {"Date", "ticker", "open", "high", "low", "close", "EV_buy_fund_3"}
 
 
@@ -38,55 +40,50 @@ class TestGANotebook(unittest.TestCase):
         self.assertIn("def aggregate_window_stats(stats_list", self.code_source)
 
     def test_ga_notebook_declares_input_output_paths(self):
-        self.assertIn('HISTORY_CSV_PATH = "/content/drive/MyDrive/history_consolidated.csv"', self.code_source)
-        self.assertIn('OUTPUT_DIR       = "/content/drive/MyDrive/"', self.code_source)
+        self.assertIn('HISTORY_CSV_PATH = "./history_consolidated.parquet"', self.code_source)
+        self.assertIn('OUTPUT_DIR = "./"', self.code_source)
+        self.assertIn("pd.read_parquet", self.code_source)
         self.assertIn("apply_PER_TICKER_WFGA_intraday__H{FWD_H}__APPLY{APPLY_DAYS}D__v2.xlsx", self.code_source)
         self.assertIn("apply_last_{APPLY_DAYS}d__H{FWD_H}__v2.csv", self.code_source)
 
     def test_repo_history_csv_schema_when_present(self):
-        if not REPO_HISTORY_CSV.exists():
-            self.skipTest("Arquivo opcional history_consolidated.csv não está no repositório")
+        if not REPO_HISTORY_PARQUET.exists():
+            self.skipTest("Arquivo opcional history_consolidated.parquet não está no repositório")
 
-        with REPO_HISTORY_CSV.open("r", encoding="utf-8") as fp:
-            reader = csv.DictReader(fp)
-            fieldnames = set(reader.fieldnames or [])
-            missing = REQUIRED_INPUT_COLS - fieldnames
-            self.assertFalse(missing, f"Colunas obrigatórias ausentes em history_consolidated.csv: {sorted(missing)}")
+        df = pd.read_parquet(REPO_HISTORY_PARQUET)
+        fieldnames = set(df.columns)
+        missing = REQUIRED_INPUT_COLS - fieldnames
+        self.assertFalse(missing, f"Colunas obrigatórias ausentes em history_consolidated.parquet: {sorted(missing)}")
+        self.assertGreater(len(df), 0, "history_consolidated.parquet está vazio")
 
-            try:
-                first_row = next(reader)
-            except StopIteration:
-                self.fail("history_consolidated.csv está vazio")
-
+        first_row = df.iloc[0]
         self.assertIsNotNone(first_row.get("Date"))
         self.assertIsNotNone(first_row.get("ticker"))
 
     def test_ga_notebook_io_contract_with_fixture(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
-            input_csv = tmp_path / "history_consolidated.csv"
+            input_parquet = tmp_path / "history_consolidated.parquet"
 
-            with input_csv.open("w", newline="", encoding="utf-8") as fp:
-                writer = csv.DictWriter(fp, fieldnames=list(REQUIRED_INPUT_COLS))
-                writer.writeheader()
-                writer.writerow(
+            fixture_df = pd.DataFrame(
+                [
                     {
                         "Date": "2026-01-02",
                         "ticker": "PETR4",
-                        "open": "30.10",
-                        "high": "30.55",
-                        "low": "29.90",
-                        "close": "30.25",
-                        "EV_buy_fund_3": "0.42",
+                        "open": 30.10,
+                        "high": 30.55,
+                        "low": 29.90,
+                        "close": 30.25,
+                        "EV_buy_fund_3": 0.42,
                     }
-                )
+                ]
+            )
+            fixture_df.to_parquet(input_parquet, index=False)
 
-            with input_csv.open("r", encoding="utf-8") as fp:
-                reader = csv.DictReader(fp)
-                self.assertEqual(set(reader.fieldnames or []), REQUIRED_INPUT_COLS)
-                rows = list(reader)
-            self.assertEqual(len(rows), 1)
-            self.assertEqual(rows[0]["ticker"], "PETR4")
+            loaded = pd.read_parquet(input_parquet)
+            self.assertEqual(set(loaded.columns), REQUIRED_INPUT_COLS)
+            self.assertEqual(len(loaded), 1)
+            self.assertEqual(loaded.iloc[0]["ticker"], "PETR4")
 
             apply_days = 5
             fwd_h = 5
