@@ -10,8 +10,23 @@ os.makedirs('./output/data/models', exist_ok=True)
 os.makedirs('./output', exist_ok=True)
 
 
-def run_bin_models():
-    """Run the pipeline step."""
+def run_bin_models(mode: str = "full"):
+    """Run the pipeline step.
+
+    Parameters
+    ----------
+    mode : str
+        "full"      – load or retrain binary models and rescore all history (default).
+        "data-only" – skip entirely if the ensemble output file already exists;
+                      use cached predictions from the last full run.
+    """
+    import os as _os
+    if mode == "data-only":
+        _out = "./output/ensemble_signals_history.parquet"
+        if _os.path.exists(_out):
+            print(f"[bin_models] data-only: usando cache → {_out}  (skipping ML scoring)")
+            return
+        print(f"[bin_models] data-only: nenhum cache em {_out} — executando normalmente.")
     # -*- coding: utf-8 -*-
     """bin_Stock_modelos_individuais.ipynb
 
@@ -2172,6 +2187,24 @@ def run_bin_models():
             hist_out_reset = normalize_before_save(hist_out_reset)
             hist_out_reset.to_parquet(HIST_PATH, index=False)
             print(f"[OK] Saved history with trust → {HIST_PATH} | rows={len(hist_out_reset)}")
+
+            # ── Feature-mismatch detector ─────────────────────────────────────
+            # If saved models were trained on a different ETL feature schema
+            # (e.g. after a yfinance upgrade), align_columns fills missing features
+            # with 0 and the models output near-zero probabilities for every row.
+            # Detect this so the user knows to retrain (MODE = "train").
+            _prob_cols = [c for c in hist_out_reset.columns if c.startswith("proba_target_up20__")]
+            if _prob_cols:
+                _mean_p = float(hist_out_reset[_prob_cols[0]].mean())
+                if _mean_p < 1e-4:
+                    print(
+                        "\n[WARN] *** FEATURE MISMATCH DETECTED ***\n"
+                        f"       {_prob_cols[0]} media={_mean_p:.6f}  (esperado > 0)\n"
+                        "       Os modelos binários salvos foram treinados com um schema de\n"
+                        "       features diferente do ETL atual. Todas as probabilidades são ~0.\n"
+                        "       → Rode o pipeline em modo completo para retreinar: run_pipeline.py\n"
+                        "         (ou altere MODE='train' em stock_bin_models.py)\n"
+                    )
 
 
 

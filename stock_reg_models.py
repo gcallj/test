@@ -10,8 +10,23 @@ os.makedirs('./output/data/models', exist_ok=True)
 os.makedirs('./output', exist_ok=True)
 
 
-def run_reg_models():
-    """Run the pipeline step."""
+def run_reg_models(mode: str = "full"):
+    """Run the pipeline step.
+
+    Parameters
+    ----------
+    mode : str
+        "full"      – run rolling-baseline regression and produce forecast parquet (default).
+        "data-only" – skip entirely if the forecast output file already exists;
+                      use cached regression predictions from the last full run.
+    """
+    import os as _os
+    if mode == "data-only":
+        _out = "./output/forecast_history_wide.parquet"
+        if _os.path.exists(_out):
+            print(f"[reg_models] data-only: usando cache → {_out}  (skipping regression)")
+            return
+        print(f"[reg_models] data-only: nenhum cache em {_out} — executando normalmente.")
     # -*- coding: utf-8 -*-
     """reg_Stock_modelos_individuais.ipynb
 
