@@ -1,2 +1,19 @@
 # Arquivos grandes/dados locais
 history_consolidated.csv
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Logs de execução
+ga_fast_output*.txt
+ga_full_output.txt
+pipeline_output.txt
+
+# Artefatos do sistema
+*.stackdump
+nul
+
+# Claude metadata
+.claude/
