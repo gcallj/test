@@ -182,6 +182,7 @@ MIN_FEAT_NONNA_FRAC = 0.60
 MIN_FEAT_STD = 1e-12
 MIN_VALID_SAMPLES_FOR_CORRELATION = 30
 MAX_FEATURES = 40  # use best 40 features (per-ticker Spearman ranked); more signal with less noise dilution
+FEAT_DEDUP_CORR_THRESH = 0.80  # max pairwise |r| allowed between selected features (greedy dedup)
 
 # Intraday entry (limit) based on signal strength
 ENTRY_DISCOUNT_RANGE = (0.0, 0.4)
@@ -1662,7 +1663,30 @@ def run():
                 pass
 
         feat_correlations.sort(key=lambda x: x[1], reverse=True)
-        feat_cols = [col for col, _ in feat_correlations[:MAX_FEATURES]]
+        # Greedy dedup: keep the highest-r feature first; skip any later feature whose
+        # pairwise |Spearman r| with ANY already-selected feature exceeds FEAT_DEDUP_CORR_THRESH.
+        # This removes quasi-identical signals (e.g. EV_buy variants r=1.00) without
+        # discarding genuinely independent lower-ranked features.
+        _sel_cols: List[str] = []
+        _sel_arrays: List[np.ndarray] = []
+        _sel_corrs: List[tuple] = []
+        for _ccol, _abs_r in feat_correlations:
+            _arr = pd.to_numeric(g[_ccol], errors="coerce").to_numpy(np.float64)
+            _redundant = False
+            for _prev_arr in _sel_arrays:
+                _valid = np.isfinite(_arr) & np.isfinite(_prev_arr)
+                if _valid.sum() > MIN_VALID_SAMPLES_FOR_CORRELATION:
+                    _r_pair, _ = spearmanr(_arr[_valid], _prev_arr[_valid])
+                    if np.isfinite(_r_pair) and abs(_r_pair) > FEAT_DEDUP_CORR_THRESH:
+                        _redundant = True
+                        break
+            if not _redundant:
+                _sel_cols.append(_ccol)
+                _sel_arrays.append(_arr)
+                _sel_corrs.append((_ccol, _abs_r))
+            if len(_sel_cols) >= MAX_FEATURES:
+                break
+        feat_cols = _sel_cols
         if len(feat_cols) < 5:
             reasons["few_feats"] = reasons.get("few_feats", 0) + 1
             continue
@@ -1687,7 +1711,7 @@ def run():
             "score_matrix": directed_cols, "dates": dates, "ma": ma,
             "feat_cols": feat_cols, "valid_mask": valid_mask,
             "long_votes": long_votes, "short_votes": short_votes,
-            "feat_corr": feat_correlations,  # list of (col, abs_spearman_r) sorted desc
+            "feat_corr": _sel_corrs,  # list of (col, abs_spearman_r) for selected (deduped) features
         }
         if (ix_tkr % max(1, PRINT_EVERY)) == 0 or ix_tkr == len(tickers):
             dt = time.perf_counter() - prep_t0
