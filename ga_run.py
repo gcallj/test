@@ -1687,6 +1687,7 @@ def run():
             "score_matrix": directed_cols, "dates": dates, "ma": ma,
             "feat_cols": feat_cols, "valid_mask": valid_mask,
             "long_votes": long_votes, "short_votes": short_votes,
+            "feat_corr": feat_correlations,  # list of (col, abs_spearman_r) sorted desc
         }
         if (ix_tkr % max(1, PRINT_EVERY)) == 0 or ix_tkr == len(tickers):
             dt = time.perf_counter() - prep_t0
@@ -1915,17 +1916,48 @@ def run():
         all_pass = obj_win_rate_ok and obj_mdd_ok and obj_bh_ok and obj_trades_ok
         print(f"  TODOS OBJETIVOS     : {'ALL PASS' if all_pass else 'FAIL -- re-avaliar'}")
         print(sep)
+
+        # ── Feature importance per ticker ─────────────────────────────────
+        # Derived purely from data already in ticker_payloads (no logic change).
+        # Metrics:
+        #   spearman_abs_r   – |Spearman r| with forward-return event (feature selection criterion)
+        #   mean_abs_zscore  – mean |directed z-score| across all history (signal magnitude)
+        #   pct_days_active  – % days where |z| > 0.35 (feature fires a vote)
+        _feat_imp_rows: List[Dict] = []
+        for _tkr, _pl in ticker_payloads.items():
+            _corrs: List[tuple] = _pl.get("feat_corr", [])   # (col, abs_r) sorted desc
+            _sm: np.ndarray = _pl["score_matrix"]             # (N_days, K_selected)
+            for _rank0, (_feat, _abs_r) in enumerate(_corrs[:MAX_FEATURES]):
+                _col_z = _sm[:, _rank0]
+                _valid_z = _col_z[np.isfinite(_col_z)]
+                _mean_abs_z = float(np.mean(np.abs(_valid_z))) if len(_valid_z) > 0 else float("nan")
+                _pct_active = float(np.mean(np.abs(_valid_z) > 0.35)) * 100.0 if len(_valid_z) > 0 else float("nan")
+                _feat_imp_rows.append({
+                    "ticker":           _tkr,
+                    "rank":             _rank0 + 1,
+                    "feature":          _feat,
+                    "spearman_abs_r":   round(float(_abs_r), 4),
+                    "mean_abs_zscore":  round(_mean_abs_z, 4),
+                    "pct_days_active_%": round(_pct_active, 1),
+                })
+        df_feat_imp = pd.DataFrame(_feat_imp_rows) if _feat_imp_rows else pd.DataFrame()
+        # ─────────────────────────────────────────────────────────────────
+
         try:
             with pd.ExcelWriter(out_xlsx, engine="xlsxwriter") as writer:
                 df_sum.to_excel(writer, sheet_name="Summary", index=False)
                 if not df_app.empty:
                     df_app.to_excel(writer, sheet_name="Apply", index=False)
+                if not df_feat_imp.empty:
+                    df_feat_imp.to_excel(writer, sheet_name="Feature_Importance", index=False)
         except Exception as e:
             print(f"[WARN] xlsxwriter failed, trying openpyxl: {e}")
             with pd.ExcelWriter(out_xlsx, engine="openpyxl") as writer:
                 df_sum.to_excel(writer, sheet_name="Summary", index=False)
                 if not df_app.empty:
                     df_app.to_excel(writer, sheet_name="Apply", index=False)
+                if not df_feat_imp.empty:
+                    df_feat_imp.to_excel(writer, sheet_name="Feature_Importance", index=False)
 
     if not df_app.empty:
         df_app.to_csv(out_apply_csv, index=False)
