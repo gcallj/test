@@ -1,0 +1,14 @@
+lightgbm
+pyarrow
+fastparquet
+tqdm
+imbalanced-learn
+ta
+yfinance
+scikit-learn
+joblib
+scipy
+matplotlib
+openpyxl
+numpy
+pandas

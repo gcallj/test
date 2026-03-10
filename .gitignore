@@ -1,26 +1,19 @@
 # Local large files / generated datasets
 history_consolidated.csv
-history_final_enriched.parquet
 
-# Python cache and build artifacts
+# Python cache
 __pycache__/
-*.py[cod]
+*.pyc
 *.pyo
-*.pyd
 
-# Jupyter temporary files
-.ipynb_checkpoints/
-*.ipynb.bak
-*.ipynb.bak_*
+# Logs de execução
+ga_fast_output*.txt
+ga_full_output.txt
+pipeline_output.txt
 
-# Logs and debug outputs
-*.log
-_*.txt
+# Artefatos do sistema
+*.stackdump
+nul
 
-# Generated reports and plots
-feature_importance*.csv
-feature_importance*.png
-summary_latest_bkup.xlsx
-
-# Pipeline outputs (large, generated)
-output/
+# Claude metadata
+.claude/
