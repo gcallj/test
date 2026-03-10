@@ -94,7 +94,7 @@ def run_bin_models(mode: str = "full"):
     # -------------------------
     # USER CONFIG
     # -------------------------
-    MODE              = "load"   # "auto" (load if exists else train) | "train" | "load"
+    MODE              = "train"  # "auto" (load if exists else train) | "train" | "load"
     RUN_MODELS        = ["lgbm", "hgb", "rf", "et"]
     SAVE_MODELS       = True
     MODEL_DIR         = "./output/data/models"
