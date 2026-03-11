@@ -741,38 +741,47 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
     median_mdd        = float(np.median(mdd_vals)) # negative
 
     # ── Activity bonus/penalty ────────────────────────────────────────────
-    # We want enough trades for statistical significance but not overtrading.
-    # Target: 15-100 trades per year per ticker. Penalise extremes.
-    # Overtrading leads to high MDD through accumulated small losses (cost drag).
+    # Target: 15-80 trades per year per ticker. Penalise extremes.
+    # Tighter target range (was 100) to reduce churn and cost drag.
     trade_bonus = 0.0
     if med_trades < 8:
         trade_bonus -= (8 - med_trades) * 0.10   # hard penalty for near-zero trades
     elif med_trades < 15:
         trade_bonus -= (15 - med_trades) * 0.04
-    if med_trades > 100:
-        trade_bonus -= (med_trades - 100) * 0.008  # penalise excessive trading (was 120)
-    if med_trades > 250:
-        trade_bonus -= (med_trades - 250) * 0.015  # heavy penalty above 250/yr (was 300)
+    if med_trades > 80:
+        trade_bonus -= (med_trades - 80) * 0.012  # tighter target (was 100 × 0.008)
+    if med_trades > 200:
+        trade_bonus -= (med_trades - 200) * 0.020  # heavy penalty above 200 (was 250)
     if med_trades > 400:
         trade_bonus -= (med_trades - 400) * 0.025  # catastrophic above 400/yr
     if mean_exposure < 0.40:
         trade_bonus -= (0.40 - mean_exposure) * 2.0
 
     # ── MDD penalty (key objective: median_mdd must stay low) ────────────
-    # median_mdd is negative; |median_mdd| is the actual max drawdown.
-    # Target: full-history MDD ≤ 25%; punish hard above that.
+    # Uses both median_mdd AND the worst-quartile MDD to penalise tail risk.
+    # Target: full-history MDD ≤ 22%; punish hard above that.
     mdd_penalty = 0.0
     abs_mdd = abs(median_mdd)
     if abs_mdd > 0.10:
         mdd_penalty += (abs_mdd - 0.10) * 8.0   # penalise above 10%
     if abs_mdd > 0.20:
-        mdd_penalty += (abs_mdd - 0.20) * 20.0  # steep above 20% (was 16x)
+        mdd_penalty += (abs_mdd - 0.20) * 25.0  # steeper cliff at 20% (was 20x)
+    if abs_mdd > 0.22:
+        mdd_penalty += (abs_mdd - 0.22) * 55.0  # new cliff at 22% (current result)
     if abs_mdd > 0.25:
-        mdd_penalty += (abs_mdd - 0.25) * 50.0  # NEW: big cliff at 25% target boundary
+        mdd_penalty += (abs_mdd - 0.25) * 50.0  # big cliff at 25% target boundary
     if abs_mdd > 0.30:
-        mdd_penalty += (abs_mdd - 0.30) * 40.0  # very steep above 30% (was 30x)
+        mdd_penalty += (abs_mdd - 0.30) * 40.0  # very steep above 30%
     if abs_mdd > 0.40:
-        mdd_penalty += (abs_mdd - 0.40) * 60.0  # catastrophic above 40% (was 45x@50)
+        mdd_penalty += (abs_mdd - 0.40) * 60.0  # catastrophic above 40%
+
+    # Tail-risk penalty: worst-quartile MDD (p25 of mdd_vals since MDD is negative)
+    mdd_p25 = float(np.percentile(mdd_vals, 25))  # worst 25% of tickers' MDD
+    abs_mdd_tail = abs(mdd_p25)
+    if abs_mdd_tail > 0.30:
+        mdd_penalty += (abs_mdd_tail - 0.30) * 12.0  # penalise worst-quartile above 30%
+    if abs_mdd_tail > 0.40:
+        mdd_penalty += (abs_mdd_tail - 0.40) * 25.0  # steep for worst quartile above 40%
 
     # ── Under-performance penalty ─────────────────────────────────────────
     underperf_penalty = 0.0
@@ -789,25 +798,37 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
         underperf_penalty += abs(mean_ret) * 30.0         # extra cliff for negative returns
 
     # ── Win-rate bonus ───────────────────────────────────────────────────
-    # Strongly reward high win rates (prefer quality trades)
+    # Strongly reward high win rates (prefer quality trades over quantity)
     win_rate_bonus = 0.0
-    if mean_win_rate > 0.55:
-        win_rate_bonus += (mean_win_rate - 0.55) * 3.0   # extra bonus above 55%
-    if med_win_rate > 0.60:
-        win_rate_bonus += (med_win_rate - 0.60) * 2.0
+    # Sub-50% win rate hard penalty (losing more often than winning = unacceptable)
+    if mean_win_rate < 0.50:
+        win_rate_bonus -= (0.50 - mean_win_rate) * 8.0
+    # Start rewarding at 52% (lowered from 55%) with higher multiplier (5.0, was 3.0)
+    if mean_win_rate > 0.52:
+        win_rate_bonus += (mean_win_rate - 0.52) * 5.0
+    # Extra step bonus above 58% (significantly above chance)
+    if mean_win_rate > 0.58:
+        win_rate_bonus += (mean_win_rate - 0.58) * 4.0
+    # Median win rate bonus (start at 55%, was 60%)
+    if med_win_rate > 0.55:
+        win_rate_bonus += (med_win_rate - 0.55) * 3.0
+    if med_win_rate > 0.62:
+        win_rate_bonus += (med_win_rate - 0.62) * 3.0
 
     # ── Main fitness ─────────────────────────────────────────────────────
+    # Raised weights for: excess return over B&H (1.4→1.6), pct_excess_pos (0.8→1.2),
+    # win_rate (0.7→0.9). These directly correspond to the 3 objectives to improve.
     fitness = (
-        1.4 * np.clip(mean_excess, -1.0, 5.0) +
+        1.6 * np.clip(mean_excess, -1.0, 5.0) +   # beat B&H: higher weight (was 1.4)
         1.2 * np.clip(med_excess,  -1.0, 5.0) +
-        0.8 * pct_excess_pos +
+        1.2 * pct_excess_pos +                      # % tickers beating B&H: higher (was 0.8)
         0.5 * np.clip(mean_ret,    -1.0, 5.0) +
         0.3 * np.clip(med_ret,     -1.0, 5.0) +
-        0.5 * np.clip(mean_sharpe, -2.0, 3.0) +  # raised from 0.4
+        0.5 * np.clip(mean_sharpe, -2.0, 3.0) +
         0.4 * np.clip(med_sharpe,  -2.0, 3.0) +
         0.3 * pct_positive +
-        0.7 * mean_win_rate +                      # raised from 0.4
-        0.5 * med_win_rate +                       # added median win_rate
+        0.9 * mean_win_rate +                       # win rate main weight (was 0.7)
+        0.6 * med_win_rate +                        # median win rate (was 0.5)
         win_rate_bonus +
         trade_bonus -
         mdd_penalty -
@@ -1475,11 +1496,21 @@ def build_direct_feature_signal(frame: pd.DataFrame, feat_cols: List[str]) -> Tu
     z = (feat - roll_mean) / roll_std
     z = z.replace([np.inf, -np.inf], np.nan).clip(-4.0, 4.0)
 
-    bearish_tokens = ("risk", "down", "dd", "sell", "err_buy", "pe", "price_to_book")
+    # Bearish tokens: features where HIGH value = WORSE (use negative sign → high z-score = sell signal)
+    bearish_tokens = ("risk", "down", "dd", "sell", "err_buy", "pe", "price_to_book",
+                      "fund_dy_bearish", "fund_pe_vs_hist")
+    # Bullish override: features that contain bearish sub-strings but are INVERTED (high = bullish)
+    bullish_override_tokens = ("earnings_yield", "book_yield", "xs_inv", "dy_xs",
+                               "dy_vs_hist", "value_composite", "fund_pe_xs_inv")
     signs = []
     for c in feat_cols:
         lc = str(c).lower()
-        sign = -1.0 if any(tok in lc for tok in bearish_tokens) else 1.0
+        if any(tok in lc for tok in bullish_override_tokens):
+            sign = 1.0  # explicitly bullish even if bearish sub-string present
+        elif any(tok in lc for tok in bearish_tokens):
+            sign = -1.0
+        else:
+            sign = 1.0
         signs.append(sign)
     sign_arr = np.asarray(signs, dtype=np.float64)
 
@@ -1512,6 +1543,70 @@ def load_full_history_all_cols(path: str) -> pd.DataFrame:
     df = add_sma200(df)
     df = add_atr_ohlc_fast(df)
     df = add_technical_features(df)
+
+    # ── Derived fundamental features (computed on-the-fly, no ETL re-run needed) ──
+    # These add alternative economic signal flavors so the GA can choose
+    # among multiple hypotheses about dividend yield, PE, P/B direction.
+
+    # 1. Earnings yield = 1/PE (positive signal: high yield = cheap stock = bullish)
+    #    Works even with snapshot PE because cross-sectional ranks are valid
+    if "trailing_pe" in df.columns:
+        pe_pos = df["trailing_pe"].where(df["trailing_pe"] > 0.5, np.nan)  # only meaningful PE
+        df["fund_earnings_yield"] = (1.0 / pe_pos).clip(0, 0.50)  # cap at 50% earnings yield
+
+        # Cross-sectional rank of earnings yield per date (high rank = cheap vs market = bullish)
+        df["fund_pe_xs_inv"] = df.groupby(DATE_COL)["fund_earnings_yield"].rank(
+            pct=True, ascending=True, na_option="keep"
+        )  # high rank = high earnings yield = cheap = bullish (sign=+1)
+
+        # Ticker-relative PE: deviation from own rolling 2yr median (sign=-1: above hist = expensive)
+        df["fund_pe_vs_hist"] = df.groupby(TICKER_COL)["trailing_pe"].transform(
+            lambda x: (x - x.rolling(504, min_periods=60).median()) /
+                      (x.rolling(504, min_periods=60).std().replace(0, np.nan) + 1e-9)
+        ).clip(-3, 3)  # bearish when above own history → sign controlled by "pe" in bearish_tokens
+
+    # 2. Alternative dividend yield signals (two economic hypotheses)
+    if "dividend_yield" in df.columns:
+        # Hypothesis A (income): high DY = more income = bullish → default sign=+1
+        # (already in parquet as 'dividend_yield', which has no bearish token → sign=+1)
+
+        # Hypothesis B (value trap): high DY = distress signal = bearish
+        df["fund_dy_bearish"] = df["dividend_yield"].clip(0, 1)  # raw: bearish token 'dy_bearish'
+
+        # Hypothesis C: DY relative to ticker's own 2yr rolling median (above = unusually generous)
+        df["fund_dy_vs_hist"] = df.groupby(TICKER_COL)["dividend_yield"].transform(
+            lambda x: (x - x.rolling(504, min_periods=60).median()) /
+                      (x.rolling(504, min_periods=60).std().replace(0, np.nan) + 1e-9)
+        ).clip(-3, 3)  # sign=+1 (above historical DY = bullish, more income than usual)
+
+        # Cross-sectional DY rank: high rank = high yield relative to market
+        df["fund_dy_xs"] = df.groupby(DATE_COL)["dividend_yield"].rank(
+            pct=True, ascending=True, na_option="keep"
+        )  # sign=+1 (high DY rank = high income = bullish in income hypothesis)
+
+    # 3. Alternative P/B signals
+    if "price_to_book" in df.columns:
+        pb_pos = df["price_to_book"].where(df["price_to_book"] > 0.01, np.nan)
+        # Book yield = 1/P/B (low P/B = cheap = bullish, avoid "price_to_book" bearish token)
+        df["fund_book_yield"] = (1.0 / pb_pos).clip(0, 5.0)  # sign=+1 (high book yield = cheap)
+
+        # Cross-sectional P/B rank inverted: low P/B tickers rank higher = cheaper
+        df["fund_pb_xs_inv"] = 1.0 - df.groupby(DATE_COL)["price_to_book"].rank(
+            pct=True, ascending=True, na_option="keep"
+        )  # sign=+1 (high score = low P/B = cheap = bullish)
+
+    # 4. Composite value score (cross-sectional, weights earnings_yield + book_yield + dy)
+    fund_components = [c for c in ["fund_earnings_yield", "fund_book_yield", "fund_dy_xs"]
+                       if c in df.columns]
+    if len(fund_components) >= 2:
+        # Cross-sectional normalize each component per date, then average
+        normed = []
+        for fc in fund_components:
+            ranked = df.groupby(DATE_COL)[fc].rank(pct=True, ascending=True, na_option="keep")
+            normed.append(ranked)
+        df["fund_value_composite"] = pd.concat(normed, axis=1).mean(axis=1)
+        # sign=+1: higher composite rank = cheaper stock = bullish
+
     return df
 
 

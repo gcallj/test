@@ -1,0 +1,152 @@
+[INFO] google.colab drive.mount ignorado no Codespaces
+=== GA + Walk-Forward ML (OOS) + Intraday Backtest (v2) ===
+[FEATS] numeric candidates: 40 (using up to 40)
+[DATA] 344455 rows, 81 tickers (out of 81)
+[SYSTEM] CPUs available=4 | configured_workers=1
+[PHASE1] prep 1/81 | payloads=1 | elapsed=0.8s
+[PHASE1] prep 2/81 | payloads=2 | elapsed=1.5s
+[PHASE1] prep 3/81 | payloads=3 | elapsed=2.1s
+[PHASE1] prep 4/81 | payloads=4 | elapsed=2.6s
+[PHASE1] prep 5/81 | payloads=5 | elapsed=3.1s
+[PHASE1] prep 6/81 | payloads=6 | elapsed=3.7s
+[PHASE1] prep 7/81 | payloads=7 | elapsed=4.3s
+[PHASE1] prep 8/81 | payloads=8 | elapsed=5.0s
+[PHASE1] prep 9/81 | payloads=9 | elapsed=5.7s
+[PHASE1] prep 10/81 | payloads=10 | elapsed=6.4s
+C:\Users\gabri\OneDrive\Documentos\GitHub\test\.claude\worktrees\dazzling-robinson\ga_run.py:1754: ConstantInputWarning: An input array is constant; the correlation coefficient is not defined.
+  corr, _ = spearmanr(s_col.to_numpy()[valid_idx_temp], y_event_temp[valid_idx_temp])
+[PHASE1] prep 11/81 | payloads=11 | elapsed=7.1s
+[PHASE1] prep 12/81 | payloads=12 | elapsed=7.8s
+[PHASE1] prep 13/81 | payloads=13 | elapsed=8.3s
+[PHASE1] prep 14/81 | payloads=14 | elapsed=8.9s
+[PHASE1] prep 15/81 | payloads=15 | elapsed=9.7s
+[PHASE1] prep 16/81 | payloads=16 | elapsed=10.5s
+[PHASE1] prep 17/81 | payloads=17 | elapsed=11.4s
+[PHASE1] prep 18/81 | payloads=18 | elapsed=12.3s
+[PHASE1] prep 19/81 | payloads=19 | elapsed=13.1s
+[PHASE1] prep 20/81 | payloads=20 | elapsed=13.8s
+[PHASE1] prep 21/81 | payloads=21 | elapsed=14.4s
+[PHASE1] prep 22/81 | payloads=22 | elapsed=14.9s
+[PHASE1] prep 23/81 | payloads=23 | elapsed=15.4s
+[PHASE1] prep 24/81 | payloads=24 | elapsed=15.8s
+[PHASE1] prep 25/81 | payloads=25 | elapsed=16.3s
+[PHASE1] prep 26/81 | payloads=26 | elapsed=16.8s
+[PHASE1] prep 27/81 | payloads=27 | elapsed=17.4s
+[PHASE1] prep 28/81 | payloads=28 | elapsed=18.1s
+[PHASE1] prep 29/81 | payloads=29 | elapsed=18.9s
+[PHASE1] prep 30/81 | payloads=30 | elapsed=19.7s
+[PHASE1] prep 31/81 | payloads=31 | elapsed=20.5s
+[PHASE1] prep 32/81 | payloads=32 | elapsed=21.5s
+[PHASE1] prep 33/81 | payloads=33 | elapsed=22.4s
+[PHASE1] prep 34/81 | payloads=34 | elapsed=23.2s
+[PHASE1] prep 35/81 | payloads=35 | elapsed=24.0s
+[PHASE1] prep 36/81 | payloads=36 | elapsed=24.8s
+[PHASE1] prep 37/81 | payloads=37 | elapsed=25.9s
+[PHASE1] prep 38/81 | payloads=38 | elapsed=26.9s
+[PHASE1] prep 39/81 | payloads=39 | elapsed=27.9s
+C:\Users\gabri\OneDrive\Documentos\GitHub\test\.claude\worktrees\dazzling-robinson\ga_run.py:1754: ConstantInputWarning: An input array is constant; the correlation coefficient is not defined.
+  corr, _ = spearmanr(s_col.to_numpy()[valid_idx_temp], y_event_temp[valid_idx_temp])
+[PHASE1] prep 40/81 | payloads=40 | elapsed=28.8s
+[PHASE1] prep 41/81 | payloads=41 | elapsed=29.6s
+[PHASE1] prep 42/81 | payloads=42 | elapsed=30.1s
+[PHASE1] prep 43/81 | payloads=43 | elapsed=30.8s
+[PHASE1] prep 44/81 | payloads=44 | elapsed=31.4s
+[PHASE1] prep 45/81 | payloads=45 | elapsed=32.0s
+[PHASE1] prep 46/81 | payloads=46 | elapsed=32.6s
+C:\Users\gabri\OneDrive\Documentos\GitHub\test\.claude\worktrees\dazzling-robinson\ga_run.py:1754: ConstantInputWarning: An input array is constant; the correlation coefficient is not defined.
+  corr, _ = spearmanr(s_col.to_numpy()[valid_idx_temp], y_event_temp[valid_idx_temp])
+[PHASE1] prep 47/81 | payloads=47 | elapsed=33.1s
+[PHASE1] prep 48/81 | payloads=48 | elapsed=33.6s
+[PHASE1] prep 49/81 | payloads=49 | elapsed=34.1s
+[PHASE1] prep 50/81 | payloads=50 | elapsed=34.8s
+[PHASE1] prep 51/81 | payloads=51 | elapsed=35.3s
+[PHASE1] prep 52/81 | payloads=52 | elapsed=35.7s
+[PHASE1] prep 53/81 | payloads=53 | elapsed=36.2s
+[PHASE1] prep 54/81 | payloads=54 | elapsed=36.8s
+[PHASE1] prep 55/81 | payloads=55 | elapsed=37.4s
+[PHASE1] prep 56/81 | payloads=56 | elapsed=37.9s
+[PHASE1] prep 57/81 | payloads=57 | elapsed=38.8s
+[PHASE1] prep 58/81 | payloads=58 | elapsed=39.7s
+[PHASE1] prep 59/81 | payloads=59 | elapsed=40.3s
+[PHASE1] prep 60/81 | payloads=60 | elapsed=41.2s
+[PHASE1] prep 61/81 | payloads=61 | elapsed=41.7s
+[PHASE1] prep 62/81 | payloads=62 | elapsed=42.2s
+[PHASE1] prep 63/81 | payloads=63 | elapsed=42.8s
+[PHASE1] prep 64/81 | payloads=64 | elapsed=43.4s
+[PHASE1] prep 65/81 | payloads=65 | elapsed=44.1s
+[PHASE1] prep 66/81 | payloads=66 | elapsed=44.5s
+[PHASE1] prep 67/81 | payloads=67 | elapsed=45.1s
+[PHASE1] prep 68/81 | payloads=68 | elapsed=45.7s
+[PHASE1] prep 69/81 | payloads=69 | elapsed=46.5s
+C:\Users\gabri\OneDrive\Documentos\GitHub\test\.claude\worktrees\dazzling-robinson\ga_run.py:1754: ConstantInputWarning: An input array is constant; the correlation coefficient is not defined.
+  corr, _ = spearmanr(s_col.to_numpy()[valid_idx_temp], y_event_temp[valid_idx_temp])
+[PHASE1] prep 70/81 | payloads=70 | elapsed=47.1s
+[PHASE1] prep 71/81 | payloads=71 | elapsed=47.7s
+[PHASE1] prep 72/81 | payloads=72 | elapsed=48.3s
+[PHASE1] prep 73/81 | payloads=73 | elapsed=48.9s
+[PHASE1] prep 74/81 | payloads=74 | elapsed=49.3s
+[PHASE1] prep 75/81 | payloads=75 | elapsed=50.2s
+[PHASE1] prep 76/81 | payloads=76 | elapsed=50.9s
+C:\Users\gabri\OneDrive\Documentos\GitHub\test\.claude\worktrees\dazzling-robinson\ga_run.py:1754: ConstantInputWarning: An input array is constant; the correlation coefficient is not defined.
+  corr, _ = spearmanr(s_col.to_numpy()[valid_idx_temp], y_event_temp[valid_idx_temp])
+[PHASE1] prep 77/81 | payloads=77 | elapsed=51.5s
+[PHASE1] prep 78/81 | payloads=78 | elapsed=52.2s
+[PHASE1] prep 79/81 | payloads=79 | elapsed=52.8s
+[PHASE1] prep 80/81 | payloads=80 | elapsed=53.4s
+[PHASE1] prep 81/81 | payloads=81 | elapsed=53.8s
+[PHASE1] done payloads=81 in 53.8s
+[GLOBAL_GA] checkpoint found (fit=2.2548) — will warm-start GA from it
+[GLOBAL_GA] start (FULL mode, windows=36, tickers=81)
+[GLOBAL_GA] config pop=30 ngen=20 windows_total=36 windows_ga=8 median_feats=14
+[GLOBAL_GA] CPUs available=4 | CPUs used=1
+[GLOBAL_GA] Warm-starting from previous checkpoint genome (len=21)
+[GLOBAL_GA] Seeded 4 individuals from checkpoint.
+[GLOBAL_GA] single-threaded evaluation (Windows/1-CPU mode)
+[GA] gen 001/020 | best=2.948 (gen_max=2.948) avg=0.043 med=0.623 min=-3.468 std=2.429 | sharpe_tr=2.66 sharpe_val=2.95 | div=86.7% | mut_pb=0.40 | eval=24 | time=631.9s
+[GA] gen 002/020 | best=2.948 (gen_max=2.948) avg=2.614 med=2.617 min=2.076 std=0.234 | sharpe_tr=2.66 sharpe_val=2.95 | div=76.7% | mut_pb=0.40 | eval=20 | time=214.9s
+[GA] gen 003/020 | best=2.948 (gen_max=2.948) avg=2.851 med=2.942 min=2.642 std=0.118 | sharpe_tr=2.66 sharpe_val=2.95 | div=76.7% | mut_pb=0.40 | eval=19 | time=212.1s
+[GA] gen 004/020 | best=3.131 (gen_max=3.131) avg=2.935 med=2.948 min=2.796 std=0.074 | sharpe_tr=2.93 sharpe_val=3.13 | div=86.7% | mut_pb=0.40 | eval=26 | time=286.8s
+[GA] gen 005/020 | best=3.131 (gen_max=3.131) avg=2.965 med=2.948 min=2.717 std=0.089 | sharpe_tr=2.93 sharpe_val=3.13 | div=83.3% | mut_pb=0.40 | eval=22 | time=242.1s
+[GA] gen 006/020 | best=3.139 (gen_max=3.139) avg=3.022 med=2.971 min=2.827 std=0.092 | sharpe_tr=2.94 sharpe_val=3.14 | div=70.0% | mut_pb=0.40 | eval=22 | time=227.0s
+[GA] gen 007/020 | best=3.144 (gen_max=3.144) avg=3.084 med=3.119 min=2.948 std=0.065 | sharpe_tr=2.90 sharpe_val=3.14 | div=83.3% | mut_pb=0.40 | eval=24 | time=250.4s
+[GA] gen 008/020 | best=3.184 (gen_max=3.184) avg=3.139 med=3.139 min=3.089 std=0.018 | sharpe_tr=2.12 sharpe_val=3.18 | div=53.3% | mut_pb=0.40 | eval=21 | time=174.7s
+[GA] gen 009/020 | best=3.184 (gen_max=3.184) avg=3.152 med=3.144 min=3.087 std=0.021 | sharpe_tr=2.12 sharpe_val=3.18 | div=66.7% | mut_pb=0.40 | eval=25 | time=206.7s
+[GA] gen 010/020 | best=3.269 (gen_max=3.269) avg=3.142 med=3.163 min=2.741 std=0.090 | sharpe_tr=3.16 sharpe_val=3.27 | div=73.3% | mut_pb=0.40 | eval=21 | time=204.2s
+[GA] gen 011/020 | best=3.269 (gen_max=3.269) avg=3.191 med=3.184 min=2.955 std=0.063 | sharpe_tr=3.16 sharpe_val=3.27 | div=86.7% | mut_pb=0.40 | eval=29 | time=298.7s
+[GA] gen 012/020 | best=3.271 (gen_max=3.271) avg=3.217 med=3.269 min=2.867 std=0.108 | sharpe_tr=3.17 sharpe_val=3.27 | div=70.0% | mut_pb=0.40 | eval=24 | time=391.1s
+[GA] gen 013/020 | best=3.283 (gen_max=3.283) avg=3.263 med=3.269 min=3.184 std=0.021 | sharpe_tr=3.48 sharpe_val=3.33 | div=83.3% | mut_pb=0.40 | eval=26 | time=537.2s
+[GA] gen 014/020 | best=3.283 (gen_max=3.283) avg=3.270 med=3.271 min=3.181 std=0.018 | sharpe_tr=3.48 sharpe_val=3.33 | div=73.3% | mut_pb=0.40 | eval=24 | time=231.1s
+[GA] gen 015/020 | best=3.425 (gen_max=3.425) avg=3.294 med=3.283 min=3.271 std=0.038 | sharpe_tr=3.41 sharpe_val=3.42 | div=60.0% | mut_pb=0.40 | eval=17 | time=153.4s
+[GA] gen 016/020 | best=3.425 (gen_max=3.425) avg=3.328 med=3.283 min=3.283 std=0.057 | sharpe_tr=3.41 sharpe_val=3.42 | div=73.3% | mut_pb=0.40 | eval=21 | time=214.5s
+[GA] gen 017/020 | best=3.427 (gen_max=3.427) avg=3.395 med=3.425 min=3.320 std=0.041 | sharpe_tr=3.41 sharpe_val=3.43 | div=76.7% | mut_pb=0.40 | eval=23 | time=230.1s
+[GA] gen 018/020 | best=3.427 (gen_max=3.427) avg=3.425 med=3.425 min=3.411 std=0.003 | sharpe_tr=3.41 sharpe_val=3.43 | div=80.0% | mut_pb=0.40 | eval=27 | time=259.3s
+[GA] gen 019/020 | best=3.427 (gen_max=3.427) avg=3.404 med=3.427 min=3.183 std=0.060 | sharpe_tr=3.41 sharpe_val=3.43 | div=70.0% | mut_pb=0.40 | eval=22 | time=187.5s
+[GA] gen 020/020 | best=3.427 (gen_max=3.427) avg=3.402 med=3.427 min=3.120 std=0.073 | sharpe_tr=3.41 sharpe_val=3.43 | div=86.7% | mut_pb=0.40 | eval=28 | time=259.8s
+
+[GA] Top 5 cromossomos:
+  #1: fitness=3.427 sharpe_tr=3.41 sharpe_val=3.43
+  #2: fitness=3.427 sharpe_tr=3.41 sharpe_val=3.43
+  #3: fitness=3.427 sharpe_tr=3.41 sharpe_val=3.43
+  #4: fitness=3.427 sharpe_tr=3.41 sharpe_val=3.43
+  #5: fitness=3.427 sharpe_tr=3.41 sharpe_val=3.43
+[GLOBAL_GA] finished in 90.3m | best_fit=3.42669
+[GLOBAL_GA] checkpoint saved fit=3.4267
+[GLOBAL_GA] done fit=3.4267 mode=FULL
+
+============================================================
+=== OBJETIVOS (FULL MODE) ===
+============================================================
+  win_rate_mean   : 0.563  (median: 0.605)  >> objetivo: ALTO
+  median_mdd      : -0.222  (mean: -0.242)     >> objetivo: BAIXO
+  beat buy&hold % : 55.6%  test_return(38.4298) vs buy_hold(6.8515)
+  mean trades/tkr : 138.1
+  % ret_pos       : 82.7%  | % sharpe_pos: 84.0%
+  GA fitness      : 3.4267
+============================================================
+  win_rate_mean>=0.52  : PASS (0.563)
+  median_mdd>=-25%    : PASS (-0.222)
+  beats buy&hold      : PASS (38.4298 vs 6.8515)
+  trades>=10/ticker   : PASS (138.1)
+  TODOS OBJETIVOS     : ALL PASS
+============================================================
+Saved: ./summary_latest.xlsx | ./apply_last_5d__H5.csv
