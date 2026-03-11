@@ -230,7 +230,7 @@ GA_RUN_MC_EVERY_WINDOW = False
 import platform as _platform
 GA_EVAL_WORKERS = 1 if _platform.system() == "Windows" else max(1, min(8, (os.cpu_count() or 2)))
 GA_TWO_STAGE = True
-RUN_MODE = "load"  # "train" always retrains (seeding from checkpoint), "load" skips GA entirely
+RUN_MODE = "train"  # "train" always retrains (seeding from checkpoint), "load" skips GA entirely
 SLOW_STEP_PRINT_SEC = 2.0  # print only timings above this per-step threshold
 GA_STAGE1_TOP_N = 6
 GA_STAGE2_PADDING_RATIO = 0.60
@@ -308,8 +308,8 @@ def sanitize_params(p: Params) -> Params:
 # ==============================================================================
 
 GLOBAL_PARAM_SPECS = [
-    ("vote_threshold_long", 0.20, 0.60, 0.05, False),  # reverted: GA free to choose
-    ("vote_threshold_short", 0.10, 0.60, 0.05, False),
+    ("vote_threshold_long", 0.15, 0.55, 0.05, False),  # tighter range (was 0.20-0.60)
+    ("vote_threshold_short", 0.10, 0.55, 0.05, False),
     ("z_threshold", 0.15, 0.80, 0.05, False),
     ("signal_ema_span", 2.0, 12.0, 1.0, True),
     ("entry_confirmation_days", 1.0, 3.0, 1.0, True),
@@ -317,7 +317,7 @@ GLOBAL_PARAM_SPECS = [
     ("stop_atr_mult", 1.0, 4.0, 0.25, False),
     ("stop_tighten_after_bars", 3.0, 15.0, 1.0, True),
     ("stop_tighten_factor", 0.40, 0.85, 0.05, False),
-    ("max_loss_per_trade_pct", 0.02, 0.15, 0.01, False),  # reverted: GA free to choose stop size
+    ("max_loss_per_trade_pct", 0.02, 0.15, 0.01, False),
     ("reward_risk_ratio", 1.0, 5.0, 0.25, False),
     ("partial_take_pct", 0.0, 0.60, 0.10, False),
     ("partial_take_level", 0.5, 1.5, 0.25, False),
@@ -326,9 +326,14 @@ GLOBAL_PARAM_SPECS = [
     ("volatility_filter_percentile", 0.0, 0.40, 0.05, False),
     ("score_strength_scaling", 0.0, 1.0, 0.1, False),
     ("ma_filter_period", 100.0, 300.0, 50.0, True),
-    ("ma_filter_mode", 0.0, 2.0, 1.0, True),  # reverted: GA free to use/skip MA filter
-    ("consecutive_loss_cooldown", 8.0, 20.0, 1.0, True),  # min 8, max 20: prevent crash re-entry
-    ("equity_drawdown_stop_pct", 0.10, 0.40, 0.05, False),  # NEW: pause if equity curve drops >X% from peak (MDD circuit-breaker)
+    ("ma_filter_mode", 0.0, 2.0, 1.0, True),
+    ("consecutive_loss_cooldown", 5.0, 20.0, 1.0, True),  # lowered min from 8→5 for more flexibility
+    ("equity_drawdown_stop_pct", 0.08, 0.30, 0.02, False),  # tighter range (was 0.10-0.40), step 0.02
+    # ── NEW genes for v3 ──
+    ("vol_regime_mode", 0.0, 2.0, 1.0, True),  # 0=off, 1=conservative(widen stops in high vol), 2=aggressive(skip high vol)
+    ("partial_take_pct_2", 0.0, 0.40, 0.10, False),  # 2nd partial take (0=disabled)
+    ("partial_take_level_2", 1.0, 3.0, 0.25, False),  # 2nd partial at higher RR multiple
+    ("min_signal_strength", 0.0, 0.40, 0.05, False),  # minimum abs(score_ev)/score95 to enter
 ]
 
 
@@ -354,7 +359,12 @@ class GlobalParams:
     ma_filter_period: int
     ma_filter_mode: int
     consecutive_loss_cooldown: int
-    equity_drawdown_stop_pct: float  # NEW: pause trading if equity drops >X% from peak
+    equity_drawdown_stop_pct: float
+    # ── NEW v3 genes ──
+    vol_regime_mode: int  # 0=off, 1=conservative(widen stops high vol), 2=skip high vol
+    partial_take_pct_2: float  # 2nd partial take percentage
+    partial_take_level_2: float  # 2nd partial take at this RR multiple
+    min_signal_strength: float  # min |score_ev|/score95 to enter trade
 
 
 def sanitize_global_genome(genome: List[float]) -> List[float]:
@@ -552,6 +562,7 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
     entry_px = np.nan
     bars = 0
     partial_taken = False
+    partial_taken_2 = False
     consec_long = 0
     consec_short = 0
     consec_stops = 0
@@ -566,7 +577,23 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
             exposure_acc += float(min(1.0, abs(pos)))
         if pos != 0:
             bars += 1
-            stop_mult = gp.stop_atr_mult * (gp.stop_tighten_factor if bars >= gp.stop_tighten_after_bars else 1.0)
+            # ── Dynamic stop tightening ──
+            tighten = 1.0
+            if bars >= gp.stop_tighten_after_bars:
+                tighten = gp.stop_tighten_factor
+            elif bars >= 3:
+                # Early P&L: tighten if underwater after 3+ bars
+                early_pnl = (c[i - 1] / max(entry_px, ATR_EPS) - 1.0) * np.sign(pos)
+                if early_pnl < -0.002:
+                    tighten = max(gp.stop_tighten_factor, 0.85)
+            # Vol-regime stop adjustment (mode 1: widen stops in high vol)
+            vol_stop_adj = 1.0
+            if gp.vol_regime_mode == 1 and np.isfinite(vol_rank[i - 1]):
+                if vol_rank[i - 1] > 0.75:
+                    vol_stop_adj = 1.15
+                elif vol_rank[i - 1] < 0.25:
+                    vol_stop_adj = 0.90
+            stop_mult = gp.stop_atr_mult * tighten * vol_stop_adj
             stop_abs = max(ATR_EPS, stop_mult * max(atr[i], ATR_EPS))
             take_abs = gp.reward_risk_ratio * stop_abs
             hard_loss = abs(o[i] / max(entry_px, ATR_EPS) - 1.0)
@@ -590,6 +617,13 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
                 pos = pos * (1.0 - gp.partial_take_pct)
                 partial_taken = True
 
+            # 2nd partial take at higher level
+            if gp.partial_take_pct_2 > 0 and partial_taken and (not partial_taken_2) and fav >= gp.partial_take_level_2 * stop_abs:
+                part_ret2 = gp.partial_take_pct_2 * gp.partial_take_level_2 * stop_abs / max(entry_px, ATR_EPS)
+                equity *= (1.0 + part_ret2 - 0.0003)
+                pos = pos * (1.0 - gp.partial_take_pct_2)
+                partial_taken_2 = True
+
             stop_hit = adv >= stop_abs
             take_hit = fav >= take_abs
             time_stop = (bars >= gp.time_stop_bars) and (fav < 0.5 * stop_abs)
@@ -609,7 +643,7 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
                     else:
                         exit_px = min(ideal_exit, o[i]) if o[i] < ideal_exit else ideal_exit
                 
-                cost = 0.0003 if partial_taken else 0.0005
+                cost = 0.0003 if (partial_taken or partial_taken_2) else 0.0005
                 ret = (exit_px / entry_px - 1.0) * pos - cost
                 equity *= (1.0 + ret)
                 trade_rets.append(ret)
@@ -620,6 +654,7 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
                 pos = 0
                 bars = 0
                 partial_taken = False
+                partial_taken_2 = False
                 if gp.consecutive_loss_cooldown > 0 and consec_stops >= 2:
                     cooldown = gp.consecutive_loss_cooldown
                 continue
@@ -627,11 +662,16 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
         if pos == 0 and cooldown == 0 and np.isfinite(score_ev[i - 1]) and np.isfinite(score_pctl[i - 1]):
             if gp.volatility_filter_percentile > 0 and np.isfinite(vol_rank[i - 1]) and vol_rank[i - 1] < gp.volatility_filter_percentile:
                 continue
-            
-            # Filtro de liquidez/volume (ex: nÃ£o operar se volume relativo for muito baixo)
-            # Assumindo que temos acesso ao volume ou podemos usar o ATR como proxy de liquidez
-            if atr[i-1] < 0.01: # Filtro basico de liquidez
+            # Vol regime mode 2: skip entries in very high volatility periods
+            if gp.vol_regime_mode == 2 and np.isfinite(vol_rank[i - 1]) and vol_rank[i - 1] > 0.85:
                 continue
+            # Liquidity filter (ATR proxy)
+            if atr[i-1] < 0.01:
+                continue
+            # Min signal strength filter
+            if gp.min_signal_strength > 0:
+                if abs(score_ev[i - 1]) / score95 < gp.min_signal_strength:
+                    continue
 
             vl = votes_long[i - 1]
             vs = votes_short[i - 1]
@@ -672,18 +712,19 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
                     entry_px = float(limit_px)
                     bars = 0
                     partial_taken = False
+                    partial_taken_2 = False
                 elif np.isfinite(o[i]) and o[i] > 0:
-                    # Fallback a mercado para nÃ£o perder movimentos quando limite nÃ£o executa
                     pos = side
                     entry_px = float(o[i])
                     bars = 0
                     partial_taken = False
+                    partial_taken_2 = False
 
         peak = max(peak, equity)
         mdd = min(mdd, (equity / max(peak, ATR_EPS)) - 1.0)
-        # Equity drawdown circuit-breaker: if equity fell too far from peak, pause new entries
+        # Equity drawdown circuit-breaker (progressive re-entry: 20 bars, was 30)
         if gp.equity_drawdown_stop_pct > 0 and (equity / max(peak, ATR_EPS)) - 1.0 < -gp.equity_drawdown_stop_pct:
-            cooldown = max(cooldown, 30)  # pause 30 trading days (≈1.5 months) after DD exceeds threshold
+            cooldown = max(cooldown, 20)  # ~1 month pause after DD exceeds threshold
 
     exposure = float(exposure_acc / max(1, n - 1))
     if len(trade_rets) == 0:
@@ -757,79 +798,91 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
     if mean_exposure < 0.40:
         trade_bonus -= (0.40 - mean_exposure) * 2.0
 
-    # ── MDD penalty (key objective: median_mdd must stay low) ────────────
-    # Uses both median_mdd AND the worst-quartile MDD to penalise tail risk.
-    # Target: full-history MDD ≤ 22%; punish hard above that.
+    # ── MDD penalty (rebalanced v3) ───────────────────────────────────────
+    # Target: MDD ≤ 20%. Slightly softer slopes to allow higher-return strategies,
+    # but tighter absolute target.
     mdd_penalty = 0.0
     abs_mdd = abs(median_mdd)
-    if abs_mdd > 0.10:
-        mdd_penalty += (abs_mdd - 0.10) * 8.0   # penalise above 10%
+    if abs_mdd > 0.08:
+        mdd_penalty += (abs_mdd - 0.08) * 5.0    # gentle above 8%
+    if abs_mdd > 0.15:
+        mdd_penalty += (abs_mdd - 0.15) * 12.0   # moderate above 15%
     if abs_mdd > 0.20:
-        mdd_penalty += (abs_mdd - 0.20) * 25.0  # steeper cliff at 20% (was 20x)
-    if abs_mdd > 0.22:
-        mdd_penalty += (abs_mdd - 0.22) * 55.0  # new cliff at 22% (current result)
+        mdd_penalty += (abs_mdd - 0.20) * 40.0   # target cliff at 20% (was 22%)
     if abs_mdd > 0.25:
-        mdd_penalty += (abs_mdd - 0.25) * 50.0  # big cliff at 25% target boundary
+        mdd_penalty += (abs_mdd - 0.25) * 50.0
     if abs_mdd > 0.30:
-        mdd_penalty += (abs_mdd - 0.30) * 40.0  # very steep above 30%
+        mdd_penalty += (abs_mdd - 0.30) * 45.0
     if abs_mdd > 0.40:
-        mdd_penalty += (abs_mdd - 0.40) * 60.0  # catastrophic above 40%
+        mdd_penalty += (abs_mdd - 0.40) * 60.0
 
-    # Tail-risk penalty: worst-quartile MDD (p25 of mdd_vals since MDD is negative)
-    mdd_p25 = float(np.percentile(mdd_vals, 25))  # worst 25% of tickers' MDD
+    # Tail-risk penalty: worst-quartile MDD
+    mdd_p25 = float(np.percentile(mdd_vals, 25))
     abs_mdd_tail = abs(mdd_p25)
-    if abs_mdd_tail > 0.30:
-        mdd_penalty += (abs_mdd_tail - 0.30) * 12.0  # penalise worst-quartile above 30%
-    if abs_mdd_tail > 0.40:
-        mdd_penalty += (abs_mdd_tail - 0.40) * 25.0  # steep for worst quartile above 40%
+    if abs_mdd_tail > 0.25:
+        mdd_penalty += (abs_mdd_tail - 0.25) * 10.0  # tighter tail-risk target (was 30%)
+    if abs_mdd_tail > 0.35:
+        mdd_penalty += (abs_mdd_tail - 0.35) * 20.0
+    if abs_mdd_tail > 0.45:
+        mdd_penalty += (abs_mdd_tail - 0.45) * 30.0
 
     # ── Under-performance penalty ─────────────────────────────────────────
     underperf_penalty = 0.0
     if mean_excess < 0:
-        underperf_penalty += 10.0 * abs(mean_excess)    # was 6.0: stronger relative underperformance penalty
+        underperf_penalty += 10.0 * abs(mean_excess)
     if pct_excess_pos < 0.50:
-        underperf_penalty += (0.50 - pct_excess_pos) * 2.0
-    # Absolute return floor: penalise strategies that earn almost nothing even if Sharpe is high.
-    # A 6-month window should earn ≥1.5% to be meaningful (≈3%/yr annualised).
-    # This prevents "safe but useless" genomes that survive on Sharpe of near-zero returns.
+        underperf_penalty += (0.50 - pct_excess_pos) * 2.5  # was 2.0
     if mean_ret < 0.015:
-        underperf_penalty += (0.015 - mean_ret) * 25.0   # steep penalty below 1.5%/window
+        underperf_penalty += (0.015 - mean_ret) * 25.0
     if mean_ret < 0.0:
-        underperf_penalty += abs(mean_ret) * 30.0         # extra cliff for negative returns
+        underperf_penalty += abs(mean_ret) * 30.0
 
-    # ── Win-rate bonus ───────────────────────────────────────────────────
-    # Strongly reward high win rates (prefer quality trades over quantity)
+    # ── Win-rate bonus (v3: more aggressive tiers) ────────────────────────
     win_rate_bonus = 0.0
-    # Sub-50% win rate hard penalty (losing more often than winning = unacceptable)
+    # Sub-50% hard penalty
     if mean_win_rate < 0.50:
-        win_rate_bonus -= (0.50 - mean_win_rate) * 8.0
-    # Start rewarding at 52% (lowered from 55%) with higher multiplier (5.0, was 3.0)
+        win_rate_bonus -= (0.50 - mean_win_rate) * 10.0  # was 8.0
+    # Tiered bonuses starting at 52%
     if mean_win_rate > 0.52:
-        win_rate_bonus += (mean_win_rate - 0.52) * 5.0
-    # Extra step bonus above 58% (significantly above chance)
-    if mean_win_rate > 0.58:
-        win_rate_bonus += (mean_win_rate - 0.58) * 4.0
-    # Median win rate bonus (start at 55%, was 60%)
+        win_rate_bonus += (mean_win_rate - 0.52) * 6.0   # was 5.0
+    if mean_win_rate > 0.56:
+        win_rate_bonus += (mean_win_rate - 0.56) * 5.0   # new tier
+    if mean_win_rate > 0.60:
+        win_rate_bonus += (mean_win_rate - 0.60) * 6.0   # big bonus above 60%
+    # Median win rate
     if med_win_rate > 0.55:
-        win_rate_bonus += (med_win_rate - 0.55) * 3.0
+        win_rate_bonus += (med_win_rate - 0.55) * 4.0    # was 3.0
     if med_win_rate > 0.62:
-        win_rate_bonus += (med_win_rate - 0.62) * 3.0
+        win_rate_bonus += (med_win_rate - 0.62) * 5.0    # was 3.0
+    if med_win_rate > 0.68:
+        win_rate_bonus += (med_win_rate - 0.68) * 6.0    # premium tier
 
-    # ── Main fitness ─────────────────────────────────────────────────────
-    # Raised weights for: excess return over B&H (1.4→1.6), pct_excess_pos (0.8→1.2),
-    # win_rate (0.7→0.9). These directly correspond to the 3 objectives to improve.
+    # ── Consistency bonus: reward stable per-ticker performance ───────────
+    consistency_bonus = 0.0
+    if len(win_rates) > 5:
+        wr_std = float(np.std(win_rates))
+        if wr_std < 0.08:
+            consistency_bonus += 0.3   # very consistent across tickers
+        elif wr_std > 0.15:
+            consistency_bonus -= (wr_std - 0.15) * 2.0   # penalise inconsistency
+    ret_std = float(np.std(ret))
+    if ret_std < 0.10:
+        consistency_bonus += 0.2
+
+    # ── Main fitness (v3) ─────────────────────────────────────────────────
     fitness = (
-        1.6 * np.clip(mean_excess, -1.0, 5.0) +   # beat B&H: higher weight (was 1.4)
-        1.2 * np.clip(med_excess,  -1.0, 5.0) +
-        1.2 * pct_excess_pos +                      # % tickers beating B&H: higher (was 0.8)
+        1.8 * np.clip(mean_excess, -1.0, 5.0) +   # beat B&H: highest weight (was 1.6)
+        1.3 * np.clip(med_excess,  -1.0, 5.0) +   # was 1.2
+        1.4 * pct_excess_pos +                      # % tickers beating B&H (was 1.2)
         0.5 * np.clip(mean_ret,    -1.0, 5.0) +
         0.3 * np.clip(med_ret,     -1.0, 5.0) +
         0.5 * np.clip(mean_sharpe, -2.0, 3.0) +
         0.4 * np.clip(med_sharpe,  -2.0, 3.0) +
         0.3 * pct_positive +
-        0.9 * mean_win_rate +                       # win rate main weight (was 0.7)
-        0.6 * med_win_rate +                        # median win rate (was 0.5)
+        1.1 * mean_win_rate +                       # win rate main weight (was 0.9)
+        0.8 * med_win_rate +                        # median win rate (was 0.6)
         win_rate_bonus +
+        consistency_bonus +
         trade_bonus -
         mdd_penalty -
         underperf_penalty
@@ -1368,6 +1421,37 @@ def add_technical_features(df: pd.DataFrame) -> pd.DataFrame:
         df['regime_sma200_slope'] = np.nan
         df['regime_bull'] = np.nan
 
+    # ── NEW v3: Volatility regime features ──
+    # Rolling vol percentile: high = volatile regime, low = calm regime
+    vol_20 = grouped[CLOSE_COL].transform(
+        lambda x: x.pct_change().rolling(20, min_periods=5).std()
+    )
+    df['vol_regime_pctile'] = vol_20.groupby(df[TICKER_COL], sort=False).transform(
+        lambda x: x.rolling(252, min_periods=60).rank(pct=True)
+    )
+    # Volatility expansion/contraction: current vol vs 60-day avg vol
+    vol_60_avg = vol_20.groupby(df[TICKER_COL], sort=False).transform(
+        lambda x: x.rolling(60, min_periods=20).mean()
+    )
+    df['vol_expansion'] = (vol_20 / vol_60_avg.replace(0, np.nan)).clip(0.2, 5.0) - 1.0
+
+    # ── NEW v3: Trend consistency (% of last 10 closes above MA50) ──
+    ma50 = grouped[CLOSE_COL].transform(lambda x: x.rolling(50, min_periods=10).mean())
+    above_ma50 = (df[CLOSE_COL] > ma50).astype(float)
+    df['trend_consistency_10'] = above_ma50.groupby(df[TICKER_COL], sort=False).transform(
+        lambda x: x.rolling(10, min_periods=5).mean()
+    )
+
+    # ── NEW v3: Bollinger Band width (vol proxy) ──
+    df['bb_width'] = (bb_upper - bb_lower) / bb_ma.replace(0, np.nan)
+
+    # ── NEW v3: Mean reversion intensity (distance from BB mid as fraction of width) ──
+    df['mean_rev_intensity'] = ((df[CLOSE_COL] - bb_ma) / (bb_width.replace(0, np.nan) * bb_ma + 1e-9)).clip(-3, 3)
+
+    # ── NEW v3: Intraday range efficiency (close position in day's range) ──
+    day_range = (df[HIGH_COL] - df[LOW_COL]).replace(0, np.nan)
+    df['range_efficiency'] = (df[CLOSE_COL] - df[LOW_COL]) / day_range
+
     return df
 
 def regime_ok(sig: int, price: float, sma200: float, sma_slope: float, ml_score: float = np.nan) -> bool:
@@ -1498,10 +1582,12 @@ def build_direct_feature_signal(frame: pd.DataFrame, feat_cols: List[str]) -> Tu
 
     # Bearish tokens: features where HIGH value = WORSE (use negative sign → high z-score = sell signal)
     bearish_tokens = ("risk", "down", "dd", "sell", "err_buy", "pe", "price_to_book",
-                      "fund_dy_bearish", "fund_pe_vs_hist")
+                      "fund_dy_bearish", "fund_pe_vs_hist", "vol_regime_pctile",
+                      "vol_expansion", "mean_rev_intensity")
     # Bullish override: features that contain bearish sub-strings but are INVERTED (high = bullish)
     bullish_override_tokens = ("earnings_yield", "book_yield", "xs_inv", "dy_xs",
-                               "dy_vs_hist", "value_composite", "fund_pe_xs_inv")
+                               "dy_vs_hist", "value_composite", "fund_pe_xs_inv",
+                               "trend_consistency", "range_efficiency")
     signs = []
     for c in feat_cols:
         lc = str(c).lower()
@@ -1833,16 +1919,31 @@ def run():
         try:
             ck = json.load(open(out_global_ckpt, "r", encoding="utf-8"))
             prev_genome = ck.get("genome", None)
-            if prev_genome and len(prev_genome) == len(GLOBAL_PARAM_SPECS):
-                prev_genome_for_seed = prev_genome  # always keep for warm-start
-                prev_fit = float(ck.get("fitness", float("nan")))
-                if run_mode == "load":
-                    global_genome = prev_genome
-                    global_params = decode_global_params(global_genome)
-                    global_fit = prev_fit
-                    print(f"[GLOBAL_GA] loaded from checkpoint (load mode) fit={global_fit:.4f}")
-                else:
-                    print(f"[GLOBAL_GA] checkpoint found (fit={prev_fit:.4f}) — will warm-start GA from it")
+            n_specs = len(GLOBAL_PARAM_SPECS)
+            if prev_genome:
+                # Handle genome length mismatch: pad with defaults for new genes
+                if len(prev_genome) < n_specs:
+                    for idx in range(len(prev_genome), n_specs):
+                        _, lo, hi, step, is_int = GLOBAL_PARAM_SPECS[idx]
+                        default_val = (lo + hi) / 2.0
+                        default_val = round(default_val / step) * step
+                        if is_int:
+                            default_val = int(round(default_val))
+                        prev_genome.append(default_val)
+                    print(f"[GLOBAL_GA] padded checkpoint genome from {len(ck.get('genome',[]))} to {n_specs} genes (new genes added)")
+                elif len(prev_genome) > n_specs:
+                    prev_genome = prev_genome[:n_specs]
+                    print(f"[GLOBAL_GA] truncated checkpoint genome to {n_specs} genes")
+                if len(prev_genome) == n_specs:
+                    prev_genome_for_seed = prev_genome
+                    prev_fit = float(ck.get("fitness", float("nan")))
+                    if run_mode == "load":
+                        global_genome = prev_genome
+                        global_params = decode_global_params(global_genome)
+                        global_fit = prev_fit
+                        print(f"[GLOBAL_GA] loaded from checkpoint (load mode) fit={global_fit:.4f}")
+                    else:
+                        print(f"[GLOBAL_GA] checkpoint found (fit={prev_fit:.4f}) — will warm-start GA from it")
         except Exception as e:
             print(f"[WARN] global checkpoint load failed: {e}")
 
