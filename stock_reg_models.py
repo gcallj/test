@@ -277,11 +277,22 @@ def run_reg_models(mode: str = "full"):
         close_like = [c for c in df.columns if c[1] == tk and "close" in str(c[0]).lower()]
         return close_like[0] if close_like else None
 
-    def is_good_close(s: pd.Series, min_frac=0.80) -> bool:
+    def is_good_close(s: pd.Series, min_frac=0.80, min_trading_days=250) -> bool:
+        """Valida se uma série de fechamento tem dados suficientes para modelagem.
+        Usa apenas preços positivos (exclui zeros pré-IPO), exige >= min_trading_days
+        de pregões reais e mediana positiva. min_frac ainda é checado nos últimos
+        2 anos (~504 pregões) para garantir continuidade recente."""
         if s is None: return False
-        frac = float(s.notna().mean())
-        med = float(np.nanmedian(s.values)) if np.isfinite(np.nanmedian(s.values)) else np.nan
-        return (frac >= min_frac) and np.isfinite(med) and (med > 0)
+        s_pos = s[s > 0]                       # apenas dias com pregão real (exclui zeros pré-IPO)
+        if len(s_pos) < min_trading_days:      # exige ao menos ~1 ano de dados reais
+            return False
+        med = float(np.nanmedian(s_pos.values))
+        if not (np.isfinite(med) and med > 0):
+            return False
+        # checar continuidade recente: nos últimos 504 dias, ao menos min_frac com preço > 0
+        recent = s.iloc[-504:]
+        frac_recent = float((recent > 0).mean())
+        return frac_recent >= min_frac
 
     def asset_class(ticker: str) -> str:
         t = str(ticker)

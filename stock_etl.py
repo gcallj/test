@@ -115,6 +115,18 @@ def run_etl():
         # Química / materiais
         "UNIP6.SA",
 
+        # Construção civil / incorporação
+        "EZTC3.SA",
+
+        # Frigoríficos / alimentos
+        "MLAS3.SA",
+
+        # Turismo / lazer
+        "CVCB3.SA",
+
+        # BDR / ETF internacional
+        "XPBR31.SA",
+
     ]
 
     # FIIs Brasil (mix: logística, shoppings, lajes, papel, FoF)
@@ -131,6 +143,10 @@ def run_etl():
         "KNCR11.SA", "KNSC11.SA", "KNHY11.SA", "CPTS11.SA", "IRDM11.SA",
         # FoF
         "BCFF11.SA", "HFOF11.SA", "KFOF11.SA", "RBRF11.SA",
+        # Saúde / biotech
+        "RBRX11.SA",
+        # Híbridos / diversificados
+        "BCIA11.SA",
     ]
 
     # Índices globais + proxies macro (inclui Suécia e juros EUA)
@@ -1256,7 +1272,7 @@ def run_etl():
         min_keep=96,         # garanta pelo menos ~100 por ticker (se existirem)
         var_thr=None,        # não remova por variância agora
         corr_thr=0.9995,     # só remove quase idênticos
-        always_keep_prefixes=("pct_change","SMA_","tri_","sr_"),
+        always_keep_prefixes=("pct_change","SMA_","tri_","sr_","Close","Adj Close","close"),  # Close obrigatório para reg
         verbose=True
     )
 
