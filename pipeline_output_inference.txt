@@ -1,0 +1,883 @@
+================================================================================
+STOCK PIPELINE RUNNER
+================================================================================
+Mode:             full
+Output directory: C:\Users\gabri\OneDrive\Documentos\GitHub\test\.claude\worktrees\dazzling-robinson\output
+Steps to run:     [2, 3, 4]
+Working dir:      C:\Users\gabri\OneDrive\Documentos\GitHub\test\.claude\worktrees\dazzling-robinson
+================================================================================
+
+================================================================================
+STEP 2/4 — BINARY MODELS (bin_Stock_modelos_individuais)
+================================================================================
+Scanning labeled dates (low-ram):   0%|          | 0/134 [00:00<?, ?it/s]Scanning labeled dates (low-ram): 100%|██████████| 134/134 [00:00<00:00, 1936.98it/s]
+Max feature date: 2026-03-12 | Max labeled date: 2026-03-12
+Dates — TRAIN: 2019-09-28 → 2024-08-31 | VALID: 2024-11-30 → 2025-04-04 | TEST: 2025-07-04 → 2026-03-12 | APPLY(last 5): 2026-03-08 → 2026-03-12 | PURGE=90 (guard=90)
+Building sampled LONG (low-ram):   0%|          | 0/134 [00:00<?, ?it/s][WARN] 000001.SS: 89 features ausentes (ex: ['Open', 'SMA_1', 'SMA_2', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_15', 'cross_10_20', 'cross_10_25', 'cross_10_50', 'cross_15_20'])
+Building sampled LONG (low-ram):   1%|          | 1/134 [00:00<00:17,  7.77it/s][WARN] 399001.SZ: 90 features ausentes (ex: ['Close', 'Open', 'SMA_1', 'SMA_2', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_15', 'cross_10_20', 'cross_10_25', 'cross_10_50'])
+Building sampled LONG (low-ram):   1%|▏         | 2/134 [00:00<00:16,  8.17it/s][WARN] ABCB4.SA: 111 features ausentes (ex: ['Adj Close', 'Close', 'Low', 'Open', 'SMA_1', 'SMA_15', 'SMA_2', 'SMA_20', 'SMA_5', 'chan_high_roll_max'])
+Building sampled LONG (low-ram):   2%|▏         | 3/134 [00:00<00:15,  8.63it/s][WARN] ABEV3.SA: 83 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_20'])
+Building sampled LONG (low-ram):   3%|▎         | 4/134 [00:00<00:14,  8.84it/s][WARN] AGRO3.SA: 109 features ausentes (ex: ['High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_25', 'SMA_5', 'chan_high_roll_max'])
+Building sampled LONG (low-ram):   4%|▎         | 5/134 [00:00<00:14,  9.02it/s][WARN] ALUP11.SA: 111 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_25'])
+Building sampled LONG (low-ram):   4%|▍         | 6/134 [00:00<00:13,  9.33it/s][WARN] ALZR11.SA: 104 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_2', 'SMA_5', 'chan_high_roll_max', 'chan_low_roll_min'])
+[WARN] ASAI3.SA: 83 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Open', 'SMA_1', 'SMA_2', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_100', 'cross_10_15'])
+Building sampled LONG (low-ram):   6%|▌         | 8/134 [00:00<00:12,  9.69it/s][WARN] AXIA3.SA: 78 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_2', 'SMA_20', 'SMA_5'])
+Building sampled LONG (low-ram):   7%|▋         | 9/134 [00:00<00:12,  9.68it/s][WARN] AXIA6.SA: 92 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_15', 'SMA_2', 'SMA_20', 'SMA_25'])
+Building sampled LONG (low-ram):   7%|▋         | 10/134 [00:01<00:12,  9.66it/s][WARN] BBAS3.SA: 106 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_25'])
+Building sampled LONG (low-ram):   8%|▊         | 11/134 [00:01<00:13,  9.24it/s][WARN] BBDC4.SA: 97 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'SMA_1', 'SMA_2', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_100', 'cross_10_20'])
+[WARN] BBSE3.SA: 99 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_20'])
+Building sampled LONG (low-ram):  10%|▉         | 13/134 [00:01<00:12,  9.49it/s][WARN] BEEF3.SA: 65 features ausentes (ex: ['SMA_1', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_100', 'cross_10_15', 'cross_10_20', 'cross_10_25', 'cross_10_50', 'cross_15_100', 'cross_15_20'])
+Building sampled LONG (low-ram):  10%|█         | 14/134 [00:01<00:12,  9.51it/s][WARN] BPAC11.SA: 111 features ausentes (ex: ['Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_20', 'SMA_25'])
+Building sampled LONG (low-ram):  11%|█         | 15/134 [00:01<00:12,  9.47it/s][WARN] BRCO11.SA: 103 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Open', 'SMA_1', 'SMA_2', 'SMA_5', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_100'])
+Building sampled LONG (low-ram):  12%|█▏        | 16/134 [00:01<00:12,  9.45it/s][WARN] BRCR11.SA: 85 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'SMA_1', 'SMA_2', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_100', 'cross_10_15'])
+Building sampled LONG (low-ram):  13%|█▎        | 17/134 [00:01<00:12,  9.12it/s][WARN] BRKM5.SA: 70 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Open', 'SMA_1', 'SMA_2', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_15', 'cross_10_20'])
+Building sampled LONG (low-ram):  13%|█▎        | 18/134 [00:01<00:12,  9.21it/s][WARN] BRL=X: 111 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_2', 'SMA_5', 'Volume', 'chan_low_roll_min'])
+Building sampled LONG (low-ram):  14%|█▍        | 19/134 [00:02<00:12,  9.05it/s][WARN] BRSR6.SA: 88 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'SMA_10', 'SMA_2', 'SMA_20', 'SMA_5', 'chan_high_roll_max', 'chan_low_roll_min'])
+Building sampled LONG (low-ram):  15%|█▍        | 20/134 [00:02<00:13,  8.20it/s][WARN] BTC-USD: 111 features ausentes (ex: ['Adj Close', 'Close', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_20', 'SMA_25'])
+Building sampled LONG (low-ram):  16%|█▌        | 21/134 [00:02<00:13,  8.40it/s][WARN] BTLG11.SA: 105 features ausentes (ex: ['Adj Close', 'Close', 'Low', 'Open', 'SMA_1', 'SMA_2', 'SMA_5', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_100'])
+Building sampled LONG (low-ram):  16%|█▋        | 22/134 [00:02<00:12,  8.66it/s][WARN] BZ=F: 94 features ausentes (ex: ['Adj Close', 'Close', 'Open', 'SMA_1', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_100', 'cross_10_15', 'cross_10_20', 'cross_10_25'])
+Building sampled LONG (low-ram):  17%|█▋        | 23/134 [00:02<00:12,  8.63it/s][WARN] CL=F: 82 features ausentes (ex: ['Adj Close', 'Close', 'SMA_1', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_15', 'cross_10_25', 'cross_15_20', 'cross_15_25', 'cross_15_50'])
+Building sampled LONG (low-ram):  18%|█▊        | 24/134 [00:02<00:12,  8.89it/s][WARN] CMIG4.SA: 61 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'SMA_1', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_100', 'cross_10_15', 'cross_10_20'])
+Building sampled LONG (low-ram):  19%|█▊        | 25/134 [00:02<00:12,  8.44it/s][WARN] COPX: 103 features ausentes (ex: ['Adj Close', 'Close', 'Low', 'Open', 'SMA_1', 'SMA_2', 'chan_high_roll_max', 'cross_10_100', 'cross_10_15', 'cross_10_20'])
+Building sampled LONG (low-ram):  19%|█▉        | 26/134 [00:02<00:13,  8.27it/s][WARN] CPFE3.SA: 107 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_20'])
+Building sampled LONG (low-ram):  20%|██        | 27/134 [00:03<00:13,  8.10it/s][WARN] CPTS11.SA: 111 features ausentes (ex: ['Adj Close', 'Close', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_20', 'SMA_25'])
+Building sampled LONG (low-ram):  21%|██        | 28/134 [00:03<00:13,  7.64it/s][WARN] CRO-USD: 89 features ausentes (ex: ['Close', 'SMA_1', 'SMA_10', 'SMA_25', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_100', 'cross_10_20', 'cross_10_25', 'cross_10_50'])
+Building sampled LONG (low-ram):  22%|██▏       | 29/134 [00:03<00:13,  7.81it/s][WARN] CSAN3.SA: 83 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_20'])
+Building sampled LONG (low-ram):  22%|██▏       | 30/134 [00:03<00:12,  8.05it/s][WARN] CSMG3.SA: 93 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Open', 'SMA_1', 'SMA_15', 'SMA_2', 'SMA_20', 'SMA_25', 'SMA_5'])
+Building sampled LONG (low-ram):  23%|██▎       | 31/134 [00:03<00:12,  8.12it/s][WARN] CSNA3.SA: 66 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Open', 'SMA_1', 'SMA_10', 'SMA_2', 'SMA_25', 'chan_high_roll_max', 'chan_low_roll_min'])
+Building sampled LONG (low-ram):  24%|██▍       | 32/134 [00:03<00:12,  8.18it/s][WARN] CURY3.SA: 91 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_25'])
+Building sampled LONG (low-ram):  25%|██▍       | 33/134 [00:03<00:12,  7.96it/s][WARN] CXSE3.SA: 99 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_2', 'SMA_5', 'chan_high_roll_max', 'chan_low_roll_min'])
+Building sampled LONG (low-ram):  25%|██▌       | 34/134 [00:03<00:13,  7.65it/s][WARN] CYRE3.SA: 75 features ausentes (ex: ['Adj Close', 'Close', 'High', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_20', 'SMA_25', 'chan_low_roll_min'])
+Building sampled LONG (low-ram):  26%|██▌       | 35/134 [00:04<00:13,  7.53it/s][WARN] DIRR3.SA: 92 features ausentes (ex: ['High', 'Low', 'Open', 'SMA_1', 'SMA_15', 'SMA_2', 'SMA_20', 'SMA_25', 'SMA_5', 'chan_high_roll_max'])
+Building sampled LONG (low-ram):  27%|██▋       | 36/134 [00:04<00:13,  7.01it/s][WARN] DOGE-USD: 89 features ausentes (ex: ['SMA_1', 'SMA_10', 'SMA_25', 'chan_low_roll_min', 'cross_10_100', 'cross_10_20', 'cross_10_25', 'cross_10_50', 'cross_15_100', 'cross_15_20'])
+Building sampled LONG (low-ram):  28%|██▊       | 37/134 [00:04<00:13,  7.29it/s][WARN] ECOR3.SA: 96 features ausentes (ex: ['High', 'Low', 'SMA_1', 'SMA_2', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_100', 'cross_10_15', 'cross_10_25', 'cross_10_50'])
+Building sampled LONG (low-ram):  28%|██▊       | 38/134 [00:04<00:12,  7.44it/s][WARN] EGIE3.SA: 111 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_20'])
+Building sampled LONG (low-ram):  29%|██▉       | 39/134 [00:04<00:12,  7.75it/s][WARN] ENGI11.SA: 111 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_20'])
+Building sampled LONG (low-ram):  30%|██▉       | 40/134 [00:04<00:11,  8.16it/s][WARN] EQTL3.SA: 89 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_20'])
+Building sampled LONG (low-ram):  31%|███       | 41/134 [00:04<00:11,  8.45it/s][WARN] ETH-USD: 103 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_20', 'SMA_25'])
+Building sampled LONG (low-ram):  31%|███▏      | 42/134 [00:04<00:10,  8.63it/s][WARN] FLRY3.SA: 90 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_25'])
+Building sampled LONG (low-ram):  32%|███▏      | 43/134 [00:05<00:10,  8.57it/s][WARN] GC=F: 107 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_20'])
+Building sampled LONG (low-ram):  33%|███▎      | 44/134 [00:05<00:11,  8.09it/s][WARN] GGBR4.SA: 96 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'SMA_10', 'SMA_2', 'SMA_20', 'SMA_5', 'chan_high_roll_max', 'chan_low_roll_min'])
+[WARN] GLD: 108 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_2', 'SMA_20', 'SMA_25'])
+Building sampled LONG (low-ram):  34%|███▍      | 46/134 [00:05<00:10,  8.68it/s][WARN] GOAU4.SA: 95 features ausentes (ex: ['Adj Close', 'Close', 'Open', 'SMA_1', 'SMA_2', 'chan_high_roll_max', 'cross_10_20', 'cross_10_25', 'cross_10_50', 'cross_15_20'])
+Building sampled LONG (low-ram):  35%|███▌      | 47/134 [00:05<00:09,  8.83it/s][WARN] GRND3.SA: 77 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_25'])
+Building sampled LONG (low-ram):  36%|███▌      | 48/134 [00:05<00:09,  8.97it/s][WARN] HAPV3.SA: 83 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_2', 'SMA_20', 'SMA_5', 'chan_high_roll_max'])
+Building sampled LONG (low-ram):  37%|███▋      | 49/134 [00:05<00:09,  9.00it/s][WARN] HE=F: 83 features ausentes (ex: ['Close', 'SMA_1', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_100', 'cross_10_25', 'cross_15_20', 'cross_15_25', 'cross_1_10', 'cross_1_100'])
+[WARN] HG=F: 86 features ausentes (ex: ['Adj Close', 'Close', 'High', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_15', 'cross_10_20', 'cross_10_25', 'cross_15_25', 'cross_1_10'])
+Building sampled LONG (low-ram):  38%|███▊      | 51/134 [00:05<00:08,  9.26it/s][WARN] HGBS11.SA: 100 features ausentes (ex: ['Adj Close', 'Close', 'Low', 'Open', 'SMA_1', 'SMA_2', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_100', 'cross_10_25'])
+Building sampled LONG (low-ram):  39%|███▉      | 52/134 [00:06<00:09,  9.09it/s][WARN] HGLG11.SA: 105 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Open', 'SMA_1', 'SMA_2', 'SMA_5', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_20'])
+Building sampled LONG (low-ram):  40%|███▉      | 53/134 [00:06<00:09,  8.55it/s][WARN] HGRE11.SA: 100 features ausentes (ex: ['Adj Close', 'Close', 'Low', 'Open', 'SMA_1', 'SMA_2', 'SMA_5', 'chan_low_roll_min', 'chan_pattern', 'cross_10_100'])
+Building sampled LONG (low-ram):  40%|████      | 54/134 [00:06<00:09,  8.77it/s][WARN] HO=F: 83 features ausentes (ex: ['Adj Close', 'Close', 'SMA_1', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_25', 'cross_15_20', 'cross_15_25', 'cross_1_10', 'cross_1_15'])
+Building sampled LONG (low-ram):  41%|████      | 55/134 [00:06<00:08,  9.00it/s][WARN] IGTI11.SA: 101 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_2', 'SMA_5', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_100'])
+Building sampled LONG (low-ram):  42%|████▏     | 56/134 [00:06<00:08,  9.14it/s][WARN] ISAE4.SA: 89 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_20'])
+Building sampled LONG (low-ram):  43%|████▎     | 57/134 [00:06<00:08,  9.25it/s][WARN] ITSA4.SA: 84 features ausentes (ex: ['Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_20', 'SMA_25'])
+Building sampled LONG (low-ram):  43%|████▎     | 58/134 [00:06<00:08,  9.04it/s][WARN] ITUB4.SA: 93 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_20'])
+Building sampled LONG (low-ram):  44%|████▍     | 59/134 [00:06<00:08,  9.09it/s][WARN] JHSF3.SA: 73 features ausentes (ex: ['Adj Close', 'Close', 'Open', 'SMA_1', 'chan_high_roll_max', 'chan_low_roll_min', 'chan_pattern', 'cross_10_100', 'cross_10_15', 'cross_10_20'])
+Building sampled LONG (low-ram):  45%|████▍     | 60/134 [00:06<00:08,  9.07it/s][WARN] KC=F: 92 features ausentes (ex: ['Adj Close', 'Close', 'Low', 'Open', 'SMA_2', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_15', 'cross_10_25', 'cross_10_50'])
+Building sampled LONG (low-ram):  46%|████▌     | 61/134 [00:07<00:08,  9.06it/s][WARN] KFOF11.SA: 99 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Open', 'SMA_1', 'SMA_2', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_100', 'cross_10_20'])
+Building sampled LONG (low-ram):  46%|████▋     | 62/134 [00:07<00:08,  8.55it/s][WARN] KLBN11.SA: 110 features ausentes (ex: ['Adj Close', 'Close', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_2', 'SMA_20', 'SMA_5', 'chan_high_roll_max'])
+Building sampled LONG (low-ram):  47%|████▋     | 63/134 [00:07<00:08,  8.69it/s][WARN] LAVV3.SA: 77 features ausentes (ex: ['High', 'Low', 'Open', 'SMA_1', 'SMA_2', 'SMA_5', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_100', 'cross_10_15'])
+[WARN] LEVE3.SA: 78 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_25'])
+Building sampled LONG (low-ram):  49%|████▊     | 65/134 [00:07<00:07,  9.32it/s][WARN] LREN3.SA: 66 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_100', 'cross_10_15', 'cross_10_20'])
+[WARN] LTC-USD: 90 features ausentes (ex: ['Adj Close', 'Close', 'SMA_1', 'SMA_10', 'SMA_20', 'SMA_25', 'chan_low_roll_min', 'cross_10_100', 'cross_10_20', 'cross_10_25'])
+Building sampled LONG (low-ram):  50%|█████     | 67/134 [00:07<00:06,  9.67it/s][WARN] MBRF3.SA: 71 features ausentes (ex: ['Adj Close', 'Close', 'Open', 'SMA_1', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_100', 'cross_10_15', 'cross_10_20', 'cross_10_25'])
+[WARN] MDIA3.SA: 83 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_25'])
+Building sampled LONG (low-ram):  51%|█████▏    | 69/134 [00:07<00:06,  9.82it/s][WARN] MGLU3.SA: 111 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_20'])
+Building sampled LONG (low-ram):  52%|█████▏    | 70/134 [00:07<00:06,  9.79it/s][WARN] MULT3.SA: 86 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'SMA_1', 'SMA_15', 'SMA_2', 'SMA_20', 'SMA_5', 'chan_high_roll_max'])
+Building sampled LONG (low-ram):  53%|█████▎    | 71/134 [00:08<00:06,  9.48it/s][WARN] MXN=X: 109 features ausentes (ex: ['Adj Close', 'Close', 'Low', 'Open', 'SMA_1', 'Volume', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_100', 'cross_10_20'])
+Building sampled LONG (low-ram):  54%|█████▎    | 72/134 [00:08<00:06,  9.35it/s][WARN] MXRF11.SA: 109 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_2', 'SMA_5', 'chan_high_roll_max', 'chan_low_roll_min'])
+Building sampled LONG (low-ram):  54%|█████▍    | 73/134 [00:08<00:06,  9.43it/s][WARN] NEOE3.SA: 104 features ausentes (ex: ['Adj Close', 'Close', 'Low', 'Open', 'SMA_1', 'SMA_2', 'SMA_5', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_100'])
+Building sampled LONG (low-ram):  55%|█████▌    | 74/134 [00:08<00:06,  9.45it/s][WARN] NG=F: 80 features ausentes (ex: ['Adj Close', 'Close', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_20', 'cross_10_25', 'cross_15_100', 'cross_15_20', 'cross_15_25', 'cross_1_10'])
+Building sampled LONG (low-ram):  56%|█████▌    | 75/134 [00:08<00:06,  9.52it/s][WARN] ODPV3.SA: 108 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_20'])
+Building sampled LONG (low-ram):  57%|█████▋    | 76/134 [00:08<00:06,  9.44it/s][WARN] PETR4.SA: 82 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_20'])
+Building sampled LONG (low-ram):  57%|█████▋    | 77/134 [00:08<00:06,  9.25it/s][WARN] POMO4.SA: 106 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_25'])
+Building sampled LONG (low-ram):  58%|█████▊    | 78/134 [00:08<00:06,  9.08it/s][WARN] PRIO3.SA: 71 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_2', 'SMA_5', 'chan_high_roll_max', 'chan_low_roll_min'])
+Building sampled LONG (low-ram):  59%|█████▉    | 79/134 [00:08<00:06,  9.16it/s][WARN] PSSA3.SA: 92 features ausentes (ex: ['Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_20', 'SMA_25'])
+Building sampled LONG (low-ram):  60%|█████▉    | 80/134 [00:09<00:06,  8.81it/s][WARN] RADL3.SA: 108 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_20', 'SMA_25'])
+Building sampled LONG (low-ram):  60%|██████    | 81/134 [00:09<00:06,  8.73it/s][WARN] RAIL3.SA: 99 features ausentes (ex: ['Adj Close', 'Close', 'Low', 'Open', 'SMA_1', 'SMA_2', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_100', 'cross_10_20'])
+Building sampled LONG (low-ram):  61%|██████    | 82/134 [00:09<00:05,  9.00it/s][WARN] RAIZ4.SA: 101 features ausentes (ex: ['High', 'Low', 'Open', 'SMA_1', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_100', 'cross_10_20', 'cross_10_25', 'cross_10_50'])
+Building sampled LONG (low-ram):  62%|██████▏   | 83/134 [00:09<00:05,  9.26it/s][WARN] RANI3.SA: 105 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_20'])
+Building sampled LONG (low-ram):  63%|██████▎   | 84/134 [00:09<00:05,  9.44it/s][WARN] RBRF11.SA: 100 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_2', 'SMA_5', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_100'])
+[WARN] RBRP11.SA: 100 features ausentes (ex: ['Adj Close', 'Close', 'Low', 'Open', 'SMA_1', 'SMA_2', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_100', 'cross_10_20'])
+Building sampled LONG (low-ram):  64%|██████▍   | 86/134 [00:09<00:04,  9.75it/s][WARN] RCRB11.SA: 100 features ausentes (ex: ['Adj Close', 'Close', 'Low', 'Open', 'SMA_1', 'SMA_2', 'SMA_5', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_100'])
+Building sampled LONG (low-ram):  65%|██████▍   | 87/134 [00:09<00:04,  9.74it/s][WARN] RENT3.SA: 92 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_20'])
+Building sampled LONG (low-ram):  66%|██████▌   | 88/134 [00:09<00:04,  9.77it/s][WARN] SANB11.SA: 111 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_25'])
+Building sampled LONG (low-ram):  66%|██████▋   | 89/134 [00:10<00:04,  9.82it/s][WARN] SAPR11.SA: 110 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_15', 'SMA_2', 'SMA_25', 'SMA_5'])
+Building sampled LONG (low-ram):  67%|██████▋   | 90/134 [00:10<00:04,  9.45it/s][WARN] SB=F: 84 features ausentes (ex: ['Adj Close', 'Close', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_100', 'cross_10_15', 'cross_15_100', 'cross_15_20', 'cross_15_25', 'cross_1_10'])
+[WARN] SBSP3.SA: 111 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_20'])
+Building sampled LONG (low-ram):  69%|██████▊   | 92/134 [00:10<00:04,  9.86it/s][WARN] SEK=X: 105 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'SMA_1', 'Volume', 'chan_high_roll_max', 'cross_10_15', 'cross_10_25', 'cross_10_50'])
+Building sampled LONG (low-ram):  69%|██████▉   | 93/134 [00:10<00:04,  9.79it/s][WARN] SI=F: 88 features ausentes (ex: ['Adj Close', 'Close', 'Low', 'Open', 'SMA_10', 'SMA_2', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_15', 'cross_10_20'])
+Building sampled LONG (low-ram):  70%|███████   | 94/134 [00:10<00:04,  9.64it/s][WARN] SLCE3.SA: 84 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_15', 'SMA_2', 'SMA_20', 'SMA_25'])
+Building sampled LONG (low-ram):  71%|███████   | 95/134 [00:10<00:04,  9.44it/s][WARN] SMTO3.SA: 108 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_20'])
+Building sampled LONG (low-ram):  72%|███████▏  | 96/134 [00:10<00:04,  9.38it/s][WARN] SOL-USD: 100 features ausentes (ex: ['High', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_20', 'SMA_25', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_100'])
+Building sampled LONG (low-ram):  72%|███████▏  | 97/134 [00:10<00:03,  9.35it/s][WARN] SUZB3.SA: 103 features ausentes (ex: ['Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_20', 'SMA_25'])
+Building sampled LONG (low-ram):  73%|███████▎  | 98/134 [00:10<00:03,  9.36it/s][WARN] SYNE3.SA: 55 features ausentes (ex: ['SMA_1', 'SMA_10', 'chan_high_roll_max', 'chan_low_roll_min', 'chan_pattern', 'cross_10_100', 'cross_10_15', 'cross_10_20', 'cross_10_25', 'cross_10_50'])
+Building sampled LONG (low-ram):  74%|███████▍  | 99/134 [00:11<00:03,  9.16it/s][WARN] TAEE11.SA: 102 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_20'])
+Building sampled LONG (low-ram):  75%|███████▍  | 100/134 [00:11<00:03,  8.57it/s][WARN] TGMA3.SA: 83 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_2', 'SMA_5', 'chan_high_roll_max', 'chan_low_roll_min', 'chan_pattern'])
+Building sampled LONG (low-ram):  75%|███████▌  | 101/134 [00:11<00:03,  8.66it/s][WARN] TIMS3.SA: 96 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_20'])
+Building sampled LONG (low-ram):  76%|███████▌  | 102/134 [00:11<00:03,  8.54it/s][WARN] UGPA3.SA: 64 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_100', 'cross_10_20'])
+Building sampled LONG (low-ram):  77%|███████▋  | 103/134 [00:11<00:03,  8.48it/s][WARN] UNIP6.SA: 81 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_20'])
+Building sampled LONG (low-ram):  78%|███████▊  | 104/134 [00:11<00:03,  8.45it/s][WARN] USIM5.SA: 70 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'SMA_1', 'chan_high_roll_max', 'chan_low_roll_min', 'chan_pattern', 'cross_10_15', 'cross_10_25'])
+Building sampled LONG (low-ram):  78%|███████▊  | 105/134 [00:11<00:03,  8.51it/s][WARN] USO: 104 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Open', 'SMA_1', 'chan_high_roll_max', 'chan_low_roll_min', 'chan_pattern', 'cross_10_15', 'cross_10_25'])
+[WARN] VALE3.SA: 80 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_25'])
+Building sampled LONG (low-ram):  80%|███████▉  | 107/134 [00:12<00:02,  9.29it/s][WARN] VBBR3.SA: 102 features ausentes (ex: ['Adj Close', 'Close', 'Low', 'Open', 'SMA_1', 'SMA_2', 'SMA_5', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_100'])
+Building sampled LONG (low-ram):  81%|████████  | 108/134 [00:12<00:02,  9.14it/s][WARN] VIVT3.SA: 106 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_25'])
+[WARN] VULC3.SA: 86 features ausentes (ex: ['High', 'Low', 'Open', 'SMA_1', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_15', 'cross_10_20', 'cross_10_50', 'cross_15_100'])
+Building sampled LONG (low-ram):  82%|████████▏ | 110/134 [00:12<00:02,  9.59it/s][WARN] WEGE3.SA: 88 features ausentes (ex: ['High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_20', 'SMA_25', 'SMA_5'])
+[WARN] WIZC3.SA: 78 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Open', 'SMA_1', 'SMA_2', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_100', 'cross_10_15'])
+Building sampled LONG (low-ram):  84%|████████▎ | 112/134 [00:12<00:02,  9.78it/s][WARN] XPML11.SA: 97 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_100', 'cross_10_20'])
+Building sampled LONG (low-ram):  84%|████████▍ | 113/134 [00:12<00:02,  9.80it/s][WARN] ZC=F: 86 features ausentes (ex: ['Adj Close', 'Close', 'SMA_2', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_15', 'cross_10_25', 'cross_15_20', 'cross_15_25', 'cross_1_10'])
+Building sampled LONG (low-ram):  85%|████████▌ | 114/134 [00:12<00:02,  9.75it/s][WARN] ZS=F: 85 features ausentes (ex: ['SMA_1', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_100', 'cross_10_15', 'cross_10_25', 'cross_15_100', 'cross_15_20', 'cross_15_25', 'cross_15_50'])
+Building sampled LONG (low-ram):  86%|████████▌ | 115/134 [00:12<00:01,  9.67it/s][WARN] ZW=F: 81 features ausentes (ex: ['Close', 'SMA_1', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_15', 'cross_10_50', 'cross_15_20', 'cross_15_25', 'cross_1_10', 'cross_1_20'])
+Building sampled LONG (low-ram):  87%|████████▋ | 116/134 [00:12<00:01,  9.59it/s][WARN] ^BSESN: 111 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_20'])
+Building sampled LONG (low-ram):  87%|████████▋ | 117/134 [00:13<00:01,  9.50it/s][WARN] ^BVSP: 105 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_2', 'SMA_20', 'SMA_5'])
+Building sampled LONG (low-ram):  88%|████████▊ | 118/134 [00:13<00:01,  8.94it/s][WARN] ^FVX: 93 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Open', 'SMA_1', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_15', 'cross_10_20', 'cross_10_25'])
+Building sampled LONG (low-ram):  89%|████████▉ | 119/134 [00:13<00:01,  9.05it/s][WARN] ^GDAXI: 107 features ausentes (ex: ['Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_2', 'SMA_20', 'SMA_5', 'chan_high_roll_max'])
+Building sampled LONG (low-ram):  90%|████████▉ | 120/134 [00:13<00:01,  9.06it/s][WARN] ^HSI: 85 features ausentes (ex: ['Adj Close', 'Close', 'Open', 'SMA_1', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_100', 'cross_10_15', 'cross_10_20', 'cross_10_25'])
+Building sampled LONG (low-ram):  90%|█████████ | 121/134 [00:13<00:01,  9.18it/s][WARN] ^IRX: 99 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_2', 'SMA_20', 'SMA_5', 'Volume'])
+Building sampled LONG (low-ram):  91%|█████████ | 122/134 [00:13<00:01,  9.26it/s][WARN] ^IXIC: 111 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_20'])
+Building sampled LONG (low-ram):  92%|█████████▏| 123/134 [00:13<00:01,  9.29it/s][WARN] ^JKSE: 108 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Open', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_20', 'SMA_5'])
+Building sampled LONG (low-ram):  93%|█████████▎| 124/134 [00:13<00:01,  9.34it/s][WARN] ^KS11: 99 features ausentes (ex: ['Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_2', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_100', 'cross_10_20'])
+Building sampled LONG (low-ram):  93%|█████████▎| 125/134 [00:13<00:00,  9.30it/s][WARN] ^MXX: 104 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_2', 'SMA_20', 'SMA_5', 'chan_high_roll_max'])
+Building sampled LONG (low-ram):  94%|█████████▍| 126/134 [00:14<00:00,  9.33it/s][WARN] ^N225: 108 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_15', 'SMA_2', 'SMA_25', 'SMA_5'])
+Building sampled LONG (low-ram):  95%|█████████▍| 127/134 [00:14<00:00,  9.24it/s][WARN] ^NDX: 111 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_15', 'SMA_2', 'SMA_20'])
+[WARN] ^RUT: 104 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_2', 'SMA_20', 'SMA_5', 'chan_high_roll_max'])
+Building sampled LONG (low-ram):  96%|█████████▋| 129/134 [00:14<00:00,  9.78it/s][WARN] ^TNX: 94 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Open', 'SMA_1', 'Volume', 'chan_high_roll_max', 'cross_10_20', 'cross_10_25', 'cross_10_50'])
+[WARN] ^TWII: 105 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Open', 'SMA_1', 'SMA_10', 'SMA_2', 'SMA_20', 'SMA_5'])
+Building sampled LONG (low-ram):  98%|█████████▊| 131/134 [00:14<00:00,  9.94it/s][WARN] ^TYX: 91 features ausentes (ex: ['Adj Close', 'Close', 'High', 'Low', 'Volume', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_10_15', 'cross_10_25', 'cross_1_10'])
+Building sampled LONG (low-ram):  99%|█████████▊| 132/134 [00:14<00:00,  9.94it/s][WARN] ^VIX: 89 features ausentes (ex: ['SMA_1', 'Volume', 'chan_high_roll_max', 'chan_low_roll_min', 'cross_15_100', 'cross_15_20', 'cross_15_25', 'cross_15_50', 'cross_1_10', 'cross_1_15'])
+[WARN] ^VVIX: 97 features ausentes (ex: ['Close', 'SMA_1', 'Volume', 'chan_high_roll_max', 'chan_low_roll_min', 'chan_pattern', 'cross_10_100', 'cross_10_15', 'cross_10_20', 'cross_10_25'])
+Building sampled LONG (low-ram): 100%|██████████| 134/134 [00:14<00:00, 10.09it/s]Building sampled LONG (low-ram): 100%|██████████| 134/134 [00:14<00:00,  9.04it/s]
+Long shape (sampled): (282557, 215) | labeled rows: 282557
+Max feature date: 2026-03-12 | Max labeled date: 2026-03-12
+Dates — TRAIN: 2019-09-28 → 2024-03-04 | VALID: 2024-06-03 → 2025-01-04 | TEST: 2025-07-04 → 2026-03-12 | APPLY(last 5): 2026-03-08 → 2026-03-12 | PURGE=90 (guard=90)
+[load] tv models loaded: 8/8
+[load] train models loaded: 8/8
+[OK] Saved history with trust → ./output/ensemble_signals_history_with_trust.parquet | rows=282557
+
+[VALID | target_up20 | lgbm] metrics
+  AP:           0.4475
+  ROC-AUC:      0.7861
+  MCC:          0.3300
+  F1:           0.3237
+  Precision:    0.6408
+  Recall:       0.2166
+  BalancedAcc:  0.6001
+  FPR:          0.0164   (lower is fewer false positives)
+  PosRate:      0.0401 (fraction predicted positive)
+  Confusion:    tn=14192  fp=236  fn=1523  tp=421
+  Threshold:    0.8611
+
+[TEST | target_up20 | lgbm] metrics
+  AP:           0.3338
+  ROC-AUC:      0.6262
+  MCC:          0.1418
+  F1:           0.1345
+  Precision:    0.5353
+  Recall:       0.0769
+  BalancedAcc:  0.5297
+  FPR:          0.0174   (lower is fewer false positives)
+  PosRate:      0.0298 (fraction predicted positive)
+  Confusion:    tn=26306  fp=467  fn=6457  tp=538
+  Threshold:    0.8611
+
+[VALID | target_up20 | hgb] metrics
+  AP:           0.5213
+  ROC-AUC:      0.8419
+  MCC:          0.2101
+  F1:           0.0959
+  Precision:    0.9899
+  Recall:       0.0504
+  BalancedAcc:  0.5252
+  FPR:          0.0001   (lower is fewer false positives)
+  PosRate:      0.0060 (fraction predicted positive)
+  Confusion:    tn=14427  fp=1  fn=1846  tp=98
+  Threshold:    0.9147
+
+[TEST | target_up20 | hgb] metrics
+  AP:           0.3710
+  ROC-AUC:      0.6556
+  MCC:          0.1180
+  F1:           0.0348
+  Precision:    0.9920
+  Recall:       0.0177
+  BalancedAcc:  0.5088
+  FPR:          0.0000   (lower is fewer false positives)
+  PosRate:      0.0037 (fraction predicted positive)
+  Confusion:    tn=26772  fp=1  fn=6871  tp=124
+  Threshold:    0.9147
+
+[VALID | target_up20 | rf] metrics
+  AP:           0.4413
+  ROC-AUC:      0.8052
+  MCC:          0.1990
+  F1:           0.1266
+  Precision:    0.7143
+  Recall:       0.0694
+  BalancedAcc:  0.5329
+  FPR:          0.0037   (lower is fewer false positives)
+  PosRate:      0.0115 (fraction predicted positive)
+  Confusion:    tn=14374  fp=54  fn=1809  tp=135
+  Threshold:    0.7503
+
+[TEST | target_up20 | rf] metrics
+  AP:           0.3459
+  ROC-AUC:      0.6730
+  MCC:          0.0721
+  F1:           0.0549
+  Precision:    0.4605
+  Recall:       0.0292
+  BalancedAcc:  0.5101
+  FPR:          0.0089   (lower is fewer false positives)
+  PosRate:      0.0131 (fraction predicted positive)
+  Confusion:    tn=26534  fp=239  fn=6791  tp=204
+  Threshold:    0.7503
+
+[VALID | target_up20 | et] metrics
+  AP:           0.3989
+  ROC-AUC:      0.7869
+  MCC:          0.3664
+  F1:           0.3937
+  Precision:    0.5905
+  Recall:       0.2953
+  BalancedAcc:  0.6338
+  FPR:          0.0276   (lower is fewer false positives)
+  PosRate:      0.0594 (fraction predicted positive)
+  Confusion:    tn=14030  fp=398  fn=1370  tp=574
+  Threshold:    0.5765
+
+[TEST | target_up20 | et] metrics
+  AP:           0.3262
+  ROC-AUC:      0.6546
+  MCC:          0.1012
+  F1:           0.1341
+  Precision:    0.4055
+  Recall:       0.0803
+  BalancedAcc:  0.5248
+  FPR:          0.0308   (lower is fewer false positives)
+  PosRate:      0.0410 (fraction predicted positive)
+  Confusion:    tn=25949  fp=824  fn=6433  tp=562
+  Threshold:    0.5765
+
+[VALID | target_dd5 | lgbm] metrics
+  AP:           0.6135
+  ROC-AUC:      0.7555
+  MCC:          0.3733
+  F1:           0.6168
+  Precision:    0.5662
+  Recall:       0.6773
+  BalancedAcc:  0.6926
+  FPR:          0.2922   (lower is fewer false positives)
+  PosRate:      0.4310 (fraction predicted positive)
+  Confusion:    tn=7413  fp=3061  fn=1903  tp=3995
+  Threshold:    0.3981
+
+[TEST | target_dd5 | lgbm] metrics
+  AP:           0.3237
+  ROC-AUC:      0.6452
+  MCC:          0.1539
+  F1:           0.3791
+  Precision:    0.2699
+  Recall:       0.6367
+  BalancedAcc:  0.5951
+  FPR:          0.4465   (lower is fewer false positives)
+  PosRate:      0.4857 (fraction predicted positive)
+  Confusion:    tn=14842  fp=11975  fn=2525  tp=4426
+  Threshold:    0.3981
+
+[VALID | target_dd5 | hgb] metrics
+  AP:           0.6196
+  ROC-AUC:      0.7560
+  MCC:          0.3537
+  F1:           0.5469
+  Precision:    0.6408
+  Recall:       0.4769
+  BalancedAcc:  0.6632
+  FPR:          0.1506   (lower is fewer false positives)
+  PosRate:      0.2681 (fraction predicted positive)
+  Confusion:    tn=8897  fp=1577  fn=3085  tp=2813
+  Threshold:    0.5510
+
+[TEST | target_dd5 | hgb] metrics
+  AP:           0.3477
+  ROC-AUC:      0.7141
+  MCC:          0.2659
+  F1:           0.4398
+  Precision:    0.3674
+  Recall:       0.5477
+  BalancedAcc:  0.6516
+  FPR:          0.2444   (lower is fewer false positives)
+  PosRate:      0.3069 (fraction predicted positive)
+  Confusion:    tn=20262  fp=6555  fn=3144  tp=3807
+  Threshold:    0.5510
+
+[VALID | target_dd5 | rf] metrics
+  AP:           0.6438
+  ROC-AUC:      0.7594
+  MCC:          0.3670
+  F1:           0.6058
+  Precision:    0.5766
+  Recall:       0.6382
+  BalancedAcc:  0.6871
+  FPR:          0.2639   (lower is fewer false positives)
+  PosRate:      0.3987 (fraction predicted positive)
+  Confusion:    tn=7710  fp=2764  fn=2134  tp=3764
+  Threshold:    0.4618
+
+[TEST | target_dd5 | rf] metrics
+  AP:           0.4455
+  ROC-AUC:      0.7431
+  MCC:          0.3087
+  F1:           0.4712
+  Precision:    0.3408
+  Recall:       0.7635
+  BalancedAcc:  0.6903
+  FPR:          0.3829   (lower is fewer false positives)
+  PosRate:      0.4612 (fraction predicted positive)
+  Confusion:    tn=16550  fp=10267  fn=1644  tp=5307
+  Threshold:    0.4618
+
+[VALID | target_dd5 | et] metrics
+  AP:           0.5997
+  ROC-AUC:      0.7314
+  MCC:          0.2471
+  F1:           0.4348
+  Precision:    0.5903
+  Recall:       0.3442
+  BalancedAcc:  0.6048
+  FPR:          0.1345   (lower is fewer false positives)
+  PosRate:      0.2101 (fraction predicted positive)
+  Confusion:    tn=9065  fp=1409  fn=3868  tp=2030
+  Threshold:    0.5417
+
+[TEST | target_dd5 | et] metrics
+  AP:           0.4292
+  ROC-AUC:      0.7194
+  MCC:          0.2016
+  F1:           0.3656
+  Precision:    0.3664
+  Recall:       0.3648
+  BalancedAcc:  0.6007
+  FPR:          0.1635   (lower is fewer false positives)
+  PosRate:      0.2050 (fraction predicted positive)
+  Confusion:    tn=22432  fp=4385  fn=4415  tp=2536
+  Threshold:    0.5417
+
+=== Metrics comparison (VALID + TEST) ===
+    split model       target       thr  ...    fn    tp  Prec@20_mean  Prec@20_std
+13   TEST    rf   target_dd5  0.461788  ...  1644  5307      0.437103     0.128492
+15   TEST    et   target_dd5  0.541716  ...  4415  2536      0.450794     0.142119
+11   TEST   hgb   target_dd5  0.551046  ...  3144  3807      0.381349     0.134627
+9    TEST  lgbm   target_dd5  0.398121  ...  2525  4426      0.362500     0.117988
+3    TEST   hgb  target_up20  0.914699  ...  6871   124      0.413889     0.179687
+5    TEST    rf  target_up20  0.750304  ...  6791   204      0.424802     0.170753
+1    TEST  lgbm  target_up20  0.861145  ...  6457   538      0.372619     0.151265
+7    TEST    et  target_up20  0.576465  ...  6433   562      0.395238     0.153068
+12  VALID    rf   target_dd5  0.461788  ...  2134  3764      0.704365     0.146252
+10  VALID   hgb   target_dd5  0.551046  ...  3085  2813      0.682540     0.165989
+8   VALID  lgbm   target_dd5  0.398121  ...  1903  3995      0.667460     0.179982
+14  VALID    et   target_dd5  0.541716  ...  3868  2030      0.644444     0.201110
+2   VALID   hgb  target_up20  0.914699  ...  1846    98      0.449206     0.140009
+0   VALID  lgbm  target_up20  0.861145  ...  1523   421      0.392460     0.195492
+4   VALID    rf  target_up20  0.750304  ...  1809   135      0.404762     0.128704
+6   VALID    et  target_up20  0.576465  ...  1370   574      0.385317     0.117018
+
+[16 rows x 20 columns]
+
+=== Aggregated APPLY outputs (last 5 days) — head ===
+           ticker_rec  split  y_target_up20  ...  buy__et  sell__et  action__et
+Date                                         ...                               
+2024-06-03       SI=F  VALID            0.0  ...        0         1        SELL
+2024-06-03   BBSE3.SA  VALID            0.0  ...        0         0        HOLD
+2024-06-03  ENGI11.SA  VALID            0.0  ...        0         0        HOLD
+2024-06-03   CSNA3.SA  VALID            0.0  ...        0         0        HOLD
+2024-06-03   RAIZ4.SA  VALID            0.0  ...        0         0        HOLD
+2024-06-03    LTC-USD  VALID            0.0  ...        0         1        SELL
+2024-06-03       ^RUT  VALID            0.0  ...        0         0        HOLD
+2024-06-03   ODPV3.SA  VALID            0.0  ...        0         0        HOLD
+2024-06-03   USIM5.SA  VALID            0.0  ...        0         0        HOLD
+2024-06-03   RAIL3.SA  VALID            0.0  ...        0         0        HOLD
+2024-06-03   GOAU4.SA  VALID            0.0  ...        0         0        HOLD
+2024-06-03   ABEV3.SA  VALID            0.0  ...        0         0        HOLD
+2024-06-03   MDIA3.SA  VALID            0.0  ...        0         0        HOLD
+2024-06-03  RBRF11.SA  VALID            0.0  ...        0         0        HOLD
+2024-06-03   EQTL3.SA  VALID            0.0  ...        0         0        HOLD
+2024-06-03   SLCE3.SA  VALID            0.0  ...        0         0        HOLD
+2024-06-03       HO=F  VALID            0.0  ...        0         1        SELL
+2024-06-03   VBBR3.SA  VALID            1.0  ...        0         0        HOLD
+2024-06-03   ITSA4.SA  VALID            0.0  ...        0         0        HOLD
+2024-06-03       ^NDX  VALID            0.0  ...        0         0        HOLD
+2024-06-03   CURY3.SA  VALID            1.0  ...        0         0        HOLD
+2024-06-03   BEEF3.SA  VALID            1.0  ...        0         0        HOLD
+2024-06-03   AXIA3.SA  VALID            0.0  ...        0         0        HOLD
+2024-06-03   HAPV3.SA  VALID            0.0  ...        0         0        HOLD
+2024-06-03    SOL-USD  VALID            0.0  ...        0         0        HOLD
+2024-06-03   GRND3.SA  VALID            0.0  ...        0         0        HOLD
+2024-06-03   DOGE-USD  VALID            0.0  ...        0         1        SELL
+2024-06-03      ^N225  VALID            0.0  ...        0         0        HOLD
+2024-06-03   BBDC4.SA  VALID            1.0  ...        1         0         BUY
+2024-06-03   ECOR3.SA  VALID            0.0  ...        0         0        HOLD
+2024-06-03   LREN3.SA  VALID            1.0  ...        1         0         BUY
+2024-06-03      ^IXIC  VALID            0.0  ...        0         0        HOLD
+2024-06-03   UNIP6.SA  VALID            0.0  ...        0         0        HOLD
+2024-06-03   SYNE3.SA  VALID            1.0  ...        1         0         BUY
+2024-06-03  ALUP11.SA  VALID            0.0  ...        0         0        HOLD
+2024-06-03   PSSA3.SA  VALID            0.0  ...        0         0        HOLD
+2024-06-03       COPX  VALID            0.0  ...        0         1        SELL
+2024-06-03       ^HSI  VALID            0.0  ...        0         0        HOLD
+2024-06-03   RANI3.SA  VALID            0.0  ...        0         0        HOLD
+2024-06-03    CRO-USD  VALID            0.0  ...        0         0        HOLD
+2024-06-03  KFOF11.SA  VALID            0.0  ...        0         0        HOLD
+2024-06-03   BBAS3.SA  VALID            0.0  ...        0         0        HOLD
+2024-06-03       NG=F  VALID            0.0  ...        0         1        SELL
+2024-06-03   ABCB4.SA  VALID            0.0  ...        0         0        HOLD
+2024-06-03   AXIA6.SA  VALID            0.0  ...        0         0        HOLD
+2024-06-03       ZS=F  VALID            0.0  ...        0         1        SELL
+2024-06-03       HE=F  VALID            0.0  ...        0         1        SELL
+2024-06-03   CMIG4.SA  VALID            0.0  ...        0         0        HOLD
+2024-06-03   VIVT3.SA  VALID            0.0  ...        0         0        HOLD
+2024-06-03     ^BSESN  VALID            0.0  ...        0         0        HOLD
+
+[50 rows x 48 columns]
+
+Top-K BUY candidates by LGBM policy (up20 high AND dd5 low):
+                 date ticker_rec  ...  buy__lgbm  action__lgbm
+Date                              ...                         
+2024-06-03 2024-06-03   BBDC4.SA  ...          1           BUY
+2024-06-03 2024-06-03   LREN3.SA  ...          1           BUY
+2024-06-03 2024-06-03   DIRR3.SA  ...          1           BUY
+2024-06-04 2024-06-04   BBDC4.SA  ...          1           BUY
+2024-06-04 2024-06-04   LREN3.SA  ...          1           BUY
+...               ...        ...  ...        ...           ...
+2026-03-11 2026-03-11   RAIZ4.SA  ...          1           BUY
+2026-03-11 2026-03-11   GRND3.SA  ...          1           BUY
+2026-03-11 2026-03-11   ECOR3.SA  ...          1           BUY
+2026-03-12 2026-03-12   RAIZ4.SA  ...          1           BUY
+2026-03-12 2026-03-12   GRND3.SA  ...          1           BUY
+
+[381 rows x 6 columns]
+[OK] Saved compatibility history → ./output/ensemble_signals_history.parquet | rows=17042
+[info] Skipping notebook-only extra ensemble section.
+
+✅ Binary models concluído.
+   Models em: C:\Users\gabri\OneDrive\Documentos\GitHub\test\.claude\worktrees\dazzling-robinson\output\data\models/
+   Signals em: C:\Users\gabri\OneDrive\Documentos\GitHub\test\.claude\worktrees\dazzling-robinson\output/ensemble_signals_history*.parquet
+⏱️  Step 2 (Binary Models) took 174.0s
+
+================================================================================
+STEP 3/4 — REGRESSION MODELS (reg_Stock_modelos_individuais)
+================================================================================
+MODE=baseline_only | MODEL_TAG=v35_BASELINE_ONLY_IMPROVED_SPLIT_TEST_ASYM_BAND_VOLADAPT_WFCAL_CLASSFB_OPLEVELS_v4
+HORIZON=90 | VAL_DAYS=90 | TEST_DAYS=90 | APPLY_DAYS=5 | PURGE=90
+Baseline: roll_q(60) + ewm_gauss=True(HL=252) | calib=True
+VolBounds=True(K_entry=2.3, K_sale=4.5) | CAP_Q=0.98 HYBRID=True
+AsymBand: resid q[0.02,0.98] | WFcal target=0.97 | scale in [0.5,25.0]
+VolAdapt: True win=60 clip=(0.45, 2.6)
+OpLevels: entry_bias=0.6 | sale_bias=0.6
+
+[1/7] Carregando parquet...
+  ✓ Tickers válidos: 134
+
+[2/7] Preparando Close...
+  ⚠️ Close não encontrado no parquet para 55 tickers. Baixando via yfinance (auto_adjust=True)...
+  ⚠️ Removidos por Close inválido (11): ['ALZR11.SA', 'BPAC11.SA', 'CRO-USD', 'DOGE-USD', 'ETH-USD', 'HAPV3.SA', 'LAVV3.SA', 'RAIZ4.SA', 'SAPR11.SA', 'SOL-USD']...
+  ✓ Close disponível para 123 tickers
+
+[3/7] Preparando séries e escolhendo baseline + banda WFcal/class-fallback...
+Tickers:   0%|          | 0/123 [00:00<?, ?it/s]Tickers:   1%|          | 1/123 [00:00<01:40,  1.21it/s]Tickers:   2%|▏         | 2/123 [00:01<01:40,  1.20it/s]Tickers:   2%|▏         | 3/123 [00:02<01:38,  1.21it/s]Tickers:   3%|▎         | 4/123 [00:03<01:35,  1.24it/s]Tickers:   4%|▍         | 5/123 [00:04<01:35,  1.23it/s]Tickers:   5%|▍         | 6/123 [00:05<01:42,  1.14it/s]Tickers:   6%|▌         | 7/123 [00:06<01:56,  1.01s/it]Tickers:   7%|▋         | 8/123 [00:07<01:48,  1.06it/s]Tickers:   7%|▋         | 9/123 [00:07<01:42,  1.11it/s]Tickers:   8%|▊         | 10/123 [00:08<01:40,  1.13it/s]Tickers:   9%|▉         | 11/123 [00:09<01:36,  1.16it/s]Tickers:  10%|▉         | 12/123 [00:10<01:35,  1.17it/s]Tickers:  11%|█         | 13/123 [00:11<01:37,  1.13it/s]Tickers:  11%|█▏        | 14/123 [00:12<01:51,  1.03s/it]Tickers:  12%|█▏        | 15/123 [00:13<01:45,  1.02it/s]Tickers:  13%|█▎        | 16/123 [00:14<01:37,  1.10it/s]Tickers:  14%|█▍        | 17/123 [00:15<01:34,  1.12it/s]Tickers:  15%|█▍        | 18/123 [00:16<01:31,  1.15it/s]Tickers:  15%|█▌        | 19/123 [00:17<01:33,  1.11it/s]Tickers:  16%|█▋        | 20/123 [00:18<01:42,  1.00it/s]Tickers:  17%|█▋        | 21/123 [00:19<01:40,  1.02it/s]Tickers:  18%|█▊        | 22/123 [00:20<01:40,  1.01it/s]Tickers:  19%|█▊        | 23/123 [00:21<01:39,  1.01it/s]Tickers:  20%|█▉        | 24/123 [00:22<01:34,  1.05it/s]Tickers:  20%|██        | 25/123 [00:22<01:29,  1.09it/s]Tickers:  21%|██        | 26/123 [00:23<01:28,  1.09it/s]Tickers:  22%|██▏       | 27/123 [00:24<01:25,  1.12it/s]Tickers:  23%|██▎       | 28/123 [00:25<01:24,  1.13it/s]Tickers:  24%|██▎       | 29/123 [00:26<01:21,  1.15it/s]Tickers:  24%|██▍       | 30/123 [00:27<01:30,  1.03it/s]Tickers:  25%|██▌       | 31/123 [00:28<01:40,  1.09s/it]Tickers:  26%|██▌       | 32/123 [00:29<01:32,  1.01s/it]Tickers:  27%|██▋       | 33/123 [00:30<01:25,  1.05it/s]Tickers:  28%|██▊       | 34/123 [00:31<01:21,  1.09it/s]Tickers:  28%|██▊       | 35/123 [00:32<01:17,  1.13it/s]Tickers:  29%|██▉       | 36/123 [00:33<01:16,  1.14it/s]Tickers:  30%|███       | 37/123 [00:33<01:15,  1.15it/s]Tickers:  31%|███       | 38/123 [00:34<01:16,  1.11it/s]Tickers:  32%|███▏      | 39/123 [00:35<01:14,  1.12it/s]Tickers:  33%|███▎      | 40/123 [00:36<01:11,  1.15it/s]Tickers:  33%|███▎      | 41/123 [00:37<01:10,  1.17it/s]Tickers:  34%|███▍      | 42/123 [00:38<01:09,  1.17it/s]Tickers:  35%|███▍      | 43/123 [00:39<01:07,  1.19it/s]Tickers:  36%|███▌      | 44/123 [00:39<01:06,  1.20it/s]Tickers:  37%|███▋      | 45/123 [00:40<01:06,  1.17it/s]Tickers:  37%|███▋      | 46/123 [00:41<01:05,  1.18it/s]Tickers:  38%|███▊      | 47/123 [00:42<01:05,  1.16it/s]Tickers:  39%|███▉      | 48/123 [00:43<01:03,  1.18it/s]Tickers:  40%|███▉      | 49/123 [00:44<01:02,  1.19it/s]Tickers:  41%|████      | 50/123 [00:45<01:10,  1.03it/s]Tickers:  41%|████▏     | 51/123 [00:46<01:09,  1.03it/s]Tickers:  42%|████▏     | 52/123 [00:47<01:07,  1.05it/s]Tickers:  43%|████▎     | 53/123 [00:48<01:04,  1.09it/s]Tickers:  44%|████▍     | 54/123 [00:49<01:04,  1.07it/s]Tickers:  45%|████▍     | 55/123 [00:49<01:01,  1.11it/s]Tickers:  46%|████▌     | 56/123 [00:51<01:13,  1.10s/it]Tickers:  46%|████▋     | 57/123 [00:52<01:12,  1.10s/it]Tickers:  47%|████▋     | 58/123 [00:53<01:10,  1.08s/it]Tickers:  48%|████▊     | 59/123 [00:54<01:07,  1.05s/it]Tickers:  49%|████▉     | 60/123 [00:55<01:03,  1.02s/it]Tickers:  50%|████▉     | 61/123 [00:56<01:00,  1.03it/s]Tickers:  50%|█████     | 62/123 [00:57<00:55,  1.10it/s]Tickers:  51%|█████     | 63/123 [00:58<00:52,  1.13it/s]Tickers:  52%|█████▏    | 64/123 [00:58<00:52,  1.13it/s]Tickers:  53%|█████▎    | 65/123 [00:59<00:51,  1.13it/s]Tickers:  54%|█████▎    | 66/123 [01:00<00:50,  1.13it/s]Tickers:  54%|█████▍    | 67/123 [01:02<00:58,  1.05s/it]Tickers:  55%|█████▌    | 68/123 [01:02<00:54,  1.01it/s]Tickers:  56%|█████▌    | 69/123 [01:03<00:50,  1.07it/s]Tickers:  57%|█████▋    | 70/123 [01:04<00:48,  1.10it/s]Tickers:  58%|█████▊    | 71/123 [01:05<00:47,  1.09it/s]Tickers:  59%|█████▊    | 72/123 [01:06<00:44,  1.15it/s]Tickers:  59%|█████▉    | 73/123 [01:07<00:43,  1.15it/s]Tickers:  60%|██████    | 74/123 [01:08<00:42,  1.16it/s]Tickers:  61%|██████    | 75/123 [01:08<00:41,  1.17it/s]Tickers:  62%|██████▏   | 76/123 [01:09<00:40,  1.16it/s]Tickers:  63%|██████▎   | 77/123 [01:11<00:46,  1.01s/it]Tickers:  63%|██████▎   | 78/123 [01:12<00:49,  1.10s/it]Tickers:  64%|██████▍   | 79/123 [01:13<00:51,  1.17s/it]Tickers:  65%|██████▌   | 80/123 [01:14<00:46,  1.07s/it]Tickers:  66%|██████▌   | 81/123 [01:15<00:41,  1.01it/s]Tickers:  67%|██████▋   | 82/123 [01:16<00:39,  1.05it/s]Tickers:  67%|██████▋   | 83/123 [01:17<00:36,  1.09it/s]Tickers:  68%|██████▊   | 84/123 [01:17<00:35,  1.11it/s]Tickers:  69%|██████▉   | 85/123 [01:18<00:34,  1.12it/s]Tickers:  70%|██████▉   | 86/123 [01:19<00:34,  1.08it/s]Tickers:  71%|███████   | 87/123 [01:20<00:32,  1.09it/s]Tickers:  72%|███████▏  | 88/123 [01:21<00:32,  1.08it/s]Tickers:  72%|███████▏  | 89/123 [01:22<00:30,  1.10it/s]Tickers:  73%|███████▎  | 90/123 [01:23<00:30,  1.10it/s]Tickers:  74%|███████▍  | 91/123 [01:24<00:29,  1.10it/s]Tickers:  75%|███████▍  | 92/123 [01:25<00:29,  1.04it/s]Tickers:  76%|███████▌  | 93/123 [01:26<00:29,  1.02it/s]Tickers:  76%|███████▋  | 94/123 [01:27<00:29,  1.02s/it]Tickers:  77%|███████▋  | 95/123 [01:28<00:28,  1.03s/it]Tickers:  78%|███████▊  | 96/123 [01:29<00:26,  1.01it/s]Tickers:  79%|███████▉  | 97/123 [01:30<00:24,  1.05it/s]Tickers:  80%|███████▉  | 98/123 [01:31<00:22,  1.10it/s]Tickers:  80%|████████  | 99/123 [01:32<00:21,  1.12it/s]Tickers:  81%|████████▏ | 100/123 [01:32<00:20,  1.14it/s]Tickers:  82%|████████▏ | 101/123 [01:33<00:19,  1.14it/s]Tickers:  83%|████████▎ | 102/123 [01:35<00:21,  1.04s/it]Tickers:  84%|████████▎ | 103/123 [01:36<00:19,  1.02it/s]Tickers:  85%|████████▍ | 104/123 [01:36<00:17,  1.06it/s]Tickers:  85%|████████▌ | 105/123 [01:37<00:16,  1.11it/s]Tickers:  86%|████████▌ | 106/123 [01:38<00:15,  1.12it/s]Tickers:  87%|████████▋ | 107/123 [01:39<00:14,  1.14it/s]Tickers:  88%|████████▊ | 108/123 [01:40<00:12,  1.17it/s]Tickers:  89%|████████▊ | 109/123 [01:41<00:12,  1.14it/s]Tickers:  89%|████████▉ | 110/123 [01:42<00:11,  1.09it/s]Tickers:  90%|█████████ | 111/123 [01:43<00:10,  1.12it/s]Tickers:  91%|█████████ | 112/123 [01:43<00:09,  1.13it/s]Tickers:  92%|█████████▏| 113/123 [01:44<00:08,  1.15it/s]Tickers:  93%|█████████▎| 114/123 [01:45<00:07,  1.15it/s]Tickers:  93%|█████████▎| 115/123 [01:46<00:06,  1.16it/s]Tickers:  94%|█████████▍| 116/123 [01:47<00:06,  1.16it/s]Tickers:  95%|█████████▌| 117/123 [01:48<00:05,  1.15it/s]Tickers:  96%|█████████▌| 118/123 [01:48<00:04,  1.18it/s]Tickers:  97%|█████████▋| 119/123 [01:49<00:03,  1.17it/s]Tickers:  98%|█████████▊| 120/123 [01:50<00:02,  1.17it/s]Tickers:  98%|█████████▊| 121/123 [01:51<00:01,  1.18it/s]Tickers:  99%|█████████▉| 122/123 [01:52<00:00,  1.16it/s]Tickers: 100%|██████████| 123/123 [01:53<00:00,  1.15it/s]                                                            ✓ Séries preparadas: 246 (ticker,target)
+
+[4/7] Calibrando band_scale com WF cross-fit + fallback por asset_class...
+WFCal:   0%|          | 0/246 [00:00<?, ?it/s]WFCal:   0%|          | 1/246 [00:00<00:32,  7.44it/s]WFCal:   1%|          | 2/246 [00:00<00:34,  7.13it/s]WFCal:   1%|          | 3/246 [00:00<00:35,  6.88it/s]WFCal:   2%|▏         | 4/246 [00:00<00:34,  6.93it/s]WFCal:   2%|▏         | 5/246 [00:00<00:35,  6.81it/s]WFCal:   2%|▏         | 6/246 [00:00<00:34,  6.89it/s]WFCal:   3%|▎         | 7/246 [00:01<00:36,  6.57it/s]WFCal:   3%|▎         | 8/246 [00:01<00:35,  6.65it/s]WFCal:   4%|▎         | 9/246 [00:01<00:35,  6.73it/s]WFCal:   4%|▍         | 10/246 [00:01<00:34,  6.81it/s]WFCal:   4%|▍         | 11/246 [00:01<00:34,  6.79it/s]WFCal:   5%|▍         | 12/246 [00:02<00:52,  4.46it/s]WFCal:   5%|▌         | 13/246 [00:02<00:45,  5.12it/s]WFCal:   6%|▌         | 14/246 [00:02<00:40,  5.67it/s]WFCal:   6%|▌         | 15/246 [00:02<00:37,  6.09it/s]WFCal:   7%|▋         | 16/246 [00:02<00:36,  6.28it/s]WFCal:   7%|▋         | 17/246 [00:02<00:35,  6.40it/s]WFCal:   7%|▋         | 18/246 [00:02<00:35,  6.51it/s]WFCal:   8%|▊         | 19/246 [00:03<00:34,  6.59it/s]WFCal:   8%|▊         | 20/246 [00:03<00:33,  6.69it/s]WFCal:   9%|▊         | 21/246 [00:03<00:33,  6.71it/s]WFCal:   9%|▉         | 22/246 [00:03<00:33,  6.77it/s]WFCal:   9%|▉         | 23/246 [00:03<00:33,  6.63it/s]WFCal:  10%|▉         | 24/246 [00:03<00:37,  5.87it/s]WFCal:  10%|█         | 25/246 [00:04<00:38,  5.73it/s]WFCal:  11%|█         | 26/246 [00:04<00:37,  5.86it/s]WFCal:  11%|█         | 27/246 [00:04<00:37,  5.88it/s]WFCal:  11%|█▏        | 28/246 [00:04<00:36,  5.99it/s]WFCal:  12%|█▏        | 29/246 [00:04<00:37,  5.75it/s]WFCal:  12%|█▏        | 30/246 [00:04<00:38,  5.57it/s]WFCal:  13%|█▎        | 31/246 [00:05<01:02,  3.46it/s]WFCal:  13%|█▎        | 32/246 [00:05<00:57,  3.72it/s]WFCal:  13%|█▎        | 33/246 [00:05<00:51,  4.12it/s]WFCal:  14%|█▍        | 34/246 [00:06<00:50,  4.24it/s]WFCal:  14%|█▍        | 35/246 [00:06<00:46,  4.58it/s]WFCal:  15%|█▍        | 36/246 [00:06<00:45,  4.66it/s]WFCal:  15%|█▌        | 37/246 [00:06<00:49,  4.20it/s]WFCal:  15%|█▌        | 38/246 [00:06<00:46,  4.48it/s]WFCal:  16%|█▌        | 39/246 [00:07<00:41,  4.96it/s]WFCal:  16%|█▋        | 40/246 [00:07<00:39,  5.22it/s]WFCal:  17%|█▋        | 41/246 [00:07<00:38,  5.34it/s]WFCal:  17%|█▋        | 42/246 [00:07<00:39,  5.13it/s]WFCal:  17%|█▋        | 43/246 [00:07<00:39,  5.18it/s]WFCal:  18%|█▊        | 44/246 [00:08<00:40,  5.03it/s]WFCal:  18%|█▊        | 45/246 [00:08<00:38,  5.27it/s]WFCal:  19%|█▊        | 46/246 [00:08<00:35,  5.71it/s]WFCal:  19%|█▉        | 47/246 [00:08<00:32,  6.14it/s]WFCal:  20%|█▉        | 48/246 [00:08<00:46,  4.26it/s]WFCal:  20%|█▉        | 49/246 [00:08<00:40,  4.89it/s]WFCal:  20%|██        | 50/246 [00:09<00:35,  5.46it/s]WFCal:  21%|██        | 51/246 [00:09<00:33,  5.86it/s]WFCal:  21%|██        | 52/246 [00:09<00:31,  6.12it/s]WFCal:  22%|██▏       | 53/246 [00:09<00:30,  6.32it/s]WFCal:  22%|██▏       | 54/246 [00:09<00:29,  6.51it/s]WFCal:  22%|██▏       | 55/246 [00:09<00:29,  6.51it/s]WFCal:  23%|██▎       | 56/246 [00:10<00:28,  6.65it/s]WFCal:  23%|██▎       | 57/246 [00:10<00:28,  6.70it/s]WFCal:  24%|██▎       | 58/246 [00:10<00:28,  6.67it/s]WFCal:  24%|██▍       | 59/246 [00:10<00:27,  6.75it/s]WFCal:  24%|██▍       | 60/246 [00:10<00:27,  6.74it/s]WFCal:  25%|██▍       | 61/246 [00:10<00:26,  6.99it/s]WFCal:  25%|██▌       | 62/246 [00:10<00:25,  7.20it/s]WFCal:  26%|██▌       | 63/246 [00:10<00:25,  7.30it/s]WFCal:  26%|██▌       | 64/246 [00:11<00:26,  6.99it/s]WFCal:  26%|██▋       | 65/246 [00:11<00:26,  6.93it/s]WFCal:  27%|██▋       | 66/246 [00:11<00:26,  6.82it/s]WFCal:  27%|██▋       | 67/246 [00:11<00:26,  6.74it/s]WFCal:  28%|██▊       | 68/246 [00:11<00:26,  6.66it/s]WFCal:  28%|██▊       | 69/246 [00:11<00:27,  6.54it/s]WFCal:  28%|██▊       | 70/246 [00:12<00:26,  6.62it/s]WFCal:  29%|██▉       | 71/246 [00:12<00:40,  4.32it/s]WFCal:  29%|██▉       | 72/246 [00:12<00:36,  4.81it/s]WFCal:  30%|██▉       | 73/246 [00:12<00:32,  5.30it/s]WFCal:  30%|███       | 74/246 [00:12<00:29,  5.74it/s]WFCal:  30%|███       | 75/246 [00:13<00:27,  6.18it/s]WFCal:  31%|███       | 76/246 [00:13<00:26,  6.46it/s]WFCal:  31%|███▏      | 77/246 [00:13<00:24,  6.80it/s]WFCal:  32%|███▏      | 78/246 [00:13<00:23,  7.06it/s]WFCal:  32%|███▏      | 79/246 [00:13<00:23,  7.19it/s]WFCal:  33%|███▎      | 80/246 [00:13<00:23,  7.05it/s]WFCal:  33%|███▎      | 81/246 [00:13<00:23,  7.05it/s]WFCal:  33%|███▎      | 82/246 [00:14<00:24,  6.82it/s]WFCal:  34%|███▎      | 83/246 [00:14<00:24,  6.75it/s]WFCal:  34%|███▍      | 84/246 [00:14<00:23,  6.80it/s]WFCal:  35%|███▍      | 85/246 [00:14<00:23,  6.82it/s]WFCal:  35%|███▍      | 86/246 [00:14<00:23,  6.87it/s]WFCal:  35%|███▌      | 87/246 [00:14<00:23,  6.86it/s]WFCal:  36%|███▌      | 88/246 [00:14<00:22,  6.92it/s]WFCal:  36%|███▌      | 89/246 [00:15<00:22,  6.89it/s]WFCal:  37%|███▋      | 90/246 [00:15<00:34,  4.57it/s]WFCal:  37%|███▋      | 91/246 [00:15<00:29,  5.21it/s]WFCal:  37%|███▋      | 92/246 [00:15<00:26,  5.76it/s]WFCal:  38%|███▊      | 93/246 [00:15<00:24,  6.26it/s]WFCal:  38%|███▊      | 94/246 [00:15<00:23,  6.53it/s]WFCal:  39%|███▊      | 95/246 [00:16<00:22,  6.61it/s]WFCal:  39%|███▉      | 96/246 [00:16<00:22,  6.63it/s]WFCal:  39%|███▉      | 97/246 [00:16<00:22,  6.71it/s]WFCal:  40%|███▉      | 98/246 [00:16<00:22,  6.71it/s]WFCal:  40%|████      | 99/246 [00:16<00:21,  6.75it/s]WFCal:  41%|████      | 100/246 [00:16<00:21,  6.73it/s]WFCal:  41%|████      | 101/246 [00:16<00:21,  6.83it/s]WFCal:  41%|████▏     | 102/246 [00:17<00:21,  6.61it/s]WFCal:  42%|████▏     | 103/246 [00:17<00:21,  6.52it/s]WFCal:  42%|████▏     | 104/246 [00:17<00:21,  6.53it/s]WFCal:  43%|████▎     | 105/246 [00:17<00:21,  6.56it/s]WFCal:  43%|████▎     | 106/246 [00:17<00:20,  6.68it/s]WFCal:  43%|████▎     | 107/246 [00:18<00:30,  4.56it/s]WFCal:  44%|████▍     | 108/246 [00:18<00:27,  5.08it/s]WFCal:  44%|████▍     | 109/246 [00:18<00:24,  5.49it/s]WFCal:  45%|████▍     | 110/246 [00:18<00:23,  5.86it/s]WFCal:  45%|████▌     | 111/246 [00:18<00:22,  6.10it/s]WFCal:  46%|████▌     | 112/246 [00:18<00:21,  6.31it/s]WFCal:  46%|████▌     | 113/246 [00:19<00:20,  6.51it/s]WFCal:  46%|████▋     | 114/246 [00:19<00:19,  6.64it/s]WFCal:  47%|████▋     | 115/246 [00:19<00:19,  6.67it/s]WFCal:  47%|████▋     | 116/246 [00:19<00:19,  6.72it/s]WFCal:  48%|████▊     | 117/246 [00:19<00:19,  6.73it/s]WFCal:  48%|████▊     | 118/246 [00:19<00:18,  7.00it/s]WFCal:  48%|████▊     | 119/246 [00:19<00:17,  7.16it/s]WFCal:  49%|████▉     | 120/246 [00:20<00:18,  6.76it/s]WFCal:  49%|████▉     | 121/246 [00:20<00:18,  6.62it/s]WFCal:  50%|████▉     | 122/246 [00:20<00:17,  6.90it/s]WFCal:  50%|█████     | 123/246 [00:20<00:17,  6.93it/s]WFCal:  50%|█████     | 124/246 [00:20<00:17,  6.89it/s]WFCal:  51%|█████     | 125/246 [00:20<00:17,  6.93it/s]WFCal:  51%|█████     | 126/246 [00:20<00:17,  6.84it/s]WFCal:  52%|█████▏    | 127/246 [00:21<00:17,  6.82it/s]WFCal:  52%|█████▏    | 128/246 [00:21<00:17,  6.87it/s]WFCal:  52%|█████▏    | 129/246 [00:21<00:16,  6.94it/s]WFCal:  53%|█████▎    | 130/246 [00:21<00:26,  4.41it/s]WFCal:  53%|█████▎    | 131/246 [00:21<00:23,  4.95it/s]WFCal:  54%|█████▎    | 132/246 [00:22<00:20,  5.54it/s]WFCal:  54%|█████▍    | 133/246 [00:22<00:18,  6.04it/s]WFCal:  54%|█████▍    | 134/246 [00:22<00:17,  6.43it/s]WFCal:  55%|█████▍    | 135/246 [00:22<00:16,  6.70it/s]WFCal:  55%|█████▌    | 136/246 [00:22<00:15,  6.95it/s]WFCal:  56%|█████▌    | 137/246 [00:22<00:15,  6.98it/s]WFCal:  56%|█████▌    | 138/246 [00:22<00:15,  7.06it/s]WFCal:  57%|█████▋    | 139/246 [00:22<00:15,  7.07it/s]WFCal:  57%|█████▋    | 140/246 [00:23<00:17,  6.09it/s]WFCal:  57%|█████▋    | 141/246 [00:23<00:17,  6.02it/s]WFCal:  58%|█████▊    | 142/246 [00:23<00:17,  6.06it/s]WFCal:  58%|█████▊    | 143/246 [00:23<00:16,  6.13it/s]WFCal:  59%|█████▊    | 144/246 [00:23<00:16,  6.19it/s]WFCal:  59%|█████▉    | 145/246 [00:23<00:16,  6.30it/s]WFCal:  59%|█████▉    | 146/246 [00:24<00:15,  6.49it/s]WFCal:  60%|█████▉    | 147/246 [00:24<00:14,  6.79it/s]WFCal:  60%|██████    | 148/246 [00:24<00:13,  7.03it/s]WFCal:  61%|██████    | 149/246 [00:24<00:20,  4.65it/s]WFCal:  61%|██████    | 150/246 [00:24<00:18,  5.24it/s]WFCal:  61%|██████▏   | 151/246 [00:25<00:16,  5.59it/s]WFCal:  62%|██████▏   | 152/246 [00:25<00:15,  5.92it/s]WFCal:  62%|██████▏   | 153/246 [00:25<00:15,  6.17it/s]WFCal:  63%|██████▎   | 154/246 [00:25<00:14,  6.34it/s]WFCal:  63%|██████▎   | 155/246 [00:25<00:14,  6.41it/s]WFCal:  63%|██████▎   | 156/246 [00:25<00:13,  6.50it/s]WFCal:  64%|██████▍   | 157/246 [00:25<00:13,  6.60it/s]WFCal:  64%|██████▍   | 158/246 [00:26<00:13,  6.63it/s]WFCal:  65%|██████▍   | 159/246 [00:26<00:13,  6.63it/s]WFCal:  65%|██████▌   | 160/246 [00:26<00:12,  6.71it/s]WFCal:  65%|██████▌   | 161/246 [00:26<00:12,  6.89it/s]WFCal:  66%|██████▌   | 162/246 [00:26<00:11,  7.09it/s]WFCal:  66%|██████▋   | 163/246 [00:26<00:11,  7.22it/s]WFCal:  67%|██████▋   | 164/246 [00:26<00:11,  7.35it/s]WFCal:  67%|██████▋   | 165/246 [00:27<00:10,  7.42it/s]WFCal:  67%|██████▋   | 166/246 [00:27<00:17,  4.57it/s]WFCal:  68%|██████▊   | 167/246 [00:27<00:15,  5.10it/s]WFCal:  68%|██████▊   | 168/246 [00:27<00:14,  5.46it/s]WFCal:  69%|██████▊   | 169/246 [00:27<00:13,  5.85it/s]WFCal:  69%|██████▉   | 170/246 [00:28<00:12,  6.14it/s]WFCal:  70%|██████▉   | 171/246 [00:28<00:11,  6.29it/s]WFCal:  70%|██████▉   | 172/246 [00:28<00:11,  6.49it/s]WFCal:  70%|███████   | 173/246 [00:28<00:10,  6.65it/s]WFCal:  71%|███████   | 174/246 [00:28<00:10,  6.55it/s]WFCal:  71%|███████   | 175/246 [00:28<00:10,  6.74it/s]WFCal:  72%|███████▏  | 176/246 [00:28<00:10,  6.96it/s]WFCal:  72%|███████▏  | 177/246 [00:29<00:09,  7.13it/s]WFCal:  72%|███████▏  | 178/246 [00:29<00:09,  7.02it/s]WFCal:  73%|███████▎  | 179/246 [00:29<00:09,  6.86it/s]WFCal:  73%|███████▎  | 180/246 [00:29<00:09,  6.72it/s]WFCal:  74%|███████▎  | 181/246 [00:29<00:09,  6.62it/s]WFCal:  74%|███████▍  | 182/246 [00:29<00:09,  6.52it/s]WFCal:  74%|███████▍  | 183/246 [00:29<00:09,  6.62it/s]WFCal:  75%|███████▍  | 184/246 [00:30<00:09,  6.63it/s]WFCal:  75%|███████▌  | 185/246 [00:30<00:09,  6.67it/s]WFCal:  76%|███████▌  | 186/246 [00:30<00:08,  6.75it/s]WFCal:  76%|███████▌  | 187/246 [00:30<00:08,  6.78it/s]WFCal:  76%|███████▋  | 188/246 [00:30<00:08,  6.49it/s]WFCal:  77%|███████▋  | 189/246 [00:31<00:14,  4.00it/s]WFCal:  77%|███████▋  | 190/246 [00:31<00:12,  4.50it/s]WFCal:  78%|███████▊  | 191/246 [00:31<00:10,  5.05it/s]WFCal:  78%|███████▊  | 192/246 [00:31<00:09,  5.48it/s]WFCal:  78%|███████▊  | 193/246 [00:31<00:09,  5.59it/s]WFCal:  79%|███████▉  | 194/246 [00:32<00:09,  5.53it/s]WFCal:  79%|███████▉  | 195/246 [00:32<00:09,  5.44it/s]WFCal:  80%|███████▉  | 196/246 [00:32<00:08,  5.61it/s]WFCal:  80%|████████  | 197/246 [00:32<00:08,  5.77it/s]WFCal:  80%|████████  | 198/246 [00:32<00:08,  5.78it/s]WFCal:  81%|████████  | 199/246 [00:32<00:07,  6.01it/s]WFCal:  81%|████████▏ | 200/246 [00:32<00:07,  6.24it/s]WFCal:  82%|████████▏ | 201/246 [00:33<00:06,  6.50it/s]WFCal:  82%|████████▏ | 202/246 [00:33<00:06,  6.72it/s]WFCal:  83%|████████▎ | 203/246 [00:33<00:06,  6.95it/s]WFCal:  83%|████████▎ | 204/246 [00:33<00:05,  7.11it/s]WFCal:  83%|████████▎ | 205/246 [00:33<00:05,  7.25it/s]WFCal:  84%|████████▎ | 206/246 [00:33<00:05,  7.27it/s]WFCal:  84%|████████▍ | 207/246 [00:33<00:05,  6.95it/s]WFCal:  85%|████████▍ | 208/246 [00:34<00:08,  4.32it/s]WFCal:  85%|████████▍ | 209/246 [00:34<00:07,  4.86it/s]WFCal:  85%|████████▌ | 210/246 [00:34<00:06,  5.15it/s]WFCal:  86%|████████▌ | 211/246 [00:34<00:06,  5.50it/s]WFCal:  86%|████████▌ | 212/246 [00:35<00:05,  5.83it/s]WFCal:  87%|████████▋ | 213/246 [00:35<00:05,  5.89it/s]WFCal:  87%|████████▋ | 214/246 [00:35<00:05,  5.94it/s]WFCal:  87%|████████▋ | 215/246 [00:35<00:05,  6.13it/s]WFCal:  88%|████████▊ | 216/246 [00:35<00:04,  6.28it/s]WFCal:  88%|████████▊ | 217/246 [00:35<00:04,  6.44it/s]WFCal:  89%|████████▊ | 218/246 [00:35<00:04,  6.75it/s]WFCal:  89%|████████▉ | 219/246 [00:36<00:03,  6.97it/s]WFCal:  89%|████████▉ | 220/246 [00:36<00:03,  7.08it/s]WFCal:  90%|████████▉ | 221/246 [00:36<00:03,  6.97it/s]WFCal:  90%|█████████ | 222/246 [00:36<00:03,  6.99it/s]WFCal:  91%|█████████ | 223/246 [00:36<00:03,  6.68it/s]WFCal:  91%|█████████ | 224/246 [00:36<00:03,  6.65it/s]WFCal:  91%|█████████▏| 225/246 [00:37<00:04,  4.26it/s]WFCal:  92%|█████████▏| 226/246 [00:37<00:04,  4.82it/s]WFCal:  92%|█████████▏| 227/246 [00:37<00:03,  5.30it/s]WFCal:  93%|█████████▎| 228/246 [00:37<00:03,  5.58it/s]WFCal:  93%|█████████▎| 229/246 [00:37<00:03,  5.57it/s]WFCal:  93%|█████████▎| 230/246 [00:38<00:02,  5.68it/s]WFCal:  94%|█████████▍| 231/246 [00:38<00:02,  5.68it/s]WFCal:  94%|█████████▍| 232/246 [00:38<00:02,  5.89it/s]WFCal:  95%|█████████▍| 233/246 [00:38<00:02,  5.79it/s]WFCal:  95%|█████████▌| 234/246 [00:38<00:02,  5.74it/s]WFCal:  96%|█████████▌| 235/246 [00:38<00:02,  5.39it/s]WFCal:  96%|█████████▌| 236/246 [00:39<00:01,  5.35it/s]WFCal:  96%|█████████▋| 237/246 [00:39<00:01,  5.34it/s]WFCal:  97%|█████████▋| 238/246 [00:39<00:01,  5.09it/s]WFCal:  97%|█████████▋| 239/246 [00:39<00:01,  5.22it/s]WFCal:  98%|█████████▊| 240/246 [00:39<00:01,  5.29it/s]WFCal:  98%|█████████▊| 241/246 [00:40<00:00,  5.25it/s]WFCal:  98%|█████████▊| 242/246 [00:40<00:00,  5.27it/s]WFCal:  99%|█████████▉| 243/246 [00:40<00:00,  5.11it/s]WFCal:  99%|█████████▉| 244/246 [00:40<00:00,  5.66it/s]WFCal: 100%|█████████▉| 245/246 [00:40<00:00,  5.91it/s]WFCal: 100%|██████████| 246/246 [00:40<00:00,  6.16it/s]WFCal: 100%|██████████| 246/246 [00:40<00:00,  6.01it/s]
+  ✓ band_scale: WF+fallback pronto.
+
+[5/7] Gerando VALID, TEST e APPLY...
+Compare:   0%|          | 0/246 [00:00<?, ?it/s]Compare:   1%|          | 3/246 [00:00<00:09, 26.94it/s]Compare:   2%|▏         | 6/246 [00:00<00:09, 25.61it/s]Compare:   4%|▎         | 9/246 [00:00<00:23,  9.92it/s]Compare:   4%|▍         | 11/246 [00:00<00:20, 11.35it/s]Compare:   6%|▌         | 14/246 [00:01<00:17, 13.64it/s]Compare:   7%|▋         | 16/246 [00:01<00:15, 14.89it/s]Compare:   8%|▊         | 19/246 [00:01<00:13, 17.22it/s]Compare:   9%|▉         | 22/246 [00:01<00:11, 20.08it/s]Compare:  10%|█         | 25/246 [00:01<00:09, 22.40it/s]Compare:  12%|█▏        | 29/246 [00:01<00:08, 25.04it/s]Compare:  13%|█▎        | 33/246 [00:01<00:07, 26.68it/s]Compare:  15%|█▍        | 36/246 [00:01<00:07, 27.14it/s]Compare:  16%|█▌        | 39/246 [00:01<00:07, 27.71it/s]Compare:  17%|█▋        | 42/246 [00:02<00:07, 27.96it/s]Compare:  18%|█▊        | 45/246 [00:02<00:07, 27.65it/s]Compare:  20%|█▉        | 48/246 [00:02<00:07, 27.69it/s]Compare:  21%|██        | 51/246 [00:02<00:07, 27.35it/s]Compare:  22%|██▏       | 54/246 [00:02<00:07, 27.07it/s]Compare:  23%|██▎       | 57/246 [00:02<00:06, 27.09it/s]Compare:  24%|██▍       | 60/246 [00:02<00:06, 27.02it/s]Compare:  26%|██▌       | 63/246 [00:02<00:06, 27.44it/s]Compare:  27%|██▋       | 66/246 [00:02<00:06, 27.41it/s]Compare:  28%|██▊       | 69/246 [00:03<00:06, 27.46it/s]Compare:  29%|██▉       | 72/246 [00:03<00:06, 27.57it/s]Compare:  30%|███       | 75/246 [00:03<00:06, 27.32it/s]Compare:  32%|███▏      | 78/246 [00:03<00:06, 27.59it/s]Compare:  33%|███▎      | 81/246 [00:03<00:05, 27.60it/s]Compare:  35%|███▍      | 85/246 [00:03<00:05, 28.42it/s]Compare:  36%|███▌      | 89/246 [00:03<00:05, 28.95it/s]Compare:  37%|███▋      | 92/246 [00:03<00:05, 29.22it/s]Compare:  39%|███▊      | 95/246 [00:03<00:05, 29.28it/s]Compare:  40%|████      | 99/246 [00:04<00:04, 29.69it/s]Compare:  41%|████▏     | 102/246 [00:04<00:04, 29.64it/s]Compare:  43%|████▎     | 105/246 [00:04<00:04, 29.07it/s]Compare:  44%|████▍     | 108/246 [00:04<00:04, 28.52it/s]Compare:  45%|████▌     | 111/246 [00:04<00:04, 27.35it/s]Compare:  46%|████▋     | 114/246 [00:04<00:04, 26.97it/s]Compare:  48%|████▊     | 117/246 [00:04<00:04, 26.79it/s]Compare:  49%|████▉     | 120/246 [00:04<00:04, 26.79it/s]Compare:  50%|█████     | 123/246 [00:04<00:04, 26.89it/s]Compare:  51%|█████     | 126/246 [00:05<00:04, 26.89it/s]Compare:  52%|█████▏    | 129/246 [00:05<00:04, 27.01it/s]Compare:  54%|█████▎    | 132/246 [00:05<00:04, 26.27it/s]Compare:  55%|█████▍    | 135/246 [00:05<00:04, 26.49it/s]Compare:  56%|█████▌    | 138/246 [00:05<00:04, 26.73it/s]Compare:  57%|█████▋    | 141/246 [00:05<00:03, 26.79it/s]Compare:  59%|█████▊    | 144/246 [00:05<00:03, 27.29it/s]Compare:  60%|█████▉    | 147/246 [00:05<00:03, 27.70it/s]Compare:  61%|██████    | 150/246 [00:06<00:05, 16.06it/s]Compare:  62%|██████▏   | 153/246 [00:06<00:05, 18.01it/s]Compare:  63%|██████▎   | 156/246 [00:06<00:04, 19.96it/s]Compare:  65%|██████▍   | 159/246 [00:06<00:04, 21.69it/s]Compare:  66%|██████▌   | 162/246 [00:06<00:03, 22.66it/s]Compare:  67%|██████▋   | 165/246 [00:06<00:03, 23.52it/s]Compare:  68%|██████▊   | 168/246 [00:06<00:03, 23.89it/s]Compare:  70%|██████▉   | 171/246 [00:07<00:03, 24.81it/s]Compare:  71%|███████   | 174/246 [00:07<00:02, 25.46it/s]Compare:  72%|███████▏  | 177/246 [00:07<00:02, 26.01it/s]Compare:  73%|███████▎  | 180/246 [00:07<00:02, 26.21it/s]Compare:  74%|███████▍  | 183/246 [00:07<00:02, 26.18it/s]Compare:  76%|███████▌  | 186/246 [00:07<00:02, 26.53it/s]Compare:  77%|███████▋  | 189/246 [00:07<00:02, 26.58it/s]Compare:  78%|███████▊  | 192/246 [00:07<00:01, 27.05it/s]Compare:  79%|███████▉  | 195/246 [00:07<00:01, 26.89it/s]Compare:  80%|████████  | 198/246 [00:08<00:01, 27.29it/s]Compare:  82%|████████▏ | 202/246 [00:08<00:01, 28.35it/s]Compare:  83%|████████▎ | 205/246 [00:08<00:01, 28.78it/s]Compare:  85%|████████▍ | 208/246 [00:08<00:01, 29.08it/s]Compare:  86%|████████▌ | 212/246 [00:08<00:01, 29.47it/s]Compare:  87%|████████▋ | 215/246 [00:08<00:01, 29.60it/s]Compare:  89%|████████▊ | 218/246 [00:08<00:00, 29.64it/s]Compare:  90%|████████▉ | 221/246 [00:08<00:00, 29.28it/s]Compare:  91%|█████████ | 224/246 [00:08<00:00, 28.72it/s]Compare:  92%|█████████▏| 227/246 [00:09<00:00, 28.22it/s]Compare:  93%|█████████▎| 230/246 [00:09<00:00, 24.94it/s]Compare:  95%|█████████▍| 233/246 [00:09<00:00, 24.62it/s]Compare:  96%|█████████▌| 236/246 [00:09<00:00, 24.12it/s]Compare:  97%|█████████▋| 239/246 [00:09<00:00, 22.88it/s]Compare:  98%|█████████▊| 242/246 [00:09<00:00, 22.24it/s]Compare: 100%|█████████▉| 245/246 [00:09<00:00, 22.92it/s]Compare: 100%|██████████| 246/246 [00:09<00:00, 24.94it/s]
+  ✓ VALID_COMPARE rows: 22140
+  ✓ TEST_COMPARE  rows: 22140
+  ✓ APPLY_VIEW    rows: 1230
+
+===== VALID_COMPARE (GERAL) =====
+rows (com y_true): 22140
+MAE: 0.049984   (≈ 5.00 p.p.)
+P95 abs err: 0.145789   (≈ 14.58 p.p.)
+coverage UNCAPPED: 0.905
+coverage CAPPED   : 0.828
+cap_hit_rate (média por ticker/target): 0.080
+
+===== VALID_COMPARE por target =====
+ target_best_entry | MAE=0.040688 (~4.07pp) | P95=0.125499 (~12.55pp) | covU=0.915 | covC=0.888 | cap_hit=0.062
+ target_best_sale | MAE=0.059279 (~5.93pp) | P95=0.161442 (~16.14pp) | covU=0.895 | covC=0.767 | cap_hit=0.098
+
+===== TEST_COMPARE (GERAL) =====
+rows (com y_true): 22140
+MAE: 0.056639   (≈ 5.66 p.p.)
+P95 abs err: 0.183341   (≈ 18.33 p.p.)
+coverage UNCAPPED: 0.790
+coverage CAPPED   : 0.715
+cap_hit_rate (média por ticker/target): 0.130
+
+===== TEST_COMPARE por target =====
+ target_best_entry | MAE=0.042371 (~4.24pp) | P95=0.152479 (~15.25pp) | covU=0.847 | covC=0.809 | cap_hit=0.077
+ target_best_sale | MAE=0.070907 (~7.09pp) | P95=0.202166 (~20.22pp) | covU=0.733 | covC=0.621 | cap_hit=0.182
+
+[6/7] Salvando outputs...
+
+[Concluído ✅]
+📁 Outputs em: ./output/data/models\v35_BASELINE_ONLY_IMPROVED_SPLIT_TEST_ASYM_BAND_VOLADAPT_WFCAL_CLASSFB_OPLEVELS_v4_outputs
+✅ APPLY exportado para: ./output/apply_forecast_with_error_band.csv
+
+[history] Exporting WIDE FORMAT regression forecast...
+  - tickers processed: 1/123 | rows=6,727
+  - tickers processed: 11/123 | rows=73,997
+  - tickers processed: 21/123 | rows=141,267
+  - tickers processed: 31/123 | rows=208,537
+  - tickers processed: 41/123 | rows=275,807
+  - tickers processed: 51/123 | rows=343,077
+  - tickers processed: 61/123 | rows=410,347
+  - tickers processed: 71/123 | rows=477,617
+  - tickers processed: 81/123 | rows=544,887
+  - tickers processed: 91/123 | rows=612,157
+  - tickers processed: 101/123 | rows=679,427
+  - tickers processed: 111/123 | rows=746,697
+  - tickers processed: 121/123 | rows=813,967
+[saved] ./output/forecast_history_wide.parquet (rows=827,421)
+=== Colunas no Arquivo ===
+['Date', 'ticker', 'best_buy_price', 'buy_err_lo', 'buy_err_hi', 'best_sell_price', 'sell_err_lo', 'sell_err_hi']
+
+=== Primeiras 5 linhas ===
+        Date     ticker  ...  sell_err_lo  sell_err_hi
+0 2005-01-03  000001.SS  ...  1242.774048  1331.460699
+1 2005-01-04  000001.SS  ...  1242.774048  1331.460699
+2 2005-01-05  000001.SS  ...  1242.774048  1331.460699
+3 2005-01-06  000001.SS  ...  1251.937012  1341.277549
+4 2005-01-07  000001.SS  ...  1239.430054  1327.878072
+
+[5 rows x 8 columns]
+
+✅ Regression models concluído.
+   Outputs em: C:\Users\gabri\OneDrive\Documentos\GitHub\test\.claude\worktrees\dazzling-robinson\output/forecast_history_wide.parquet
+⏱️  Step 3 (Regression Models) took 203.7s
+
+================================================================================
+STEP 4/4 — FINAL OUTPUT (Final_stock_output)
+================================================================================
+[scan] coletando tickers .SA do REG (streaming)...
+[scan] tickers .SA únicos: 82
+[fund] 25/82 tickers processados
+[fund] 50/82 tickers processados
+[fund] 75/82 tickers processados
+[fund] 82/82 tickers processados
+[fund] ok — fundamentos carregados para .SA
+[cols] ens_cols=['Date', 'ticker', 'split', 'p_up20', 'p_dd5', 'pred_up20', 'pred_dd5']
+[cols] reg_cols=['Date', 'ticker', 'best_buy_price', 'buy_err_lo', 'buy_err_hi', 'best_sell_price', 'sell_err_lo', 'sell_err_hi']
+[yahoo] Baixando OHLC de 82 ativos (2005-01-01 a 2026-12-31)...
+[                       0%                       ][*                      2%                       ]  2 of 82 completed[**                     4%                       ]  3 of 82 completed[**                     5%                       ]  4 of 82 completed[***                    6%                       ]  5 of 82 completed[***                    7%                       ]  6 of 82 completed[****                   9%                       ]  7 of 82 completed[*****                 10%                       ]  8 of 82 completed[*****                 11%                       ]  9 of 82 completed[******                12%                       ]  10 of 82 completed[******                13%                       ]  11 of 82 completed[*******               15%                       ]  12 of 82 completed[********              16%                       ]  13 of 82 completed[********              17%                       ]  14 of 82 completed[*********             18%                       ]  15 of 82 completed[**********            20%                       ]  16 of 82 completed[**********            21%                       ]  17 of 82 completed[***********           22%                       ]  18 of 82 completed[***********           23%                       ]  19 of 82 completed[************          24%                       ]  20 of 82 completed[************          24%                       ]  20 of 82 completed[*************         27%                       ]  22 of 82 completed[*************         28%                       ]  23 of 82 completed[**************        29%                       ]  24 of 82 completed[**************        30%                       ]  25 of 82 completed[***************       32%                       ]  26 of 82 completed[****************      33%                       ]  27 of 82 completed[****************      34%                       ]  28 of 82 completed[*****************     35%                       ]  29 of 82 completed[******************    37%                       ]  30 of 82 completed[******************    38%                       ]  31 of 82 completed[*******************   39%                       ]  32 of 82 completed[*******************   40%                       ]  33 of 82 completed[********************  41%                       ]  34 of 82 completed[********************* 43%                       ]  35 of 82 completed[********************* 44%                       ]  36 of 82 completed[**********************45%                       ]  37 of 82 completed[**********************46%                       ]  38 of 82 completed[**********************48%                       ]  39 of 82 completed[**********************49%                       ]  40 of 82 completed[**********************50%                       ]  41 of 82 completed[**********************51%                       ]  42 of 82 completed[**********************52%                       ]  43 of 82 completed[**********************54%*                      ]  44 of 82 completed[**********************55%*                      ]  45 of 82 completed[**********************56%**                     ]  46 of 82 completed[**********************57%**                     ]  47 of 82 completed[**********************59%***                    ]  48 of 82 completed[**********************60%****                   ]  49 of 82 completed[**********************61%****                   ]  50 of 82 completed[**********************62%*****                  ]  51 of 82 completed[**********************63%*****                  ]  52 of 82 completed[**********************65%******                 ]  53 of 82 completed[**********************66%*******                ]  54 of 82 completed[**********************67%*******                ]  55 of 82 completed[**********************68%********               ]  56 of 82 completed[**********************70%*********              ]  57 of 82 completed[**********************71%*********              ]  58 of 82 completed[**********************72%**********             ]  59 of 82 completed[**********************73%**********             ]  60 of 82 completed[**********************74%***********            ]  61 of 82 completed[**********************76%***********            ]  62 of 82 completed[**********************77%************           ]  63 of 82 completed[**********************78%************           ]  64 of 82 completed[**********************79%*************          ]  65 of 82 completed[**********************80%*************          ]  66 of 82 completed[**********************82%**************         ]  67 of 82 completed[**********************83%***************        ]  68 of 82 completed[**********************84%***************        ]  69 of 82 completed[**********************85%****************       ]  70 of 82 completed[**********************87%*****************      ]  71 of 82 completed[**********************88%*****************      ]  72 of 82 completed[**********************89%******************     ]  73 of 82 completed[**********************90%******************     ]  74 of 82 completed[**********************91%*******************    ]  75 of 82 completed[**********************93%********************   ]  76 of 82 completed[**********************94%********************   ]  77 of 82 completed[**********************95%*********************  ]  78 of 82 completed[**********************96%*********************  ]  79 of 82 completed[**********************98%********************** ]  80 of 82 completed[**********************99%***********************]  81 of 82 completed[*********************100%***********************]  82 of 82 completed
+[yahoo] Download concluído. Linhas carregadas: 433042
+[chunk] 2005-01-01 -> 2005-03-02 | rows=1,248 | total=1,248
+[chunk] 2005-03-02 -> 2005-05-01 | rows=1,312 | total=2,560
+[chunk] 2005-05-01 -> 2005-06-30 | rows=1,371 | total=3,931
+[chunk] 2005-06-30 -> 2005-08-29 | rows=1,422 | total=5,353
+[chunk] 2005-08-29 -> 2005-10-28 | rows=1,428 | total=6,781
+[chunk] 2005-10-28 -> 2005-12-27 | rows=1,387 | total=8,168
+[chunk] 2005-12-27 -> 2006-02-25 | rows=1,517 | total=9,685
+[chunk] 2006-02-25 -> 2006-04-26 | rows=1,508 | total=11,193
+[chunk] 2006-04-26 -> 2006-06-25 | rows=1,585 | total=12,778
+[chunk] 2006-06-25 -> 2006-08-24 | rows=1,591 | total=14,369
+[chunk] 2006-08-24 -> 2006-10-23 | rows=1,555 | total=15,924
+[chunk] 2006-10-23 -> 2006-12-22 | rows=1,684 | total=17,608
+[chunk] 2006-12-22 -> 2007-02-20 | rows=1,448 | total=19,056
+[chunk] 2007-02-20 -> 2007-04-21 | rows=1,687 | total=20,743
+[chunk] 2007-04-21 -> 2007-06-20 | rows=1,643 | total=22,386
+[chunk] 2007-06-20 -> 2007-08-19 | rows=1,867 | total=24,253
+[chunk] 2007-08-19 -> 2007-10-18 | rows=1,901 | total=26,154
+[chunk] 2007-10-18 -> 2007-12-17 | rows=1,855 | total=28,009
+[chunk] 2007-12-17 -> 2008-02-15 | rows=1,863 | total=29,872
+[chunk] 2008-02-15 -> 2008-04-15 | rows=2,097 | total=31,969
+[chunk] 2008-04-15 -> 2008-06-14 | rows=2,132 | total=34,101
+[chunk] 2008-06-14 -> 2008-08-13 | rows=2,132 | total=36,233
+[chunk] 2008-08-13 -> 2008-10-12 | rows=2,236 | total=38,469
+[chunk] 2008-10-12 -> 2008-12-11 | rows=2,184 | total=40,653
+[chunk] 2008-12-11 -> 2009-02-09 | rows=1,976 | total=42,629
+[chunk] 2009-02-09 -> 2009-04-10 | rows=2,220 | total=44,849
+[chunk] 2009-04-10 -> 2009-06-09 | rows=2,067 | total=46,916
+[chunk] 2009-06-09 -> 2009-08-08 | rows=2,278 | total=49,194
+[chunk] 2009-08-08 -> 2009-10-07 | rows=2,173 | total=51,367
+[chunk] 2009-10-07 -> 2009-12-06 | rows=2,194 | total=53,561
+[chunk] 2009-12-06 -> 2010-02-04 | rows=2,214 | total=55,775
+[chunk] 2010-02-04 -> 2010-04-05 | rows=2,224 | total=57,999
+[chunk] 2010-04-05 -> 2010-06-04 | rows=2,436 | total=60,435
+[chunk] 2010-06-04 -> 2010-08-03 | rows=2,378 | total=62,813
+[chunk] 2010-08-03 -> 2010-10-02 | rows=2,494 | total=65,307
+[chunk] 2010-10-02 -> 2010-12-01 | rows=2,287 | total=67,594
+[chunk] 2010-12-01 -> 2011-01-30 | rows=2,360 | total=69,954
+[chunk] 2011-01-30 -> 2011-03-31 | rows=2,438 | total=72,392
+[chunk] 2011-03-31 -> 2011-05-30 | rows=2,420 | total=74,812
+[chunk] 2011-05-30 -> 2011-07-29 | rows=2,623 | total=77,435
+[chunk] 2011-07-29 -> 2011-09-27 | rows=2,501 | total=79,936
+[chunk] 2011-09-27 -> 2011-11-26 | rows=2,501 | total=82,437
+[chunk] 2011-11-26 -> 2012-01-25 | rows=2,501 | total=84,938
+[chunk] 2012-01-25 -> 2012-03-25 | rows=2,389 | total=87,327
+[chunk] 2012-03-25 -> 2012-05-24 | rows=2,542 | total=89,869
+[chunk] 2012-05-24 -> 2012-07-23 | rows=2,480 | total=92,349
+[chunk] 2012-07-23 -> 2012-09-21 | rows=2,666 | total=95,015
+[chunk] 2012-09-21 -> 2012-11-20 | rows=2,418 | total=97,433
+[chunk] 2012-11-20 -> 2013-01-19 | rows=2,418 | total=99,851
+[chunk] 2013-01-19 -> 2013-03-20 | rows=2,418 | total=102,269
+[chunk] 2013-03-20 -> 2013-05-19 | rows=2,573 | total=104,842
+[chunk] 2013-05-19 -> 2013-07-18 | rows=2,624 | total=107,466
+[chunk] 2013-07-18 -> 2013-09-16 | rows=2,688 | total=110,154
+[chunk] 2013-09-16 -> 2013-11-15 | rows=2,816 | total=112,970
+[chunk] 2013-11-15 -> 2014-01-14 | rows=2,304 | total=115,274
+[chunk] 2014-01-14 -> 2014-03-15 | rows=2,723 | total=117,997
+[chunk] 2014-03-15 -> 2014-05-14 | rows=2,535 | total=120,532
+[chunk] 2014-05-14 -> 2014-07-13 | rows=2,600 | total=123,132
+[chunk] 2014-07-13 -> 2014-09-11 | rows=2,873 | total=126,005
+[chunk] 2014-09-11 -> 2014-11-10 | rows=2,856 | total=128,861
+[chunk] 2014-11-10 -> 2015-01-09 | rows=2,652 | total=131,513
+[chunk] 2015-01-09 -> 2015-03-10 | rows=2,720 | total=134,233
+[chunk] 2015-03-10 -> 2015-05-09 | rows=2,812 | total=137,045
+[chunk] 2015-05-09 -> 2015-07-08 | rows=2,852 | total=139,897
+[chunk] 2015-07-08 -> 2015-09-06 | rows=2,942 | total=142,839
+[chunk] 2015-09-06 -> 2015-11-05 | rows=2,820 | total=145,659
+[chunk] 2015-11-05 -> 2016-01-04 | rows=2,616 | total=148,275
+[chunk] 2016-01-04 -> 2016-03-04 | rows=2,897 | total=151,172
+[chunk] 2016-03-04 -> 2016-05-03 | rows=2,837 | total=154,009
+[chunk] 2016-05-03 -> 2016-07-02 | rows=3,051 | total=157,060
+[chunk] 2016-07-02 -> 2016-08-31 | rows=2,982 | total=160,042
+[chunk] 2016-08-31 -> 2016-10-30 | rows=2,911 | total=162,953
+[chunk] 2016-10-30 -> 2016-12-29 | rows=2,909 | total=165,862
+[chunk] 2016-12-29 -> 2017-02-27 | rows=2,839 | total=168,701
+[chunk] 2017-02-27 -> 2017-04-28 | rows=2,840 | total=171,541
+[chunk] 2017-04-28 -> 2017-06-27 | rows=2,909 | total=174,450
+[chunk] 2017-06-27 -> 2017-08-26 | rows=3,124 | total=177,574
+[chunk] 2017-08-26 -> 2017-10-25 | rows=2,990 | total=180,564
+[chunk] 2017-10-25 -> 2017-12-24 | rows=3,090 | total=183,654
+[chunk] 2017-12-24 -> 2018-02-22 | rows=2,874 | total=186,528
+[chunk] 2018-02-22 -> 2018-04-23 | rows=2,952 | total=189,480
+[chunk] 2018-04-23 -> 2018-06-22 | rows=3,024 | total=192,504
+[chunk] 2018-06-22 -> 2018-08-21 | rows=2,956 | total=195,460
+[chunk] 2018-08-21 -> 2018-10-20 | rows=3,066 | total=198,526
+[chunk] 2018-10-20 -> 2018-12-19 | rows=2,847 | total=201,373
+[chunk] 2018-12-19 -> 2019-02-17 | rows=2,774 | total=204,147
+[chunk] 2019-02-17 -> 2019-04-18 | rows=3,029 | total=207,176
+[chunk] 2019-04-18 -> 2019-06-17 | rows=2,960 | total=210,136
+[chunk] 2019-06-17 -> 2019-08-16 | rows=3,141 | total=213,277
+[chunk] 2019-08-16 -> 2019-10-15 | rows=3,150 | total=216,427
+[chunk] 2019-10-15 -> 2019-12-14 | rows=3,183 | total=219,610
+[chunk] 2019-12-14 -> 2020-02-12 | rows=2,926 | total=222,536
+[chunk] 2020-02-12 -> 2020-04-12 | rows=3,080 | total=225,616
+[chunk] 2020-04-12 -> 2020-06-11 | rows=3,162 | total=228,778
+[chunk] 2020-06-11 -> 2020-08-10 | rows=3,195 | total=231,973
+[chunk] 2020-08-10 -> 2020-10-09 | rows=3,368 | total=235,341
+[chunk] 2020-10-09 -> 2020-12-08 | rows=3,081 | total=238,422
+[chunk] 2020-12-08 -> 2021-02-06 | rows=3,081 | total=241,503
+[chunk] 2021-02-06 -> 2021-04-07 | rows=3,107 | total=244,610
+[chunk] 2021-04-07 -> 2021-06-06 | rows=3,305 | total=247,915
+[chunk] 2021-06-06 -> 2021-08-05 | rows=3,402 | total=251,317
+[chunk] 2021-08-05 -> 2021-10-04 | rows=3,321 | total=254,638
+[chunk] 2021-10-04 -> 2021-12-03 | rows=3,330 | total=257,968
+[chunk] 2021-12-03 -> 2022-02-01 | rows=3,280 | total=261,248
+[chunk] 2022-02-01 -> 2022-04-02 | rows=3,444 | total=264,692
+[chunk] 2022-04-02 -> 2022-06-01 | rows=3,279 | total=267,971
+[chunk] 2022-06-01 -> 2022-07-31 | rows=3,444 | total=271,415
+[chunk] 2022-07-31 -> 2022-09-29 | rows=3,444 | total=274,859
+[chunk] 2022-09-29 -> 2022-11-28 | rows=3,198 | total=278,057
+[chunk] 2022-11-28 -> 2023-01-27 | rows=3,526 | total=281,583
+[chunk] 2023-01-27 -> 2023-03-28 | rows=3,280 | total=284,863
+[chunk] 2023-03-28 -> 2023-05-27 | rows=3,362 | total=288,225
+[chunk] 2023-05-27 -> 2023-07-26 | rows=3,362 | total=291,587
+[chunk] 2023-07-26 -> 2023-09-24 | rows=3,444 | total=295,031
+[chunk] 2023-09-24 -> 2023-11-23 | rows=3,280 | total=298,311
+[chunk] 2023-11-23 -> 2024-01-22 | rows=3,198 | total=301,509
+[chunk] 2024-01-22 -> 2024-03-22 | rows=3,444 | total=304,953
+[chunk] 2024-03-22 -> 2024-05-21 | rows=3,280 | total=308,233
+[chunk] 2024-05-21 -> 2024-07-20 | rows=3,525 | total=311,758
+[chunk] 2024-07-20 -> 2024-09-18 | rows=3,444 | total=315,202
+[chunk] 2024-09-18 -> 2024-11-17 | rows=3,444 | total=318,646
+[chunk] 2024-11-17 -> 2025-01-16 | rows=3,116 | total=321,762
+[chunk] 2025-01-16 -> 2025-03-17 | rows=3,280 | total=325,042
+[chunk] 2025-03-17 -> 2025-05-16 | rows=3,362 | total=328,404
+[chunk] 2025-05-16 -> 2025-07-15 | rows=3,362 | total=331,766
+[chunk] 2025-07-15 -> 2025-09-13 | rows=3,608 | total=335,374
+[chunk] 2025-09-13 -> 2025-11-12 | rows=3,444 | total=338,818
+[chunk] 2025-11-12 -> 2026-01-11 | rows=3,116 | total=341,934
+[chunk] 2026-01-11 -> 2026-03-12 | rows=3,362 | total=345,296
+[OK] Parquet salvo em: output\history_consolidated.parquet | rows=345,296
+[DONE]
+      Date    ticker split      price       open       high        low      close  best_buy_value  best_sell_value  err_buy_pct  err_sell_pct  downside_pct  upside_pct  risk_return   p_up20    p_dd5  pred_up20  pred_dd5  up20_bin  dd5_bin  buy_trust  sell_trust  EV_buy_reg  EV_buy_ens   EV_buy  fund_score  EV_buy_fund  EV_buy_fund_2  EV_buy_fund_3  signal  dividend_yield  trailing_pe  price_to_book   market_cap
+2026-02-10 XPML11.SA       110.300003 110.559998 110.650002 110.099998 110.300003      107.469891       114.017983     0.133059      0.224936      0.022145    0.037436     1.690490 0.000000 0.000000        NaN       NaN         0        0        0.0         0.0    0.513619    0.000000 0.366174    0.466164     0.288479       0.288479       0.366174     NaN          0.1007          NaN            NaN 6221084672.0
+2026-02-11 XPML11.SA       110.320000 110.529999 110.550003 110.279999 110.320000      107.489373       114.038651     0.133059      0.224936      0.022145    0.037436     1.690491 0.000000 0.000000        NaN       NaN         0        0        0.0         0.0    0.513619    0.000000 0.366174    0.466164     0.288479       0.288479       0.366174     NaN          0.1007          NaN            NaN 6221084672.0
+2026-02-12 XPML11.SA       110.519997 110.550003 110.720001 110.320000 110.519997      107.684240       114.245392     0.133059      0.224936      0.022145    0.037436     1.690491 0.000000 0.000000        NaN       NaN         0        0        0.0         0.0    0.513619    0.000000 0.366174    0.466164     0.288479       0.288479       0.366174     NaN          0.1007          NaN            NaN 6221084672.0
+2026-02-13 XPML11.SA       111.000000 110.550003 111.099998 110.410004 111.000000      108.151923       114.741571     0.133059      0.224936      0.022145    0.037436     1.690492 0.000000 0.000000        NaN       NaN         0        0        0.0         0.0    0.513619    0.000000 0.366174    0.466164     0.288479       0.288479       0.366174     NaN          0.1007          NaN            NaN 6221084672.0
+2026-02-18 XPML11.SA       111.050003 111.000000 111.480003 110.750000 111.050003      108.200646       114.793262     0.133059      0.224937      0.022145    0.037436     1.690499 0.000000 0.000000        NaN       NaN         0        0        0.0         0.0    0.513619    0.000000 0.366175    0.466164     0.288480       0.288480       0.366175     NaN          0.1007          NaN            NaN 6221084672.0
+2026-02-19 XPML11.SA       111.489998 110.849998 111.489998 110.500000 111.489998      109.537223       116.211276     0.133059      0.224936      0.022145    0.037436     1.690494 0.000000 0.000000        NaN       NaN         0        0        0.0         0.0    0.513619    0.000000 0.366175    0.466164     0.288479       0.288479       0.366175     NaN          0.1007          NaN            NaN 6221084672.0
+2026-02-20 XPML11.SA       111.709999 111.489998 111.709999 110.919998 111.709999      109.753371       116.440594     0.133059      0.224936      0.022145    0.037436     1.690495 0.000000 0.000000        NaN       NaN         0        0        0.0         0.0    0.513619    0.000000 0.366175    0.466164     0.288479       0.288479       0.366175     NaN          0.1007          NaN            NaN 6221084672.0
+2026-02-23 XPML11.SA       112.000000 111.709999 112.000000 111.449997 112.000000      110.038292       116.742875     0.133059      0.224937      0.022145    0.037436     1.690498 0.000000 0.000000        NaN       NaN         0        0        0.0         0.0    0.513619    0.000000 0.366175    0.466164     0.288480       0.288480       0.366175     NaN          0.1007          NaN            NaN 6221084672.0
+2026-02-24 XPML11.SA       111.239998 112.089996 112.199997 110.919998 111.239998      109.291602       115.950689     0.133059      0.224937      0.022145    0.037436     1.690497 0.000000 0.000000        NaN       NaN         0        0        0.0         0.0    0.513619    0.000000 0.366175    0.466164     0.288480       0.288480       0.366175     NaN          0.1007          NaN            NaN 6221084672.0
+2026-02-25 XPML11.SA       111.750000 111.500000 111.970001 111.269997 111.750000      109.792671       116.482288     0.133059      0.224936      0.022145    0.037436     1.690495 0.000000 0.000000        NaN       NaN         0        0        0.0         0.0    0.513619    0.000000 0.366175    0.466164     0.288479       0.288479       0.366175     NaN          0.1007          NaN            NaN 6221084672.0
+2026-02-26 XPML11.SA       111.290001 111.889999 111.959999 111.220001 111.290001      109.340729       116.002810     0.133059      0.224937      0.022145    0.037436     1.690497 0.000000 0.000000        NaN       NaN         0        0        0.0         0.0    0.513619    0.000000 0.366175    0.466164     0.288480       0.288480       0.366175     NaN          0.1007          NaN            NaN 6221084672.0
+2026-02-27 XPML11.SA       111.830002 111.720001 111.930000 111.290001 111.830002      109.871272       116.565678     0.133059      0.224937      0.022145    0.037436     1.690501 0.000000 0.000000        NaN       NaN         0        0        0.0         0.0    0.513619    0.000000 0.366175    0.466164     0.288480       0.288480       0.366175     NaN          0.1007          NaN            NaN 6221084672.0
+2026-03-02 XPML11.SA       110.889999 111.970001 111.970001 110.889999 110.889999      108.947734       115.585869     0.133059      0.224938      0.022145    0.037436     1.690505 0.000000 0.000000        NaN       NaN         0        0        0.0         0.0    0.513620    0.000000 0.366175    0.466164     0.288480       0.288480       0.366175     NaN          0.1007          NaN            NaN 6221084672.0
+2026-03-03 XPML11.SA       110.699997 111.120003 111.150002 110.339996 110.699997      108.761059       115.387821     0.133059      0.224938      0.022145    0.037436     1.690510 0.000000 0.000000        NaN       NaN         0        0        0.0         0.0    0.513620    0.000000 0.366175    0.466164     0.288480       0.288480       0.366175     NaN          0.1007          NaN            NaN 6221084672.0
+2026-03-04 XPML11.SA       110.410004 110.800003 110.879997 110.400002 110.410004      108.476145       115.085547     0.133059      0.224938      0.022145    0.037436     1.690511 0.000000 0.000000        NaN       NaN         0        0        0.0         0.0    0.513620    0.000000 0.366175    0.466164     0.288481       0.288481       0.366175     NaN          0.1007          NaN            NaN 6221084672.0
+2026-03-05 XPML11.SA       110.400002 110.500000 110.750000 110.300003 110.400002      108.466318       115.075121     0.133059      0.224938      0.022145    0.037436     1.690510 0.000000 0.000000        NaN       NaN         0        0        0.0         0.0    0.513620    0.000000 0.366175    0.466164     0.288480       0.288480       0.366175     NaN          0.1007          NaN            NaN 6221084672.0
+2026-03-06 XPML11.SA       110.389999 110.510002 110.680000 110.269997 110.389999      108.456491       115.064696     0.133059      0.224939      0.022145    0.037436     1.690513 0.000000 0.000000        NaN       NaN         0        0        0.0         0.0    0.513620    0.000000 0.366176    0.466164     0.288481       0.288481       0.366176     NaN          0.1007          NaN            NaN 6221084672.0
+2026-03-09 XPML11.SA APPLY 110.150002 110.680000 110.680000 110.129997 110.150002      108.220697       114.814535     0.133059      0.224939      0.022145    0.037436     1.690512 0.000017 0.995923        0.0       1.0         0        1        0.0         0.0    0.513620   -0.996725 0.080046    0.466164     0.063062       0.063062       0.079110     NaN          0.1007          NaN            NaN 6221084672.0
+2026-03-10 XPML11.SA APPLY 109.720001 110.339996 110.339996 109.419998 109.720001      107.798228       114.366325     0.133059      0.224939      0.022145    0.037436     1.690518 0.000018 0.988902        0.0       1.0         0        1        0.0         0.0    0.513620   -0.991107 0.081660    0.466164     0.064333       0.064333       0.079111     NaN          0.1007          NaN            NaN 6221084672.0
+2026-03-11 XPML11.SA APPLY 109.660004 109.959999 110.139999 109.610001 109.660004      107.739282       114.303787     0.133059      0.224939      0.022145    0.037436     1.690518 0.000013 0.994616        0.0       1.0         0        1        0.0         0.0    0.513620   -0.995682 0.080346    0.466164     0.063299       0.063299       0.079110     NaN          0.1007          NaN            NaN 6221084672.0
+
+✅ Final output concluído.
+   Output em: C:\Users\gabri\OneDrive\Documentos\GitHub\test\.claude\worktrees\dazzling-robinson\output/history_consolidated.parquet
+⏱️  Step 4 (Final Output) took 62.1s
+
+================================================================================
+✅ PIPELINE COMPLETE — Total time: 439.8s
+📁 Todos os arquivos salvos em: C:\Users\gabri\OneDrive\Documentos\GitHub\test\.claude\worktrees\dazzling-robinson\output/
+================================================================================
+
+Arquivos gerados:
+  output\apply_forecast_with_error_band.csv                        0.68 MB
+  output\ensemble_signals_history.parquet                          0.35 MB
+  output\ensemble_signals_history_with_trust.parquet              61.02 MB
+  output\forecast_history_wide.parquet                            40.96 MB
+  output\history_consolidated.parquet                             47.48 MB
+  output\data\expanded_stock.parquet                             395.35 MB
+  output\data\expanded_stock_reduced.parquet                     282.98 MB
+  output\data\models\multi_model_timeaware_v11_cv_recency_asset_thr_meta.json     0.02 MB
+  output\data\models\multi_model_timeaware_v11_cv_recency_asset_thr_train_et_target_dd5.joblib    22.26 MB
+  output\data\models\multi_model_timeaware_v11_cv_recency_asset_thr_train_et_target_up20.joblib    94.31 MB
+  output\data\models\multi_model_timeaware_v11_cv_recency_asset_thr_train_hgb_target_dd5.joblib     0.76 MB
+  output\data\models\multi_model_timeaware_v11_cv_recency_asset_thr_train_hgb_target_up20.joblib     2.49 MB
+  output\data\models\multi_model_timeaware_v11_cv_recency_asset_thr_train_lgbm_target_dd5.txt     5.64 MB
+  output\data\models\multi_model_timeaware_v11_cv_recency_asset_thr_train_lgbm_target_up20.txt    17.06 MB
+  output\data\models\multi_model_timeaware_v11_cv_recency_asset_thr_train_rf_target_dd5.joblib     3.67 MB
+  output\data\models\multi_model_timeaware_v11_cv_recency_asset_thr_train_rf_target_up20.joblib     4.23 MB
+  output\data\models\multi_model_timeaware_v11_cv_recency_asset_thr_tv_et_target_dd5.joblib    23.10 MB
+  output\data\models\multi_model_timeaware_v11_cv_recency_asset_thr_tv_et_target_up20.joblib   109.10 MB
+  output\data\models\multi_model_timeaware_v11_cv_recency_asset_thr_tv_hgb_target_dd5.joblib     0.76 MB
+  output\data\models\multi_model_timeaware_v11_cv_recency_asset_thr_tv_hgb_target_up20.joblib     2.46 MB
+  output\data\models\multi_model_timeaware_v11_cv_recency_asset_thr_tv_lgbm_target_dd5.txt     5.64 MB
+  output\data\models\multi_model_timeaware_v11_cv_recency_asset_thr_tv_lgbm_target_up20.txt    17.00 MB
+  output\data\models\multi_model_timeaware_v11_cv_recency_asset_thr_tv_rf_target_dd5.joblib     3.76 MB
+  output\data\models\multi_model_timeaware_v11_cv_recency_asset_thr_tv_rf_target_up20.joblib     4.57 MB
+  output\data\models\v35_BASELINE_ONLY_IMPROVED_SPLIT_TEST_ASYM_BAND_VOLADAPT_WFCAL_CLASSFB_OPLEVELS_v4_outputs\apply_forecast_with_error_band.csv     0.68 MB
+  output\data\models\v35_BASELINE_ONLY_IMPROVED_SPLIT_TEST_ASYM_BAND_VOLADAPT_WFCAL_CLASSFB_OPLEVELS_v4_outputs\band_scale_by_ticker_target.csv     0.01 MB
+  output\data\models\v35_BASELINE_ONLY_IMPROVED_SPLIT_TEST_ASYM_BAND_VOLADAPT_WFCAL_CLASSFB_OPLEVELS_v4_outputs\baseline_best_by_ticker_target.csv     0.06 MB
+  output\data\models\v35_BASELINE_ONLY_IMPROVED_SPLIT_TEST_ASYM_BAND_VOLADAPT_WFCAL_CLASSFB_OPLEVELS_v4_outputs\meta_best.json     0.13 MB
+  output\data\models\v35_BASELINE_ONLY_IMPROVED_SPLIT_TEST_ASYM_BAND_VOLADAPT_WFCAL_CLASSFB_OPLEVELS_v4_outputs\test_compare.csv     9.40 MB
+  output\data\models\v35_BASELINE_ONLY_IMPROVED_SPLIT_TEST_ASYM_BAND_VOLADAPT_WFCAL_CLASSFB_OPLEVELS_v4_outputs\valid_compare.csv     9.36 MB
+[INFO] google.colab drive.mount ignorado no Codespaces
+=== GA + Walk-Forward ML (OOS) + Intraday Backtest (v2) ===
+[FEATS] numeric candidates: 40 (using up to 40)
+[DATA] 345296 rows, 82 tickers (out of 82)
+[SYSTEM] CPUs available=4 | configured_workers=1
+[PHASE1] prep 1/82 | payloads=1 | elapsed=0.5s
+[PHASE1] prep 2/82 | payloads=2 | elapsed=1.2s
+[PHASE1] prep 3/82 | payloads=3 | elapsed=1.9s
+[PHASE1] prep 4/82 | payloads=4 | elapsed=2.3s
+[PHASE1] prep 5/82 | payloads=5 | elapsed=2.8s
+[PHASE1] prep 6/82 | payloads=6 | elapsed=3.3s
+C:\Users\gabri\OneDrive\Documentos\GitHub\test\.claude\worktrees\dazzling-robinson\ga_run.py:1840: ConstantInputWarning: An input array is constant; the correlation coefficient is not defined.
+  corr, _ = spearmanr(s_col.to_numpy()[valid_idx_temp], y_event_temp[valid_idx_temp])
+[PHASE1] prep 7/82 | payloads=7 | elapsed=3.8s
+[PHASE1] prep 8/82 | payloads=8 | elapsed=4.3s
+[PHASE1] prep 9/82 | payloads=9 | elapsed=4.8s
+[PHASE1] prep 10/82 | payloads=10 | elapsed=5.3s
+[PHASE1] prep 11/82 | payloads=11 | elapsed=5.8s
+[PHASE1] prep 12/82 | payloads=12 | elapsed=6.2s
+[PHASE1] prep 13/82 | payloads=13 | elapsed=6.6s
+[PHASE1] prep 14/82 | payloads=14 | elapsed=7.2s
+[PHASE1] prep 15/82 | payloads=15 | elapsed=7.7s
+[PHASE1] prep 16/82 | payloads=16 | elapsed=8.2s
+[PHASE1] prep 17/82 | payloads=17 | elapsed=8.8s
+[PHASE1] prep 18/82 | payloads=18 | elapsed=9.3s
+[PHASE1] prep 19/82 | payloads=19 | elapsed=9.8s
+[PHASE1] prep 20/82 | payloads=20 | elapsed=10.4s
+[PHASE1] prep 21/82 | payloads=21 | elapsed=11.0s
+[PHASE1] prep 22/82 | payloads=22 | elapsed=11.6s
+[PHASE1] prep 23/82 | payloads=23 | elapsed=12.0s
+[PHASE1] prep 24/82 | payloads=24 | elapsed=12.4s
+[PHASE1] prep 25/82 | payloads=25 | elapsed=12.9s
+[PHASE1] prep 26/82 | payloads=26 | elapsed=13.4s
+[PHASE1] prep 27/82 | payloads=27 | elapsed=13.9s
+[PHASE1] prep 28/82 | payloads=28 | elapsed=14.4s
+[PHASE1] prep 29/82 | payloads=29 | elapsed=15.0s
+[PHASE1] prep 30/82 | payloads=30 | elapsed=15.5s
+[PHASE1] prep 31/82 | payloads=31 | elapsed=16.1s
+[PHASE1] prep 32/82 | payloads=32 | elapsed=16.7s
+[PHASE1] prep 33/82 | payloads=33 | elapsed=17.4s
+[PHASE1] prep 34/82 | payloads=34 | elapsed=17.9s
+[PHASE1] prep 35/82 | payloads=35 | elapsed=18.4s
+[PHASE1] prep 36/82 | payloads=36 | elapsed=18.9s
+[PHASE1] prep 37/82 | payloads=37 | elapsed=19.5s
+[PHASE1] prep 38/82 | payloads=38 | elapsed=19.9s
+[PHASE1] prep 39/82 | payloads=39 | elapsed=20.6s
+[PHASE1] prep 40/82 | payloads=40 | elapsed=21.4s
+[PHASE1] prep 41/82 | payloads=41 | elapsed=22.1s
+[PHASE1] prep 42/82 | payloads=42 | elapsed=22.9s
+[PHASE1] prep 43/82 | payloads=43 | elapsed=23.4s
+[PHASE1] prep 44/82 | payloads=44 | elapsed=23.8s
+[PHASE1] prep 45/82 | payloads=45 | elapsed=24.6s
+[PHASE1] prep 46/82 | payloads=46 | elapsed=25.1s
+[PHASE1] prep 47/82 | payloads=47 | elapsed=25.8s
+[PHASE1] prep 48/82 | payloads=48 | elapsed=26.3s
+[PHASE1] prep 49/82 | payloads=49 | elapsed=26.8s
+[PHASE1] prep 50/82 | payloads=50 | elapsed=27.4s
+[PHASE1] prep 51/82 | payloads=51 | elapsed=27.8s
+[PHASE1] prep 52/82 | payloads=52 | elapsed=28.2s
+[PHASE1] prep 53/82 | payloads=53 | elapsed=28.7s
+[PHASE1] prep 54/82 | payloads=54 | elapsed=29.2s
+[PHASE1] prep 55/82 | payloads=55 | elapsed=29.8s
+[PHASE1] prep 56/82 | payloads=56 | elapsed=30.2s
+[PHASE1] prep 57/82 | payloads=57 | elapsed=30.8s
+[PHASE1] prep 58/82 | payloads=58 | elapsed=31.3s
+[PHASE1] prep 59/82 | payloads=59 | elapsed=31.7s
+[PHASE1] prep 60/82 | payloads=60 | elapsed=32.4s
+[PHASE1] prep 61/82 | payloads=61 | elapsed=32.9s
+[PHASE1] prep 62/82 | payloads=62 | elapsed=33.3s
+[PHASE1] prep 63/82 | payloads=63 | elapsed=33.7s
+[PHASE1] prep 64/82 | payloads=64 | elapsed=34.2s
+[PHASE1] prep 65/82 | payloads=65 | elapsed=34.7s
+[PHASE1] prep 66/82 | payloads=66 | elapsed=35.3s
+[PHASE1] prep 67/82 | payloads=67 | elapsed=35.8s
+[PHASE1] prep 68/82 | payloads=68 | elapsed=36.3s
+[PHASE1] prep 69/82 | payloads=69 | elapsed=36.7s
+[PHASE1] prep 70/82 | payloads=70 | elapsed=37.5s
+C:\Users\gabri\OneDrive\Documentos\GitHub\test\.claude\worktrees\dazzling-robinson\ga_run.py:1840: ConstantInputWarning: An input array is constant; the correlation coefficient is not defined.
+  corr, _ = spearmanr(s_col.to_numpy()[valid_idx_temp], y_event_temp[valid_idx_temp])
+[PHASE1] prep 71/82 | payloads=71 | elapsed=38.1s
+[PHASE1] prep 72/82 | payloads=72 | elapsed=38.5s
+[PHASE1] prep 73/82 | payloads=73 | elapsed=39.1s
+[PHASE1] prep 74/82 | payloads=74 | elapsed=39.6s
+[PHASE1] prep 75/82 | payloads=75 | elapsed=40.2s
+[PHASE1] prep 76/82 | payloads=76 | elapsed=40.8s
+[PHASE1] prep 77/82 | payloads=77 | elapsed=41.4s
+C:\Users\gabri\OneDrive\Documentos\GitHub\test\.claude\worktrees\dazzling-robinson\ga_run.py:1840: ConstantInputWarning: An input array is constant; the correlation coefficient is not defined.
+  corr, _ = spearmanr(s_col.to_numpy()[valid_idx_temp], y_event_temp[valid_idx_temp])
+[PHASE1] prep 78/82 | payloads=78 | elapsed=41.9s
+[PHASE1] prep 79/82 | payloads=79 | elapsed=42.6s
+[PHASE1] prep 80/82 | payloads=80 | elapsed=43.0s
+[PHASE1] prep 81/82 | payloads=81 | elapsed=43.5s
+[PHASE1] prep 82/82 | payloads=82 | elapsed=43.9s
+[PHASE1] done payloads=82 in 43.9s
+[GLOBAL_GA] loaded from checkpoint (load mode) fit=4.1168
+
+============================================================
+=== OBJETIVOS (FULL MODE) ===
+============================================================
+  win_rate_mean   : 0.549  (median: 0.598)  >> objetivo: ALTO
+  median_mdd      : -0.239  (mean: -0.262)     >> objetivo: BAIXO
+  beat buy&hold % : 53.7%  test_return(110.9400) vs buy_hold(6.6351)
+  mean trades/tkr : 172.7
+  % ret_pos       : 78.0%  | % sharpe_pos: 78.0%
+  GA fitness      : 4.1168
+============================================================
+  win_rate_mean>=0.52  : PASS (0.549)
+  median_mdd>=-25%    : PASS (-0.239)
+  beats buy&hold      : PASS (110.9400 vs 6.6351)
+  trades>=10/ticker   : PASS (172.7)
+  TODOS OBJETIVOS     : ALL PASS
+============================================================
+[WARN] xlsxwriter failed, trying openpyxl: [Errno 13] Permission denied: './summary_latest.xlsx'
+[WARN] xlsx save failed (file open in Excel?): [Errno 13] Permission denied: './summary_latest.xlsx' — CSV already saved.
+Saved: ./summary_latest.xlsx | ./apply_last_5d__H5.csv

@@ -2163,6 +2163,10 @@ def run():
         df_feat_imp = pd.DataFrame(_feat_imp_rows) if _feat_imp_rows else pd.DataFrame()
         # ─────────────────────────────────────────────────────────────────
 
+        # Save CSV first — never blocked by Excel having the xlsx open
+        if not df_app.empty:
+            df_app.to_csv(out_apply_csv, index=False)
+
         try:
             with pd.ExcelWriter(out_xlsx, engine="xlsxwriter") as writer:
                 df_sum.to_excel(writer, sheet_name="Summary", index=False)
@@ -2172,15 +2176,15 @@ def run():
                     df_feat_imp.to_excel(writer, sheet_name="Feature_Importance", index=False)
         except Exception as e:
             print(f"[WARN] xlsxwriter failed, trying openpyxl: {e}")
-            with pd.ExcelWriter(out_xlsx, engine="openpyxl") as writer:
-                df_sum.to_excel(writer, sheet_name="Summary", index=False)
-                if not df_app.empty:
-                    df_app.to_excel(writer, sheet_name="Apply", index=False)
-                if not df_feat_imp.empty:
-                    df_feat_imp.to_excel(writer, sheet_name="Feature_Importance", index=False)
-
-    if not df_app.empty:
-        df_app.to_csv(out_apply_csv, index=False)
+            try:
+                with pd.ExcelWriter(out_xlsx, engine="openpyxl") as writer:
+                    df_sum.to_excel(writer, sheet_name="Summary", index=False)
+                    if not df_app.empty:
+                        df_app.to_excel(writer, sheet_name="Apply", index=False)
+                    if not df_feat_imp.empty:
+                        df_feat_imp.to_excel(writer, sheet_name="Feature_Importance", index=False)
+            except Exception as e2:
+                print(f"[WARN] xlsx save failed (file open in Excel?): {e2} — CSV already saved.")
 
     print(f"Saved: {out_xlsx} | {out_apply_csv}")
 
