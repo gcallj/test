@@ -1,2 +1,26 @@
-# Arquivos grandes/dados locais
+# Local large files / generated datasets
 history_consolidated.csv
+history_final_enriched.parquet
+
+# Python cache and build artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Jupyter temporary files
+.ipynb_checkpoints/
+*.ipynb.bak
+*.ipynb.bak_*
+
+# Logs and debug outputs
+*.log
+_*.txt
+
+# Generated reports and plots
+feature_importance*.csv
+feature_importance*.png
+summary_latest_bkup.xlsx
+
+# Pipeline outputs (large, generated)
+output/
