@@ -115,6 +115,18 @@ def run_etl():
         # Química / materiais
         "UNIP6.SA",
 
+        # Construção civil / incorporação
+        "EZTC3.SA",
+
+        # Frigoríficos / alimentos
+        "MLAS3.SA",
+
+        # Turismo / lazer
+        "CVCB3.SA",
+
+        # BDR / ETF internacional
+        "XPBR31.SA",
+
     ]
 
     # FIIs Brasil (mix: logística, shoppings, lajes, papel, FoF)
@@ -131,6 +143,10 @@ def run_etl():
         "KNCR11.SA", "KNSC11.SA", "KNHY11.SA", "CPTS11.SA", "IRDM11.SA",
         # FoF
         "BCFF11.SA", "HFOF11.SA", "KFOF11.SA", "RBRF11.SA",
+        # Saúde / biotech
+        "RBRX11.SA",
+        # Híbridos / diversificados
+        "BCIA11.SA",
     ]
 
     # Índices globais + proxies macro (inclui Suécia e juros EUA)
@@ -904,17 +920,33 @@ def run_etl():
                 ni  = _stmt_get(inc, ["Net Income", "NetIncome"], col)
                 ebt = _stmt_get(inc, ["EBITDA"], col)
                 gp  = _stmt_get(inc, ["Gross Profit", "GrossProfit"], col)
+                op_inc = _stmt_get(inc, ["Operating Income", "OperatingIncome"], col)
+
+                # EPS: Diluted EPS preferred, fallback to Basic EPS
+                diluted_eps = _stmt_get(inc, ["Diluted EPS", "DilutedEPS"], col)
+                basic_eps   = _stmt_get(inc, ["Basic EPS", "BasicEPS"], col)
+                eps_val = diluted_eps if np.isfinite(diluted_eps) else basic_eps
+
+                # Shares outstanding (for derived EPS if not available)
+                shares = _stmt_get(inc, ["Diluted Average Shares", "DilutedAverageShares",
+                                         "Basic Average Shares", "BasicAverageShares"], col)
 
                 assets = _stmt_get(bal, ["Total Assets", "TotalAssets"], col)
                 liab   = _stmt_get(bal, ["Total Liabilities Net Minority Interest", "TotalLiabilitiesNetMinorityInterest",
                                          "Total Liabilities", "TotalLiabilities"], col)
                 debt   = _stmt_get(bal, ["Total Debt", "TotalDebt", "Long Term Debt", "LongTermDebt"], col)
                 cash   = _stmt_get(bal, ["Cash And Cash Equivalents", "CashAndCashEquivalents"], col)
+                curr_assets = _stmt_get(bal, ["Current Assets", "CurrentAssets"], col)
+                curr_liab   = _stmt_get(bal, ["Current Liabilities", "CurrentLiabilities"], col)
 
                 ocf = _stmt_get(cfs, ["Operating Cash Flow", "OperatingCashFlow"], col)
                 fcf = _stmt_get(cfs, ["Free Cash Flow", "FreeCashFlow"], col)
 
                 equity = (assets - liab) if np.isfinite(assets) and np.isfinite(liab) else np.nan
+
+                # Derive EPS from net_income / shares if not directly available
+                if not np.isfinite(eps_val) and np.isfinite(ni) and np.isfinite(shares) and shares > 0:
+                    eps_val = ni / shares
 
                 rows.append({
                     "date": pd.to_datetime(col),
@@ -922,11 +954,15 @@ def run_etl():
                     "fundQ_net_income": float(ni) if np.isfinite(ni) else np.nan,
                     "fundQ_ebitda": float(ebt) if np.isfinite(ebt) else np.nan,
                     "fundQ_gross_profit": float(gp) if np.isfinite(gp) else np.nan,
+                    "fundQ_op_income": float(op_inc) if np.isfinite(op_inc) else np.nan,
+                    "fundQ_eps": float(eps_val) if np.isfinite(eps_val) else np.nan,
                     "fundQ_assets": float(assets) if np.isfinite(assets) else np.nan,
                     "fundQ_liabilities": float(liab) if np.isfinite(liab) else np.nan,
                     "fundQ_equity": float(equity) if np.isfinite(equity) else np.nan,
                     "fundQ_total_debt": float(debt) if np.isfinite(debt) else np.nan,
                     "fundQ_cash": float(cash) if np.isfinite(cash) else np.nan,
+                    "fundQ_curr_assets": float(curr_assets) if np.isfinite(curr_assets) else np.nan,
+                    "fundQ_curr_liab": float(curr_liab) if np.isfinite(curr_liab) else np.nan,
                     "fundQ_ocf": float(ocf) if np.isfinite(ocf) else np.nan,
                     "fundQ_fcf": float(fcf) if np.isfinite(fcf) else np.nan,
                 })
@@ -937,13 +973,59 @@ def run_etl():
             eps = 1e-12
             qdf["fundQ_net_margin"]    = qdf["fundQ_net_income"] / (qdf["fundQ_revenue"].abs() + eps)
             qdf["fundQ_ebitda_margin"] = qdf["fundQ_ebitda"] / (qdf["fundQ_revenue"].abs() + eps)
+            qdf["fundQ_gross_margin"]  = qdf["fundQ_gross_profit"] / (qdf["fundQ_revenue"].abs() + eps)
+            qdf["fundQ_op_margin"]     = qdf["fundQ_op_income"] / (qdf["fundQ_revenue"].abs() + eps)
             qdf["fundQ_debt_to_equity"]= qdf["fundQ_total_debt"] / (qdf["fundQ_equity"].abs() + eps)
             qdf["fundQ_cash_to_debt"]  = qdf["fundQ_cash"] / (qdf["fundQ_total_debt"].abs() + eps)
             qdf["fundQ_fcf_margin"]    = qdf["fundQ_fcf"] / (qdf["fundQ_revenue"].abs() + eps)
 
+            # ROE, ROA (annualized: multiply by 4 since quarterly)
+            qdf["fundQ_roe"] = 4.0 * qdf["fundQ_net_income"] / (qdf["fundQ_equity"].abs() + eps)
+            qdf["fundQ_roa"] = 4.0 * qdf["fundQ_net_income"] / (qdf["fundQ_assets"].abs() + eps)
+
+            # Current ratio (liquidity)
+            qdf["fundQ_current_ratio"] = qdf["fundQ_curr_assets"] / (qdf["fundQ_curr_liab"].abs() + eps)
+
             # growth q/q
             qdf["fundQ_rev_qoq"] = qdf["fundQ_revenue"].pct_change()
             qdf["fundQ_ni_qoq"]  = qdf["fundQ_net_income"].pct_change()
+            qdf["fundQ_eps_qoq"] = qdf["fundQ_eps"].pct_change()
+
+            # growth YoY (pct_change(4) = same quarter last year)
+            if len(qdf) >= 4:
+                qdf["fundQ_rev_yoy"]  = qdf["fundQ_revenue"].pct_change(4)
+                qdf["fundQ_ni_yoy"]   = qdf["fundQ_net_income"].pct_change(4)
+                qdf["fundQ_eps_yoy"]  = qdf["fundQ_eps"].pct_change(4)
+                qdf["fundQ_ebitda_yoy"] = qdf["fundQ_ebitda"].pct_change(4)
+            else:
+                for c in ["fundQ_rev_yoy", "fundQ_ni_yoy", "fundQ_eps_yoy", "fundQ_ebitda_yoy"]:
+                    qdf[c] = np.nan
+
+            # TTM aggregates (trailing 12 months = sum of last 4 quarters)
+            for base_col, ttm_col in [
+                ("fundQ_revenue", "fundQ_rev_ttm"),
+                ("fundQ_net_income", "fundQ_ni_ttm"),
+                ("fundQ_ebitda", "fundQ_ebitda_ttm"),
+                ("fundQ_fcf", "fundQ_fcf_ttm"),
+                ("fundQ_ocf", "fundQ_ocf_ttm"),
+            ]:
+                if base_col in qdf.columns:
+                    qdf[ttm_col] = qdf[base_col].rolling(4, min_periods=2).sum()
+
+            # TTM margins
+            if "fundQ_rev_ttm" in qdf.columns:
+                rev_ttm_abs = qdf["fundQ_rev_ttm"].abs() + eps
+                if "fundQ_ni_ttm" in qdf.columns:
+                    qdf["fundQ_net_margin_ttm"] = qdf["fundQ_ni_ttm"] / rev_ttm_abs
+                if "fundQ_ebitda_ttm" in qdf.columns:
+                    qdf["fundQ_ebitda_margin_ttm"] = qdf["fundQ_ebitda_ttm"] / rev_ttm_abs
+                if "fundQ_fcf_ttm" in qdf.columns:
+                    qdf["fundQ_fcf_margin_ttm"] = qdf["fundQ_fcf_ttm"] / rev_ttm_abs
+
+            # Clip extreme growth ratios to prevent inf/extreme outliers
+            growth_cols = [c for c in qdf.columns if "_qoq" in c or "_yoy" in c]
+            for gc in growth_cols:
+                qdf[gc] = qdf[gc].clip(-5.0, 10.0)  # -500% to +1000%
 
             _FUND_Q_CACHE[tk] = qdf
             return qdf
@@ -1190,7 +1272,7 @@ def run_etl():
         min_keep=96,         # garanta pelo menos ~100 por ticker (se existirem)
         var_thr=None,        # não remova por variância agora
         corr_thr=0.9995,     # só remove quase idênticos
-        always_keep_prefixes=("pct_change","SMA_","tri_","sr_"),
+        always_keep_prefixes=("pct_change","SMA_","tri_","sr_","Close","Adj Close","close"),  # Close obrigatório para reg
         verbose=True
     )
 
