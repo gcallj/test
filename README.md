@@ -1,288 +1,1050 @@
-# Pipeline STOCK → BIN → REG → FINAL → GA
+# Pipeline de Sinais de Trading — Mercado Brasileiro
 
-Este repositório contém notebooks que devem ser executados **em ordem** para gerar os artefatos finais.
+Pipeline completo de geração de sinais de compra para ~94 ativos do mercado brasileiro (ações, FIIs, índices, moedas, commodities). Combina modelos de classificação binária, regressão de preços e otimização genética (GA) com walk-forward backtesting.
 
+> **Última atualização de resultados (Mar/2026)**
+> Fitness: **10.59** | Median MDD: **-23.6%** ✅ | Win Rate: **55.4%** ✅ | Retorno médio: **+5385%** vs Buy & Hold **+577%** ✅
+
+---
+
+## Índice
+
+1. [Visão Geral](#1-visão-geral)
+2. [Requisitos](#2-requisitos)
+3. [Como Executar](#3-como-executar)
+4. [Step 1 — ETL](#4-step-1--etl-stock_etlpy)
+5. [Step 2 — Modelos Binários](#5-step-2--modelos-binários-stock_bin_modelspy)
+6. [Step 3 — Regressão](#6-step-3--regressão-stock_reg_modelspy)
+7. [Step 4 — Output Final](#7-step-4--output-final-stock_final_outputpy)
+8. [Step 5 — GA (Otimização Genética)](#8-step-5--ga-otimização-genética-ga_runpy)
+9. [Lógica de Entrada (Quando Comprar)](#9-lógica-de-entrada-quando-comprar)
+10. [Lógica de Saída (Quando Vender)](#10-lógica-de-saída-quando-vender)
+11. [Saídas no Modo Apply (Planilha)](#11-saídas-no-modo-apply-planilha)
+12. [Função de Fitness](#12-função-de-fitness)
+13. [Arquivos de Saída](#13-arquivos-de-saída)
+14. [FAQ](#14-faq)
+
+---
+
+## 1. Visão Geral
+
+```
+┌─────────────┐    ┌──────────────┐    ┌─────────────┐    ┌──────────────┐    ┌──────────────┐
+│  Step 1      │    │  Step 2       │    │  Step 3      │    │  Step 4       │    │  Step 5       │
+│  ETL         │───►│  BIN Models   │───►│  Regressão   │───►│  Final Output │───►│  GA           │
+│              │    │              │    │              │    │              │    │              │
+│ stock_etl.py │    │ stock_bin_   │    │ stock_reg_   │    │ stock_final_ │    │ ga_run.py     │
+│              │    │ models.py    │    │ models.py    │    │ output.py    │    │              │
+└─────────────┘    └──────────────┘    └─────────────┘    └──────────────┘    └──────────────┘
+   ~30 min            ~2.5 h             ~10 min            ~5 min              ~4-8 h (train)
+                                                                                ~2 min (load)
+```
+
+**Fluxo de dados:**
+1. **ETL** baixa OHLCV via yfinance, gera ~222 features técnicas/microestruturais/cross-ticker, cria targets binários e contínuos → `expanded_stock_reduced.parquet`
+2. **BIN** treina ensemble de 4-6 classificadores (LGBM, HGB, RF, ET, XGB, CatBoost) para prever probabilidade de alta (+25%) e queda (-10%) → `ensemble_signals_history.parquet`
+3. **REG** gera previsões de preço de compra/venda com bandas de erro calibradas (35% ML + 65% baseline) → `forecast_history_wide.parquet`
+4. **FINAL** consolida BIN + REG + fundamentais, calcula Expected Value (EV) → `history_consolidated.parquet`
+5. **GA** otimiza 26 parâmetros de trading via algoritmo genético com walk-forward → `summary_latest.xlsx` + `apply_last_5d__H5.csv`
+
+**Premissa fundamental:** `LONG_ONLY = True` — o sistema só opera comprado. Não há short selling.
+
+---
+
+## 2. Requisitos
+
+- **Python 3.10** (obrigatório — scipy ABI incompatível com 3.12)
+- Bibliotecas: `pandas`, `numpy`, `lightgbm`, `scikit-learn`, `optuna`, `yfinance`, `ta`, `openpyxl`
+- Opcionais: `xgboost`, `catboost` (modelos adicionais no Step 2)
+
+```bash
+# Caminho recomendado no Windows:
+/c/Users/gabri/AppData/Local/Programs/Python/Python310/python.exe
+```
+
+---
+
+## 3. Como Executar
+
+### 3.1 Pipeline completa (treina tudo — ~6-12 horas)
+
+```bash
+# Steps 1-4 (ETL + ML models + consolidação)
+python run_pipeline.py                    # ~3-4 horas
+
+# Step 5 (GA — otimização genética)
+# Editar ga_run.py: RUN_MODE = "train"
+python ga_run.py                          # ~4-8 horas
+```
+
+### 3.2 Atualização diária (sem retreinar — ~40 min)
+
+```bash
+# 1) Atualizar dados de mercado (reutiliza modelos ML salvos)
+python run_pipeline.py --mode data-only   # ~35-40 min
+
+# 2) Gerar sinais com GA salvo (modo load — sem retreinar)
+# Verificar ga_run.py: RUN_MODE = "load"
+python ga_run.py                          # ~2 min
+
+# 3) Abrir summary_latest.xlsx → aba "Apply"
+```
+
+### 3.3 Steps específicos
+
+```bash
+python run_pipeline.py --steps 1          # Só ETL
+python run_pipeline.py --steps 2,3,4      # Pular ETL
+python run_pipeline.py --steps 1,4        # ETL + Final (= data-only)
+```
+
+### 3.4 Pré-requisitos para modo "load"
+
+Todos os arquivos de cache devem existir (gerados por pelo menos uma execução completa):
+- `./output/ensemble_signals_history.parquet` (BIN)
+- `./output/forecast_history_wide.parquet` (REG)
+- `./output/history_consolidated.parquet` (FINAL)
+- `./global_ga_checkpoint.json` (GA)
+
+---
+
+## 4. Step 1 — ETL (`stock_etl.py`)
+
+### Objetivo
+Baixar dados OHLCV, criar ~222 features técnicas/microestruturais/cross-ticker, e gerar targets de classificação e regressão.
+
+### Universo de ativos (~139 baixados, ~94 operados pelo GA)
+
+| Categoria | Qtd | Exemplos |
+|-----------|-----|---------|
+| **Ações brasileiras** | ~75 | VALE3, PETR4, ITUB4, BBAS3, WEGE3 |
+| **FIIs** | ~20 | KNRI11, MXRF11, HGLG11 |
+| **Índices globais** | ~16 | ^GSPC (S&P), ^GDAXI (DAX), ^N225 (Nikkei) |
+| **Moedas/commodities** | ~28 | EURUSD=X, GC=F (ouro), CL=F (petróleo), BTC-USD |
+
+> O GA filtra para ~94 tickers `.SA` com mínimo de 350 barras de dados históricas.
+
+### Features geradas (~222 colunas)
+
+| Categoria | Exemplos | Qtd aprox |
+|-----------|----------|-----------|
+| **Indicadores técnicos** | RSI, MACD, Stochastic, Bollinger, ATR, ADX, CCI, Williams %R | ~80 |
+| **Cruzamentos de médias** | SMA 1/2/5/10/15/20/25/50/100 — todas as combinações fast < slow | ~36 |
+| **Padrões gráficos** | Head & Shoulders, Double Top/Bottom, Triângulos, Canais, Wedges | ~20 |
+| **Microestrutura** | `vol_relative_20d`, `amihud_illiquidity_20d`, `gk_volatility_20d` | 3 |
+| **Cross-ticker** | `beta_ibov_60d`, `rel_strength_ibov_20d`, `corr_ibov_60d`, `vix_percentile_252d` | 4 |
+| **Fundamentais** | Dividend yield, P/L, P/VPA, market cap | 4 |
+| **Derivados** | Returns multi-período, volume profiles, volatilidade realizada | ~75 |
+
+**Detalhes das features de microestrutura:**
+
+| Feature | Fórmula | Interpretação |
+|---------|---------|---------------|
+| `vol_relative_20d` | `volume_dia / média_volume_20d` | > 1 = volume acima da média (interesse crescente) |
+| `amihud_illiquidity_20d` | `média₂₀(|retorno| / volume)` | Maior = menos líquido (mais impacto por unidade negociada) |
+| `gk_volatility_20d` | `√(média₂₀(volatilidade_OHLC_diária))` | Volatilidade Garman-Klass (mais precisa que close-to-close) |
+
+**Detalhes das features cross-ticker:**
+
+| Feature | Janela | Interpretação |
+|---------|--------|---------------|
+| `beta_ibov_60d` | 60 dias | Sensibilidade do ativo ao IBOV (1.2 = amplifica 20% os movimentos) |
+| `rel_strength_ibov_20d` | 20 dias | Retorno do ativo menos retorno do IBOV (positivo = outperformance) |
+| `corr_ibov_60d` | 60 dias | Correlação com IBOV (-1 a +1) |
+| `vix_percentile_252d` | 252 dias | Percentil do VIX (0 = VIX mínimo histórico, 1 = VIX máximo) |
+
+### Targets (horizonte = 90 dias, calculados com SHIFT = 1 dia para evitar leakage)
+
+| Target | Tipo | Definição exata |
+|--------|------|-----------------|
+| `target_up20` | Binário (0/1) | 1 se `max(High[t+1..t+90]) ≥ Close[t] × 1.25` |
+| `target_dd5` | Binário (0/1) | 1 se `min(Low[t+1..t+90]) ≤ Close[t] × 0.90` |
+| `target_best_entry` | Contínuo (%) | `(min(Low[t+1..t+90]) / Close[t]) - 1` |
+| `target_best_sale` | Contínuo (%) | `(max(High[t+1..t+90]) / Close[t]) - 1` |
+
+### Output principal
+
+**`./output/data/expanded_stock_reduced.parquet`** (~314 MB)
+
+Formato MultiIndex — nível 0 = variável, nível 1 = ticker, índice = DatetimeIndex (2005 até hoje).
+
+```python
+import pandas as pd
+df = pd.read_parquet("./output/data/expanded_stock_reduced.parquet")
+# Acessar Close da VALE3:
+df["Close"]["VALE3.SA"].tail()
+# Acessar target_up20 de todos os tickers:
+df["target_up20"].tail()
+# Todas as variáveis disponíveis:
+df.columns.get_level_values(0).unique()
+```
+
+### Configurações-chave
+
+```python
+START_DATE     = "2005-01-01"    # Início dos dados históricos
+HORIZON        = 90              # Janela forward para targets (dias úteis)
+UP_THR         = 0.25            # +25% → target_up20 = 1
+DD_THR         = -0.10           # -10% → target_dd5 = 1
+SHIFT_FEATURES = 1               # Lag de 1 dia (evita vazamento futuro)
+```
+
+---
+
+## 5. Step 2 — Modelos Binários (`stock_bin_models.py`)
+
+### Objetivo
+Treinar ensemble de classificadores para prever probabilidade de alta (+25%) e queda (-10%) em 90 dias.
+
+### Modelos treinados
+
+| Modelo | Biblioteca | Trials Optuna | Arquivo salvo |
+|--------|-----------|---------------|--------------|
+| **LightGBM** | `lightgbm` | 15 | `*_lgbm_*.txt` |
+| **HistGradientBoosting** | `sklearn` | 15 | `*_hgb_*.joblib` |
+| **RandomForest** | `sklearn` | 10 | `*_rf_*.joblib` |
+| **ExtraTrees** | `sklearn` | 10 | `*_et_*.joblib` |
+| **XGBoost** *(se instalado)* | `xgboost` | 10 | `*_xgb_*.json` |
+| **CatBoost** *(se instalado)* | `catboost` | 8 | `*_catboost_*.cbm` |
+
+Dois conjuntos de modelos por classificador:
+- `_train_*` — treinado apenas em TRAIN (para avaliação em VALID)
+- `_tv_*` — treinado em TRAIN+VALID (para APPLY — dados mais recentes)
+
+### Mecanismos anti-overfitting
+
+- **Walk-forward CV** temporal: purge gap ≥ 90 dias entre treino e validação
+- **Recency weights**: dados mais recentes pesam mais no treino
+- **Asset-class feature**: diferencia ações/FIIs/índices/moedas como feature categórica
+- **Threshold calibrado**: por precision × F-beta (conservador, β < 1)
+- **Meta-learner** `ens_stackLGBM`: LightGBM walk-forward com OOF sobre probabilidades dos modelos base
+
+### Como o sinal ensemble é formado
+
+```
+BUY  = pred_up20 == 1  AND  pred_dd5 == 0   → alta provável, queda improvável
+SELL = pred_up20 == 0  AND  pred_dd5 == 1   → alta improvável, queda provável
+HOLD = qualquer outra combinação
+```
+
+> Em `LONG_ONLY = True`, sinais SELL são ignorados pelo GA. Não abre posição vendida.
+
+### Outputs
+
+**`./output/ensemble_signals_history.parquet`** (histórico completo, ~368 KB)
+
+| Coluna | Tipo | Descrição |
+|--------|------|-----------|
+| `Date` | datetime | Data de referência |
+| `ticker` | str | Código do ativo |
+| `split` | str | TRAIN / VALID / TEST / APPLY |
+| `p_up20` | float [0,1] | Probabilidade de alta ≥ +25% em 90d |
+| `p_dd5` | float [0,1] | Probabilidade de queda ≥ -10% em 90d |
+
+**`./output/apply_ensemble_signals.csv`** (apenas partição APPLY, ~25 colunas)
+
+| Coluna | Tipo | Descrição |
+|--------|------|-----------|
+| `p_up20`, `p_dd5` | float | Probabilidades brutas dos modelos |
+| `thr_up20`, `thr_dd5` | float | Thresholds calibrados usados |
+| `pred_up20`, `pred_dd5` | int (0/1) | Predição binária final |
+| `buy`, `sell` | bool | Flags de compra/venda |
+| `action` | str | BUY / SELL / HOLD |
+| `buy_trust` | float | `p_up20 × (1 - p_dd5)` |
+| `sell_trust` | float | `(1 - p_up20) × p_dd5` |
+| `action_trust` | float | Confiança da ação escolhida |
+| `trust_up20`, `margin_up20` | float | Confiança e margem vs threshold (up20) |
+| `trust_dd5`, `margin_dd5` | float | Confiança e margem vs threshold (dd5) |
+
+---
+
+## 6. Step 3 — Regressão (`stock_reg_models.py`)
+
+### Objetivo
+Prever o melhor preço de entrada (compra) e saída (venda) dentro de 90 dias, com bandas de incerteza calibradas.
+
+### Abordagem híbrida (35% ML + 65% Baseline)
+
+| Componente | Método | Peso |
+|-----------|--------|------|
+| **Baseline** | Rolling quantile (janela=60) + EWM Gaussiana (halflife=252) | 65% |
+| **ML Regression** | LightGBM com objetivo L1 (MAE), features do ETL | 35% |
+
+Pipeline de calibração:
+1. Blend das previsões: `0.65 × baseline + 0.35 × ML`
+2. Cálculo dos resíduos históricos
+3. **Banda assimétrica**: quantis [0.02, 0.98] dos resíduos
+4. **Vol-adaptation**: escala das bandas ajusta conforme regime de volatilidade (clip 0.45–2.6×)
+5. **WF-calibration**: escala final ajustada para cobertura-alvo de 97%
+
+### Outputs principais
+
+**`./output/forecast_history_wide.parquet`** (~46 MB)
+
+| Coluna | Tipo | Descrição |
+|--------|------|-----------|
+| `Date` | datetime | Data |
+| `ticker` | str | Ativo |
+| `best_buy_price` | float | Menor preço projetado para entrada (R$) |
+| `buy_err_lo` | float | Banda inferior de confiança (compra) |
+| `buy_err_hi` | float | Banda superior de confiança (compra) |
+| `best_sell_price` | float | Maior preço projetado para saída (R$) |
+| `sell_err_lo` | float | Banda inferior de confiança (venda) |
+| `sell_err_hi` | float | Banda superior de confiança (venda) |
+
+**`./output/data/models/v35_.../apply_forecast_with_error_band.csv`** (~45 colunas detalhadas)
+
+| Coluna | Descrição |
+|--------|-----------|
+| `used_ml` | True se ML regression foi aplicado |
+| `pred_pct_center` | Previsão central (% vs Close) |
+| `pred_pct_lo/hi_uncapped` | Banda sem cap (%) |
+| `pred_pct_lo/hi_capped` | Banda com cap operacional (%) |
+| `op_pct` | Percentual operacional final |
+| `pred_price_center` | Preço previsto central (R$) |
+| `op_price` | Preço operacional final (R$) |
+| `band_scale` | Fator de escala da banda calibrada |
+| `mae_valid`, `mae_test` | Erro médio absoluto na validação/teste |
+| `covC_valid`, `touchOp_valid` | Cobertura e taxa de toque na validação |
+
+---
+
+## 7. Step 4 — Output Final (`stock_final_output.py`)
+
+### Objetivo
+Consolidar BIN + REG + fundamentais em um único DataFrame com Expected Value (EV) calculado para cada ativo por dia.
+
+### Cálculo do Expected Value
+
+```python
+# Componente regressão (upside potencial vs downside risco)
+EV_buy_reg  = f(upside_pct, downside_pct, bandas de confiança)
+
+# Componente ensemble (probabilidades × payoff)
+EV_buy_ens  = p_up20 × payoff_up - p_dd5 × loss_dd
+
+# Combinação
+EV_buy      = w_reg × EV_buy_reg + w_bin × EV_buy_ens
+
+# Score fundamentalista
+fund_score  = f(dividend_yield, trailing_pe, price_to_book, market_cap)  # [-1, +1]
+
+# Versões do EV com ajuste fundamentalista
+EV_buy_fund   = EV_buy × (1 + α₁ × fund_score)   # v1
+EV_buy_fund_2 = EV_buy × (1 + α₂ × fund_score)   # v2
+EV_buy_fund_3 = EV_buy × (1 + α₃ × fund_score)   # v3 ← USADO PELO GA
+```
+
+### Output principal
+
+**`./output/history_consolidated.parquet`** (~52 MB, ~35 colunas)
+
+| Grupo | Colunas | Descrição |
+|-------|---------|-----------|
+| **Identificação** | `Date`, `ticker`, `split` | Data, ativo, partição (TRAIN/VALID/TEST/APPLY) |
+| **Preços OHLC** | `price`, `open`, `high`, `low`, `close` | `price` = `close` |
+| **Regressão** | `best_buy_value`, `best_sell_value` | Preços-alvo de compra/venda (R$) |
+| | `err_buy_pct`, `err_sell_pct` | Incerteza das estimativas (%) |
+| | `downside_pct`, `upside_pct` | Risco e potencial projetados (%) |
+| | `risk_return` | Razão risco/retorno da regressão |
+| **Classificação** | `p_up20`, `p_dd5` | Probabilidades brutas [0,1] |
+| | `pred_up20`, `pred_dd5` | Predições binárias (0/1) |
+| | `up20_bin`, `dd5_bin` | Classes finais calibradas |
+| | `buy_trust`, `sell_trust` | Confiança de compra/venda |
+| **Expected Value** | `EV_buy_reg`, `EV_buy_ens`, `EV_buy` | EV por componente e combinado |
+| | `fund_score` | Score fundamentalista [-1, +1] |
+| | `EV_buy_fund_3` | **EV final — principal input do GA** |
+| | `signal` | Sinal consolidado (buy/sell/hold) |
+| **Fundamentais** | `dividend_yield`, `trailing_pe` | Yield e P/L |
+| | `price_to_book`, `market_cap` | P/VPA e valor de mercado |
+
+---
+
+## 8. Step 5 — GA (Otimização Genética) (`ga_run.py`)
+
+### Objetivo
+Encontrar os 26 melhores parâmetros de trading via algoritmo genético com walk-forward backtesting em 10 janelas históricas independentes.
+
+### Configuração importante
+
+```python
+LONG_ONLY    = True       # Apenas compra (sem short selling)
+ONLY_SA      = True       # Apenas tickers .SA (Brasil)
+APPLY_DAYS   = 5          # Gera sinais dos últimos 5 dias de pregão
+FWD_H        = 5          # Horizonte forward do sinal (dias)
+MAX_FEATURES = 40         # Features mais relevantes por ticker (Spearman)
+FAST_MODE    = False      # Modo completo (10 janelas walk-forward)
+RUN_MODE     = "load"     # "train" = retreina GA | "load" = usa checkpoint
+```
+
+### 26 Genes otimizados pelo GA
+
+| # | Gene | Faixa | Descrição |
+|---|------|-------|-----------|
+| 1 | `vote_threshold_long` | 0.15–0.55 | % mínimo de features votando bullish para comprar |
+| 2 | `vote_threshold_short` | 0.10–0.55 | % mínimo votando bearish (ignorado em LONG_ONLY) |
+| 3 | `z_threshold` | 0.15–0.80 | Z-score mínimo para feature emitir voto |
+| 4 | `signal_ema_span` | 2–12 | Janela EMA de suavização do score |
+| 5 | `entry_confirmation_days` | 1–3 | Dias consecutivos de sinal antes de entrar |
+| 6 | `score_percentile_trigger` | 0.35–0.80 | Percentil mínimo do score (vs últimos 252d) |
+| 7 | `stop_atr_mult` | 1.0–2.5 | Multiplicador ATR para stop loss |
+| 8 | `stop_tighten_after_bars` | 3–15 | Barras para ativar aperto do stop |
+| 9 | `stop_tighten_factor` | 0.40–0.85 | Fator de redução do stop (0.70 = -30%) |
+| 10 | `max_loss_per_trade_pct` | 2%–10% | Hard stop de emergência por trade |
+| 11 | `reward_risk_ratio` | 1.0–5.0 | Take profit = R/R × stop_abs |
+| 12 | `partial_take_pct` | 0%–60% | % da posição para 1ª saída parcial |
+| 13 | `partial_take_level` | 0.5–1.5× | Nível da 1ª saída parcial (× stop_abs) |
+| 14 | `time_stop_bars` | 5–25 | Máximo de barras na posição antes de forçar saída |
+| 15 | `entry_discount_atr_frac` | 0.0–0.5 | Desconto da ordem limitada (fração do ATR) |
+| 16 | `volatility_filter_percentile` | 0%–40% | Ignora entradas em volatilidade muito baixa |
+| 17 | `score_strength_scaling` | 0.0–1.0 | Escala o desconto de entrada pela força do sinal |
+| 18 | `ma_filter_period` | 100–300 | Período da média móvel de tendência |
+| 19 | `ma_filter_mode` | 0–2 | 0=off, 1=soft (eleva threshold), 2=hard (bloqueia) |
+| 20 | `consecutive_loss_cooldown` | 5–20 | Barras de pausa após 2+ stops consecutivos |
+| 21 | `equity_drawdown_stop_pct` | 8%–22% | Circuit-breaker de portfólio |
+| 22 | `vol_regime_mode` | 0–2 | 0=off, 1=alarga stops em alta vol, 2=pula trades |
+| 23 | `partial_take_pct_2` | 0%–40% | % da posição para 2ª saída parcial |
+| 24 | `partial_take_level_2` | 1.0–3.0× | Nível da 2ª saída parcial (× stop_abs) |
+| 25 | `min_signal_strength` | 0.0–0.40 | Força mínima do sinal (`|score_ev| / score95`) |
+| 26 | `trailing_stop_mode` | 0–2 | 0=fixo, 1=breakeven, 2=trailing 50% |
+
+### GA de 2 estágios
+
+| Estágio | Op | Pop | Gens | Objetivo |
+|---------|---|-----|------|----------|
+| **Stage 1** | Exploração | 50 | 30 | Cobrir o espaço de 26 dimensões |
+| **Stage 2** | Refinamento | 80 | 25 | Polir o melhor genoma encontrado |
+
+- **Walk-forward**: 10 janelas (treino = 3 anos, teste = 6 meses, step = 6 meses)
+- **Early stopping**: 15 gerações sem melhoria
+- **Warm-start**: Checkpoint anterior alimenta a geração inicial
+- **Operadores**: Crossover 70%, Mutação 40%, Torneio k=3
+
+---
+
+## 9. Lógica de Entrada (Quando Comprar)
+
+O sinal de compra é gerado no **fechamento do dia i** e executado no **dia i+1** (ou i+2 se não preencher). Todas as condições abaixo devem ser satisfeitas:
+
+### 9.1 Pré-filtros (verificados no fechamento do dia i)
+
+```
+✅ Posição = 0 (sem posição aberta)
+✅ Cooldown = 0 (não em pausa pós-perda)
+✅ Vol rank ≥ volatility_filter_percentile     (evita mercado "morto")
+✅ Se vol_regime_mode == 2: vol rank ≤ 0.85    (evita mercado caótico)
+✅ ATR[i] ≥ 0.01                               (liquidez mínima)
+✅ |score_ev[i]| / score95 ≥ min_signal_strength
+```
+
+### 9.2 Construção do sinal direcional (votação de features)
+
+Para cada uma das ~40 features selecionadas por Spearman, calcula-se o z-score rolling:
+
+```python
+z = (feature[i] - rolling_mean[i]) / rolling_std[i]
+if z > z_threshold:   votes_long  += 1/N    # voto bullish
+if z < -z_threshold:  votes_short += 1/N    # voto bearish
+```
+
+O score agregado:
+```python
+score_raw  = votes_long - votes_short          # [-1, +1]
+score_ev   = EMA(score_raw, signal_ema_span)   # suavizado
+score_pctl = rolling_quantile(score_ev, score_percentile_trigger, 252d)
+```
+
+**Condição de entrada (long):**
+```python
+votes_long[i] >= vote_threshold_long  AND  score_ev[i] >= score_pctl[i]
+```
+
+### 9.3 Confirmação temporal
+
+O sinal deve persistir por `entry_confirmation_days` dias consecutivos (1, 2 ou 3).
+
+### 9.4 Filtro de tendência (média móvel)
+
+| Modo | Se preço < MA(ma_filter_period) | Comportamento |
+|------|--------------------------------|---------------|
+| 0 | Sem filtro | Entra normalmente |
+| 1 (soft) | Exige dobro do `vote_threshold_long` | Entrada mais seletiva contra tendência |
+| 2 (hard) | Bloqueia entrada | Sem entrada contra tendência principal |
+
+### 9.5 Execução da ordem limitada
+
+```python
+limit_px = close[i] - entry_discount_atr_frac × ATR[i] × (1 - score_strength_scaling × strength)
+```
+
+- Se `low[i+1] ≤ limit_px` → preenchido em `limit_px` no dia i+1
+- Caso contrário → tenta na abertura do dia i+2
+- Se não preencher → sinal expira
+
+---
+
+## 10. Lógica de Saída (Quando Vender)
+
+> **Resposta direta:** Uma posição comprada é vendida quando qualquer uma das 4 condições abaixo for atingida. Verificadas **a cada barra (dia)**, nesta ordem de prioridade.
+
+**Variáveis calculadas a cada barra:**
+
+```python
+stop_abs  = stop_atr_mult × ATR[i] × tighten × vol_adj   # nível de stop (pontos)
+take_abs  = reward_risk_ratio × stop_abs                   # nível de take profit
+fav       = high[i] - entry_px    # excursão favorável do dia
+adv       = entry_px - low[i]     # excursão adversa do dia
+max_fav   = max(max_fav, fav)     # maior excursão favorável desde a entrada
+trail_adv = max_fav - fav         # recuo desde o topo
+```
+
+---
+
+### Saída 1 — Hard Loss (gap adverso na abertura)
+
+**Quando:** O mercado abre com gap de baixa maior que `max_loss_per_trade_pct`.
+
+```python
+hard_loss = |open[i] / entry_px - 1|
+if hard_loss > max_loss_per_trade_pct:
+    VENDE NA ABERTURA
+```
+
+| Parâmetro | Faixa GA | Proteção |
+|-----------|---------|---------|
+| `max_loss_per_trade_pct` | 2%–10% | Gap de abertura catastrófico |
+
+**Exemplo:** Comprou R$100. Parâmetro = 7%. Mercado abre em R$92 (gap -8%) → vende imediatamente em R$92 (-8%).
+
+---
+
+### Saída 2 — Stop Loss (com trailing opcional)
+
+O comportamento depende do gene `trailing_stop_mode`:
+
+#### Modo 0 — Stop Fixo
+
+```python
+stop_hit = (adv >= stop_abs)
+# adv = entry_px - low[i]  →  vende se low do dia caiu mais de stop_abs
+ideal_exit = entry_px - stop_abs
+exit_px = min(ideal_exit, open[i])   # slippage: pode executar no open se gap
+```
+
+#### Modo 1 — Breakeven (stop move para o pico)
+
+Após o lucro favorável superar `stop_abs`, o stop passa a ser de "não devolver o lucro máximo":
+
+```python
+if max_fav > stop_abs:
+    effective_stop = max_fav          # trail igual ao pico
+    stop_hit = (trail_adv >= effective_stop)
+    # trail_adv = max_fav - fav → vende se recuo desde o topo ≥ max_fav
+```
+
+**Exemplo:**
+```
+Entrada: R$100 | stop_abs: R$5
+Preço sobe para R$110 → max_fav = R$10 > R$5
+effective_stop = R$10
+Se preço recua R$10 desde o topo (volta a R$100) → VENDE em R$100 (breakeven ≥ 0%)
+```
+
+#### Modo 2 — Trailing 50%
+
+Quando o lucro supera `2 × stop_abs`, o trailing acompanha em 50% do máximo:
+
+```python
+if max_fav > 2.0 * stop_abs:
+    effective_stop = 0.5 * max_fav   # trail = 50% do pico
+    stop_hit = (trail_adv >= effective_stop)
+```
+
+**Exemplo:**
+```
+Entrada: R$100 | stop_abs: R$5
+Preço sobe para R$120 → max_fav = R$20 > 2 × R$5
+effective_stop = 0.5 × R$20 = R$10
+Se preço recua R$10 desde o pico (de R$120 para R$110) → VENDE em R$110 (+10%)
+```
+
+**Aperto progressivo do stop:**
+
+Após `stop_tighten_after_bars` dias em posição:
+```python
+stop_abs *= stop_tighten_factor   # ex: 0.70 → stop reduz 30%
+```
+
+Se nos primeiros 3 dias o trade já acumula -0.2%, aplica `stop_tighten_factor` antecipadamente.
+
+**Ajuste por regime de vol** (`vol_regime_mode == 1`):
+- Vol rank > 75%: `stop × 1.15` (mais espaço em alta volatilidade)
+- Vol rank < 25%: `stop × 0.90` (menos espaço em mercado tranquilo)
+
+---
+
+### Saída 3 — Take Profit (com saídas parciais)
+
+```python
+take_hit = (fav >= take_abs)    # fav = high[i] - entry_px
+```
+
+**Saídas parciais** (realizações antes do take total):
+
+| Etapa | Gatilho | % vendido | O que ocorre |
+|-------|---------|-----------|-------------|
+| **1ª parcial** | `fav ≥ partial_take_level × stop_abs` | `partial_take_pct` (0–60%) | Realiza parte do lucro, reduz posição |
+| **2ª parcial** | `fav ≥ partial_take_level_2 × stop_abs` | `partial_take_pct_2` (0–40%) | Nova realização, posição ainda menor |
+| **Take total** | `fav ≥ reward_risk_ratio × stop_abs` | Restante | Fecha posição completamente |
+
+**Exemplo com parciais:**
+```
+Compra: 100 ações a R$100
+ATR = R$2 | stop_abs = 2×R$2 = R$4
+take_abs = 3.0 × R$4 = R$12 (take total em R$112)
+partial_take_level = 0.75 → 1ª parcial em fav=R$3 (preço R$103): vende 30% → fica 70 ações
+partial_take_level_2 = 1.50 → 2ª parcial em fav=R$6 (preço R$106): vende 20% → fica 56 ações
+take total em fav=R$12 (preço R$112): vende 56 ações restantes
+```
+
+---
+
+### Saída 4 — Time Stop (capital estagnado)
+
+```python
+time_stop = (barras_na_posição >= time_stop_bars) AND (fav < 0.5 × stop_abs)
+```
+
+Encerra o trade se ficou `time_stop_bars` dias (5–25) sem lucro significativo.
+
+**Lógica:** Capital preso em um trade sem movimento favorável não pode ser realocado para oportunidades melhores.
+
+---
+
+### Diagrama completo de decisão por barra
+
+```
+POSIÇÃO ABERTA → a cada fechamento de dia:
+│
+├─ 1. open_hoje gerou gap adverso ≥ max_loss_per_trade_pct?
+│     SIM → VENDE NA ABERTURA (emergência)
+│
+├─ 2. Stop atingido no intraday?
+│     ├─ Modo 0: adv ≥ stop_abs (stop fixo)
+│     ├─ Modo 1: trail_adv ≥ max_fav (não devolve pico)
+│     └─ Modo 2: trail_adv ≥ 0.5×max_fav (trailing 50%)
+│     SIM → VENDE próximo do nível de stop
+│
+├─ 3. Lucro parcial atingido?
+│     ├─ fav ≥ partial_take_level × stop_abs → vende partial_take_pct %
+│     └─ fav ≥ partial_take_level_2 × stop_abs → vende partial_take_pct_2 %
+│     (posição continua aberta, só reduzida)
+│
+├─ 4. Take profit total atingido?
+│     fav ≥ reward_risk_ratio × stop_abs?
+│     SIM → VENDE tudo no nível do take profit
+│
+└─ 5. Time stop expirou?
+      barras ≥ time_stop_bars AND fav < 0.5 × stop_abs?
+      SIM → VENDE no fechamento
+```
+
+### Cooldown pós-perda consecutiva
+
+Após 2+ stops consecutivos com resultado negativo:
+
+```python
+cooldown = consecutive_loss_cooldown   # ex: 10 barras sem novas entradas
+```
+
+Protege contra regimes de mercado adversos onde os stops são acionados repetidamente.
+
+---
+
+## 11. Saidas no Modo Apply (Planilha)
+
+O modo apply (`RUN_MODE = "load"`) aplica o genoma salvo aos dados mais recentes e gera os sinais dos **ultimos 5 dias de pregao** para todos os tickers. Nao simula abertura/fechamento de posicoes — apenas emite recomendacoes operacionais com todos os niveis de preco necessarios para operar.
+
+### 11.1 Colunas do CSV / aba "Apply" do xlsx (18 colunas)
+
+#### Identificacao e preco
+
+| Coluna | Tipo | Descricao | Como interpretar |
+|--------|------|-----------|-----------------|
+| `Date` | date | Data do pregao | Use o registro mais recente por ticker |
+| `ticker` | str | Codigo Yahoo Finance | Ex: `VALE3.SA`, `ITUB4.SA` |
+| `close` | float | Preco de fechamento do dia | Preco de referencia atual |
+
+#### Sinal e qualidade
+
+| Coluna | Tipo | Descricao | Como interpretar |
+|--------|------|-----------|-----------------|
+| `signal_eod` | str | **Sinal do fechamento** | `buy` = sinal de compra; `hold` = aguardar |
+| `score_100` | float [0-100] | **Intensidade direcional** | >55 bullish, <45 bearish, 45-55 neutro |
+| `confidence` | float [0-100] | **Confianca geral no sinal** | >60 = alta confianca; <40 = sinal fraco |
+
+#### Filtro de tendencia
+
+| Coluna | Tipo | Descricao | Como interpretar |
+|--------|------|-----------|-----------------|
+| `above_sma300` | str | Preco acima da SMA de 300 periodos | `SIM` = tendencia de alta; `NAO` = tendencia de baixa |
+
+#### Volatilidade
+
+| Coluna | Tipo | Descricao | Como interpretar |
+|--------|------|-----------|-----------------|
+| `atr` | float | ATR (Average True Range) atual | Volatilidade diaria em R$; usado para calcular stop/take |
+
+#### Niveis de entrada
+
+| Coluna | Tipo | Descricao | Como interpretar |
+|--------|------|-----------|-----------------|
+| `entry_ref_price` | float | Referencia para calculo de stop e take (R$) | = `best_buy_value` se buy; = close se hold |
+| `best_buy_value` | float | Preco sugerido para ordem limitada de compra (R$) | `close - entry_discount_atr_frac x ATR` (abaixo do close) |
+
+#### Niveis de saida (OPERACIONAIS)
+
+| Coluna | Tipo | Descricao | Como interpretar |
+|--------|------|-----------|-----------------|
+| `stop_loss` | float | **Stop loss inicial** (R$) | `entry_ref - stop_atr_mult x ATR`. Colocar na ordem. |
+| `stop_pct` | float | **Distancia do stop em %** | Ex: 5.2 = stop esta 5.2% abaixo do entry_ref |
+| `tightened_stop` | float | **Stop apertado** (R$) | Ativado apos N dias. `entry_ref - (tighten_factor x stop_atr_mult x ATR)` |
+| `take_profit` | float | **Take profit** (R$) | `entry_ref + reward_risk_ratio x stop_abs`. Colocar na ordem. |
+| `take_pct` | float | **Distancia do take em %** | Ex: 5.2 = take esta 5.2% acima do entry_ref |
+| `time_stop_bars` | int | **Time stop** (dias uteis) | Se posicao nao atingiu stop nem take em N dias, fechar |
+| `trailing_mode` | str | **Modo do trailing stop** | `fixed` / `breakeven` / `trail-50%` (ver detalhes abaixo) |
+
+#### Resumo de regras
+
+| Coluna | Tipo | Descricao | Como interpretar |
+|--------|------|-----------|-----------------|
+| `exit_rules` | str | **Resumo completo das regras de saida** | Texto legivel com todos os parametros de saida em uma linha |
+
+### 11.2 Como interpretar `score_100`
+
+| Faixa | Significado pratico |
+|-------|---------------------|
+| 70-100 | Bullish forte — multiplas features alinhadas para alta |
+| 55-70 | Bullish moderado — maioria das features favoravel |
+| 45-55 | Neutro — sem consenso direcional claro |
+| 30-45 | Bearish moderado — maioria das features favoravel a queda |
+| 0-30 | Bearish forte — grande consenso de queda |
+
+### 11.3 Como interpretar `confidence`
+
+Combina 4 fatores com pesos fixos:
+
+| Fator | Peso | Origem |
+|-------|------|--------|
+| Qualidade do backtest no ticker (sharpe x win_rate) | 30% | Historico do GA |
+| Forca do sinal atual (`|score_ev| / score95`) | 25% | Sinal em relacao ao historico |
+| Volume de trades historicos (mais trades = mais estatistica) | 15% | Backtest |
+| Concordancia entre features (% na mesma direcao) | 30% | Votacao atual |
+
+### 11.4 Relacao entre colunas de niveis de preco
+
+```
+close (preco atual)
+  |
+  +-- best_buy_value  = close - entry_discount_atr_frac x ATR   <-- ordem limitada de compra
+  |
+  +-- entry_ref_price = best_buy_value (se buy) ou close (se hold)
+        |
+        +-- stop_loss      = entry_ref - stop_atr_mult x ATR              (stop_pct = distancia em %)
+        +-- tightened_stop = entry_ref - tighten_factor x stop_atr_mult x ATR   (ativado apos N dias)
+        +-- take_profit    = entry_ref + reward_risk_ratio x stop_abs     (take_pct = distancia em %)
+```
+
+> **stop_loss e take_profit sao os mesmos parametros usados no backtest historico.** O resultado historico (`test_return`, `test_win_rate`) foi gerado usando exatamente esses criterios de saida.
+
+### 11.5 Guia operacional: como usar a aba Apply para operar
+
+**Passo 1 — Filtrar candidatos:**
+1. `signal_eod == "buy"` (condicao obrigatoria)
+2. `confidence >= 60` (sinal confiavel)
+3. `score_100 >= 60` (score bullish)
+4. `above_sma300 == "SIM"` (tendencia favoravel)
+5. Cruzar com aba Summary: `test_return > 0`, `test_win_rate >= 0.55`, `test_trades >= 20`
+
+**Passo 2 — Montar a ordem de compra:**
+- Tipo: **Ordem limitada** (BUY LIMIT)
+- Preco: `best_buy_value`
+- Stop Loss: `stop_loss`
+- Take Profit: `take_profit`
+
+**Passo 3 — Gerenciar a posicao aberta:**
+- **Dia 1 a N:** Manter stop em `stop_loss`. Trailing stop conforme `trailing_mode`:
+  - `fixed`: stop nunca muda
+  - `breakeven`: apos lucro >= 1x stop_abs, mover stop para `entry_ref_price` (empate)
+  - `trail-50%`: apos lucro >= 2x stop_abs, trail stop a 50% do lucro maximo
+- **Apos `time_stop_bars` dias** (coluna `time_stop_bars`): se posicao nao bateu stop nem take, **fechar a mercado**
+- **Apos tighten (ver `tightened_stop`)**: apos `stop_tighten_after_bars` dias, mover stop para `tightened_stop` (mais apertado)
+- **Hard stop**: se gap de abertura > `max_loss_per_trade_pct` (2%), fechar imediatamente
+
+**Passo 4 — Ler `exit_rules` para confirmacao:**
+A coluna `exit_rules` resume todas as regras em texto legivel. Exemplo:
+```
+Stop: -5.2% (2.5xATR, breakeven); Take: +5.2% (R:R 1.0:1); Tight: 1.12xATR apos 7d; TimeStop: 14d; HardStop: 2% gap
+```
+
+### 11.6 Selecao de ativos para operar
+
+Filtros sugeridos (em ordem de importancia):
+
+1. `signal_eod == "buy"` — condicao obrigatoria
+2. `confidence >= 60` — sinal confiavel
+3. `score_100 >= 60` — score bullish
+4. `above_sma300 == "SIM"` — tendencia de alta confirmada
+5. `test_return > 0` (aba Summary) — ticker foi lucrativo historicamente
+6. `test_win_rate >= 0.55` (aba Summary) — >55% de acerto historico
+7. `test_trades >= 20` (aba Summary) — amostra estatistica suficiente
+
+---
+
+## 12. Função de Fitness
+
+O GA maximiza uma função que balanceia **retorno**, **risco** e **consistência** ao longo de 10 janelas walk-forward independentes.
+
+### Fórmula geral
+
+```
+fitness = retorno_excess + win_rate_bonus + sharpe_component + calmar_bonus
+        - mdd_penalty - tail_penalty + consistency_bonus + trade_bonus
+```
+
+### Componentes de retorno e qualidade
+
+| Componente | Peso | Descrição |
+|-----------|------|-----------|
+| Retorno excedente médio (vs B&H) | ×1.8 | Superar buy-and-hold em média nas 10 janelas |
+| Retorno excedente mediana | ×1.3 | Robusto a janelas outlier |
+| % janelas com excess > 0 | ×1.4 | Consistência de superar B&H |
+| Retorno médio absoluto | ×0.5 | Retorno bruto médio |
+| Retorno mediana absoluto | ×0.3 | Retorno bruto mediano |
+| Sharpe médio | ×0.5 | Risk-adjusted médio |
+| Sharpe mediana | ×0.4 | Risk-adjusted mediano |
+| % retornos positivos | ×0.3 | % de janelas com retorno > 0 |
+| Win rate médio | ×1.1 | Taxa de acerto média |
+| Win rate mediana | ×0.8 | Taxa de acerto mediana |
+
+### Bônus de win rate (não-linear, fortemente incentivado)
+
+| Condição | Bônus acumulado |
+|----------|----------------|
+| win_rate > 0.60 | **+6.0** |
+| win_rate > 0.56 | **+5.0** |
+| win_rate > 0.52 | **+6.0** |
+| win_rate < 0.50 | **−10.0** (penalidade forte) |
+
+### Penalidade de MDD (progressiva, em escada)
+
+O MDD de cada ticker em cada janela é calculado, depois toma-se a mediana (cap: −60%):
+
+| Faixa de |MDD| | Penalidade por ponto acima do limiar |
+|----------|------------------------------------|
+| > 8% | ×8 |
+| > 15% | ×8 + ×20 (adicional) |
+| > 18% | ×8 + ×20 + ×45 ← **muro principal** |
+| > 25% | + ×200 ← **barreira de segurança** |
+| > 30% | + ×300 ← **penalidade nuclear** |
+
+**Bônus por baixo drawdown:**
+- MDD < 20% → **+3.0**
+- MDD < 15% → **+2.0** adicional (total +5.0)
+
+### Calmar Ratio (retorno/risco)
+
+```python
+calmar = retorno_médio / abs(median_mdd)
+calmar_bonus = 0.8 × clip(calmar, 0, 5)   # máximo +4.0
+```
+
+### Penalidade de cauda (tail risk)
+
+Janelas com retorno < −20% recebem penalidade adicional progressiva (inicia em −20%, pesos dobrados).
+
+### Bônus de consistência inter-janelas
+
+| Condição | Efeito |
+|----------|--------|
+| std(win_rates) < 0.08 entre janelas | **+0.3** |
+| std(returns) < 0.10 entre janelas | **+0.2** |
+| std(win_rates) > 0.15 entre janelas | **−2.0** (inconsistente) |
+
+---
+
+## 13. Arquivos de Saída
+
+### 13.1 `summary_latest.xlsx` (3 abas)
+
+**Aba "Summary"** — Backtest por ticker
+
+| Coluna | Descrição |
+|--------|-----------|
+| `ticker` | Código do ativo |
+| `test_return` | Retorno total no período de teste |
+| `test_mdd` | Maximum drawdown no teste |
+| `test_sharpe` | Sharpe ratio no teste |
+| `test_trades` | Número total de trades |
+| `test_win_rate` | % trades com retorno > 0 |
+| `test_avg_trade` | Retorno médio por trade |
+| `buy_hold_return` | Retorno buy-and-hold no mesmo período |
+
+**Aba "Apply"** — Sinais dos últimos 5 dias (ver [Seção 11](#11-saídas-no-modo-apply-planilha))
+
+**Aba "Feature_Importance"** — Features mais relevantes por ticker
+
+| Coluna | Descrição |
+|--------|-----------|
+| `ticker` | Ativo |
+| `rank` | Posição no ranking (1 = mais importante) |
+| `feature` | Nome da feature do ETL |
+| `spearman_abs_r` | Correlação de Spearman absoluta com retorno forward |
+| `mean_abs_zscore` | Z-score médio absoluto (força histórica da feature) |
+| `pct_days_active_%` | % dos dias em que `|z| > z_threshold` |
+
+### 13.2 `apply_last_5d__H5.csv`
+
+Mesmas colunas da aba "Apply", em CSV (pode ser lido mesmo com Excel aberto na planilha).
+
+### 13.3 `global_ga_checkpoint.json`
+
+```json
+{
+    "fitness": 10.5878,
+    "genome": [0.25, 0.20, 0.35, 5, 2, 0.55, 1.5, 8, 0.65, 0.07, 3.0, ...]
+}
+```
+
+26 genes do melhor indivíduo (na ordem de `GLOBAL_PARAM_SPECS`). Usado para warm-start no próximo treino e para modo `"load"`.
+
+### 13.4 Métricas impressas ao final do GA
+
+```
+============================================================
+=== OBJETIVOS (FULL MODE) ===
+============================================================
+  win_rate_mean   : 0.554  (median: 0.603)  >> objetivo: >= 0.52
+  median_mdd      : -0.236                   >> objetivo: >= -25%
+  beat buy&hold % : 55.3%  (retorno medio: 5385% vs B&H: 577%)
+  mean trades/tkr : 169.3
+  % ret_pos       : 76.6%  | % sharpe_pos: 78.7%
+  GA fitness      : 10.5878
+============================================================
+  win_rate_mean>=0.52 : PASS
+  median_mdd>=-25%    : PASS
+  beats buy&hold      : PASS
+  trades>=10/ticker   : PASS
+  TODOS OBJETIVOS     : ALL PASS
+============================================================
+```
+
+---
+
+## 14. FAQ
+
+### O `signal_eod` no apply diz quando VENDER uma posição existente?
+
+**Não diretamente.** O sinal do apply indica **entradas** (quando comprar), não saídas de posições existentes. Para gerenciar saídas:
+
+- Use os níveis calculados **no dia que você comprou**: `stop_loss` e `take_profit`
+- Esses níveis usam os mesmos parâmetros do backtest histórico
+- `signal_eod = "hold"` significa apenas "sem novo sinal de compra hoje" — não é ordem de venda
+- `score_100 < 30` em um ativo em posição pode sinalizar deterioração do cenário
+
+Para o **trailing stop** (gene `trailing_stop_mode` no checkpoint):
+- Modo 0: saída fixa em `stop_loss`
+- Modo 1: após lucro > stop, não venda abaixo do preço máximo atingido
+- Modo 2: após lucro > 2× stop, saída se recuar 50% desde o pico
+
+### Como saber o valor atual dos parâmetros do GA?
+
+```python
+import json
+with open("global_ga_checkpoint.json") as f:
+    chk = json.load(f)
+
+genes = ["vote_threshold_long","vote_threshold_short","z_threshold","signal_ema_span",
+         "entry_confirmation_days","score_percentile_trigger","stop_atr_mult",
+         "stop_tighten_after_bars","stop_tighten_factor","max_loss_per_trade_pct",
+         "reward_risk_ratio","partial_take_pct","partial_take_level","time_stop_bars",
+         "entry_discount_atr_frac","volatility_filter_percentile","score_strength_scaling",
+         "ma_filter_period","ma_filter_mode","consecutive_loss_cooldown",
+         "equity_drawdown_stop_pct","vol_regime_mode","partial_take_pct_2",
+         "partial_take_level_2","min_signal_strength","trailing_stop_mode"]
+
+params = dict(zip(genes, chk["genome"]))
+print(f"Stop mult: {params['stop_atr_mult']}x ATR")
+print(f"R/R: {params['reward_risk_ratio']}")
+print(f"Trailing: modo {int(params['trailing_stop_mode'])}")
+print(f"Time stop: {int(params['time_stop_bars'])} barras")
+```
+
+### Como interpretar `best_buy_value` vs `entry_ref_price` vs `stop_loss`?
+
+```
+Exemplo (VALE3.SA):
+  close           = R$100.00   ← preço atual
+  best_buy_value  = R$99.50    ← ordem limitada de compra (50ct abaixo do close)
+  entry_ref_price = R$99.50    ← base para calcular stop e take (= best_buy se buy)
+  stop_loss       = R$96.50    ← R$3.00 abaixo do entry_ref (stop_atr_mult × ATR)
+  take_profit     = R$108.50   ← R$9.00 acima do entry_ref (R/R × stop)
+
+  Risco: R$99.50 - R$96.50 = R$3.00 por ação
+  Retorno alvo: R$108.50 - R$99.50 = R$9.00 por ação (R/R = 3:1)
+```
+
+### O que é `EV_buy_fund_3` e como usá-lo diretamente?
+
+É o **Expected Value** combinado (modelos binários + regressão + fundamentais), disponível em `history_consolidated.parquet`. Valores:
+- `> 0.30` → expectativa favorável de compra
+- `0.10 a 0.30` → expectativa levemente positiva
+- `< 0.10` → sem edge claro
+
+Pode ser usado para **ranquear** oportunidades quando múltiplos tickers mostram `signal_eod = "buy"`.
+
+### Por que o sistema usa LONG_ONLY?
+
+O mercado brasileiro tem baixa liquidez para short selling na maioria das ações. Alugar ações para vender a descoberto tem custo elevado e disponibilidade limitada. O sistema foi otimizado especificamente para mercado comprado, onde as restrições operacionais são menores.
+
+### Como o GA evita overfitting?
+
+1. **Walk-forward obrigatório**: 10 janelas independentes — treina em 3 anos, testa nos 6 meses seguintes
+2. **Abrange múltiplas crises**: janelas incluem 2008 (subprime), 2015-16 (recessão BR), 2018 (eleições), 2020 (COVID)
+3. **Fitness 100% OOS**: apenas os 6 meses de teste (fora da amostra) contam para o fitness
+4. **Penalidades múltiplas**: MDD, win_rate baixo e inconsistência entre janelas são penalizados severamente
+5. **Diversidade controlada**: métricas de diversidade da população evitam convergência prematura
+6. **Early stopping**: para quando não há mais melhoria (evita overfit ao continuar)
+
+### O sistema funciona em tempo real (intraday)?
+
+Não. O sistema é **diário (end-of-day)**:
+- Sinal gerado no fechamento do dia i
+- Ordem de compra executada no dia i+1 (limitada)
+- Monitoramento de stop/take durante o pregão do dia
+- Tempo de posse típico: `time_stop_bars` (5–25 dias úteis)
+
+### Como rodar atualização diária completa?
+
+```bash
+# 1. Atualizar dados (ETL + consolidação)
+python run_pipeline.py --mode data-only     # ~35-40 min
+
+# 2. Gerar sinais (sem retreinar GA)
+# ga_run.py: RUN_MODE = "load"
+python ga_run.py                            # ~2 min
+
+# 3. Verificar resultados
+# Abrir summary_latest.xlsx → aba "Apply"
+# Ou ler: apply_last_5d__H5.csv
+```
+
+---
 
 ## Testes automatizados (GitHub Actions)
-
-Foi adicionada uma pipeline de testes em `.github/workflows/test.yml` focada em validar apenas o notebook `GA_stock.ipynb`:
-- existência do arquivo;
-- estrutura básica de notebook (`nbformat`, `cells`);
-- presença de pelo menos uma célula de código.
-- contrato de I/O do GA: simulação de leitura do `history_consolidated.csv` (schema mínimo) e geração dos arquivos de saída (`.xlsx` e `.csv`) em diretório temporário.
-- se existir `history_consolidated.csv` na raiz do repositório, o teste também valida o schema mínimo real do arquivo.
-- para evitar versionar arquivo grande (ex.: 165MB), o workflow aceita `secrets.HISTORY_CSV_URL` e baixa o CSV em tempo de execução do GitHub Actions.
-
-Para rodar localmente:
 
 ```bash
 python -m unittest discover -s tests -p "test_*.py" -v
 ```
 
----
-
-## Ordem obrigatória de execução
-
-1. **stock** → `Copy_of_STOCK_ETL_v2.ipynb`
-2. **bin** → `bin_Stock_modelos_individuais.ipynb`
-3. **reg** → `reg_Stock_modelos_individuais.ipynb`
-4. **final** → `Final_stock_output.ipynb`
-5. **GA** → `GA_stock.ipynb`
-
----
-
-## 1) STOCK (`Copy_of_STOCK_ETL_v2.ipynb`)
-
-### Objetivo
-Construir o dataset base com OHLCV, features e targets.
-
-### Arquivos gerados
-- `expanded_stock.parquet`
-- `expanded_stock_reduced.parquet`
-
-### Colunas (estrutura)
-O dataset é salvo em **colunas MultiIndex** (`nível 0 = nome da variável`, `nível 1 = ticker`).
-
-#### Bloco OHLCV (por ticker)
-- `Open`: abertura do dia.
-- `High`: máxima do dia.
-- `Low`: mínima do dia.
-- `Close`: fechamento do dia.
-- `Adj Close`: fechamento ajustado.
-- `Volume`: volume negociado.
-
-#### Bloco de targets (por ticker)
-- `target_up20`: 1 se houve alta de +20% no horizonte; 0 caso contrário.
-- `target_dd5`: 1 se houve queda de -5% no horizonte; 0 caso contrário.
-- `target_best_entry`: alvo contínuo de melhor entrada (regressão).
-- `target_best_sale`: alvo contínuo de melhor saída/venda (regressão).
-
-#### Bloco de features (por ticker)
-- Conjunto de features técnicas/fundamentais/derivadas usadas no treinamento.
-- Como é pipeline de engenharia de atributos, o conjunto final pode variar conforme parâmetros do notebook.
-
----
-
-## 2) BIN (`bin_Stock_modelos_individuais.ipynb`)
-
-### Objetivo
-Treinar e aplicar modelos binários para sinais de alta/queda.
-
-### Inputs
-- `expanded_stock_reduced.parquet`.
-
-### Arquivos gerados e colunas
-
-## 2.1 `apply_ensemble_signals.csv`
-(colunas de `out_apply`)
-
-- `Date`: data de referência.
-- `ticker`: ativo.
-- `split`: sempre `APPLY` neste arquivo.
-- `p_up20`: probabilidade prevista de alta (+20%).
-- `p_dd5`: probabilidade prevista de drawdown (-5%).
-- `thr_up20`: threshold usado para classificar `up20`.
-- `thr_dd5`: threshold usado para classificar `dd5`.
-- `pred_up20`: classe prevista para alta (0/1).
-- `pred_dd5`: classe prevista para drawdown (0/1).
-- `buy`: flag de compra (`pred_up20=1` e `pred_dd5=0`).
-- `sell`: flag de venda (`pred_up20=0` e `pred_dd5=1`).
-- `action`: ação final (`BUY`, `SELL`, `HOLD`).
-- `buy_trust`: confiança da compra (`p_up20*(1-p_dd5)`).
-- `sell_trust`: confiança da venda (`(1-p_up20)*p_dd5`).
-- `action_trust`: confiança associada à ação final.
-- `y_up20`: label real de `up20` (no APPLY tende a `NaN`).
-- `y_dd5`: label real de `dd5` (no APPLY tende a `NaN`).
-- `trust_up20`: confiança do classificador para `up20`.
-- `margin_up20`: margem para o threshold de `up20`.
-- `trust_dd5`: confiança do classificador para `dd5`.
-- `margin_dd5`: margem para o threshold de `dd5`.
-
-## 2.2 `apply_ensemble_signals_debug.csv`
-- Mesmas colunas acima, mas com linhas de `VALID + APPLY` para depuração.
-
-## 2.3 `ensemble_signals_history.parquet`
-Arquivo histórico minimizado (função `save_hist_out_minimal`) com colunas:
-- `index`: índice sequencial.
-- `Date`: data.
-- `ticker`: ativo.
-- `split`: partição (`VALID`, `TEST`, `FINAL`, `APPLY`, etc. conforme execução).
-- `p_up20`: probabilidade de alta.
-- `p_dd5`: probabilidade de drawdown.
-
-## 2.4 `ensemble_signals_history_with_trust.parquet`
-Histórico enriquecido com colunas de confiança por modelo (`buy_trust__*`, `sell_trust__*`, `action_trust__*`) além das colunas-base do histórico.
-
----
-
-## 3) REG (`reg_Stock_modelos_individuais.ipynb`)
-
-### Objetivo
-Gerar previsões contínuas de preço (compra/venda) com bandas de erro.
-
-### Arquivos gerados e colunas
-
-## 3.1 `apply_forecast_with_error_band.csv`
-(saída `APPLY_VIEW`)
-
-- `Date`: data.
-- `ticker`: ativo.
-- `target`: alvo (`target_best_entry` ou `target_best_sale`).
-- `asset_class`: classe do ativo.
-- `model`: identificação do baseline/calibração.
-- `used_ml`: flag de uso de ML.
-- `alpha`: parâmetro do modelo.
-- `band_q_lo`: quantil configurado inferior da banda.
-- `band_q_hi`: quantil configurado superior da banda.
-- `resid_q_lo`: quantil residual inferior estimado.
-- `resid_q_hi`: quantil residual superior estimado.
-- `resid_fit_n`: nº de pontos usados no fit residual.
-- `band_scale`: escala da banda.
-- `band_scale_fallback`: se usou fallback de banda.
-- `cap_lo`: limite inferior de cap.
-- `cap_hi`: limite superior de cap.
-- `pred_pct_center`: previsão central (%) após cap.
-- `pred_pct_lo_uncapped`: banda inferior (%) sem cap.
-- `pred_pct_hi_uncapped`: banda superior (%) sem cap.
-- `pred_pct_lo_capped`: banda inferior (%) com cap.
-- `pred_pct_hi_capped`: banda superior (%) com cap.
-- `op_pct`: percentual operacional final.
-- `y_true_pct`: valor real (%) quando disponível.
-- `pred_price_center`: preço previsto central.
-- `pred_price_lo_uncapped`: preço inferior sem cap.
-- `pred_price_hi_uncapped`: preço superior sem cap.
-- `pred_price_lo_capped`: preço inferior com cap.
-- `pred_price_hi_capped`: preço superior com cap.
-- `op_price`: preço operacional final.
-- `abs_err_pct`: erro absoluto percentual.
-- `mae_valid`, `p95_valid`, `covU_valid`, `covC_valid`: métricas de validação.
-- `mae_test`, `p95_test`, `covU_test`, `covC_test`: métricas de teste.
-- `touchC_valid`, `touchOp_valid`, `touchC_test`, `touchOp_test`: métricas de toque/cobertura.
-
-## 3.2 `forecast_history_wide.parquet` / `forecast_history_wide.csv`
-(colunas fixas: `HISTORY_WIDE_COLS`)
-
-- `Date`: data.
-- `ticker`: ativo.
-- `best_buy_price`: melhor preço projetado para compra.
-- `buy_err_lo`: limite inferior de erro (compra).
-- `buy_err_hi`: limite superior de erro (compra).
-- `best_sell_price`: melhor preço projetado para venda.
-- `sell_err_lo`: limite inferior de erro (venda).
-- `sell_err_hi`: limite superior de erro (venda).
-
-## 3.3 `baseline_best_by_ticker_target.csv`
-Resumo dos melhores baselines por par `(ticker, target)` (colunas de identificação e hiperparâmetros/score do melhor baseline).
-
-## 3.4 `band_scale_by_ticker_target.csv`
-- `ticker`: ativo.
-- `target`: alvo.
-- `asset_class`: classe.
-- `band_scale`: escala de banda escolhida.
-- `fallback_used`: indica fallback na banda.
-
-## 3.5 `valid_compare.csv` e `test_compare.csv`
-Comparativos por ticker/target para avaliação (mesmo esquema base de colunas de métricas de erro/cobertura usadas no notebook).
-
----
-
-## 4) FINAL (`Final_stock_output.ipynb`)
-
-### Objetivo
-Consolidar REG + BIN + fundamentos e calcular score final de decisão.
-
-### Inputs diretos
-- REG wide: `forecast_history_wide.parquet`.
-- BIN: `ensemble_signals_history.parquet`.
-- Fundamentais (coletados no notebook).
-
-### Arquivos gerados
-- `history_consolidated.parquet`
-
-### Colunas do output consolidado (fixas: `FINAL_COLS`)
-- `Date`: data.
-- `ticker`: ativo.
-- `split`: partição do dado.
-- `price`: preço base da linha (no notebook, igual a `close`).
-- `open`, `high`, `low`, `close`: OHLC do dia.
-- `best_buy_value`: preço alvo de compra (normalizado da REG).
-- `best_sell_value`: preço alvo de venda (normalizado da REG).
-- `err_buy_pct`: erro percentual da estimativa de compra.
-- `err_sell_pct`: erro percentual da estimativa de venda.
-- `downside_pct`: risco percentual até o piso estimado.
-- `upside_pct`: potencial percentual até o topo estimado.
-- `risk_return`: razão risco/retorno.
-- `p_up20`: probabilidade de alta (BIN).
-- `p_dd5`: probabilidade de drawdown (BIN).
-- `pred_up20`: previsão binária de alta.
-- `pred_dd5`: previsão binária de drawdown.
-- `up20_bin`: classe binária final de alta.
-- `dd5_bin`: classe binária final de drawdown.
-- `buy_trust`: confiança de compra (derivada de probas).
-- `sell_trust`: confiança de venda (derivada de probas).
-- `EV_buy_reg`: expected value com componente de regressão.
-- `EV_buy_ens`: expected value com componente de ensemble/binário.
-- `EV_buy`: EV combinado.
-- `fund_score`: score fundamentalista.
-- `EV_buy_fund`: EV ajustado por fundamento (versão 1).
-- `EV_buy_fund_2`: EV ajustado por fundamento (versão 2).
-- `EV_buy_fund_3`: EV ajustado por fundamento (versão 3; usado no GA).
-- `signal`: sinal final consolidado.
-- `dividend_yield`: dividend yield do ativo.
-- `trailing_pe`: preço/lucro.
-- `price_to_book`: preço/valor patrimonial.
-- `market_cap`: valor de mercado.
-
----
-
-## 5) GA (`GA_stock.ipynb`)
-
-### Objetivo
-Rodar etapa final de seleção/otimização (GA + walk-forward) e gerar relatório/sinais.
-
-### Input
-- `history_consolidated.parquet` (usa `Date`, `ticker`, `price` e score, por padrão `EV_buy_fund_3`).
-
-### Arquivos gerados e colunas
-
-## 5.1 Excel
-`apply_PER_TICKER_WFGA_intraday__H{FWD_H}__APPLY{APPLY_DAYS}D__v2.xlsx`
-
-### Aba `summary_latest` (colunas)
-- `ticker`, `feat_count_used`
-- `wf_auc_mean`, `wf_auc_std`, `wf_acc_mean`, `wf_ap_mean`, `wf_logloss`, `wf_brier`
-- `ga_enter_abs`, `ga_exit_abs`, `ga_atr_mult`, `ga_rr_mult`
-- `ga_return_1y`, `ga_mdd_1y`, `ga_sharpe_1y`, `ga_trades_1y`, `ga_exposure_1y`, `ga_fitness_1y`
-- `buyhold_return_1y`
-- `test_return`, `test_mdd`, `test_sharpe`, `test_n_trades`
-- `use_strategy_flag`
-- `latest_date`, `latest_close`, `latest_atr`, `latest_score_z`
-- `signal_eod`, `signal`
-- `score_0_100`
-- `train_start`, `train_end`, `test_start`, `test_end`
-
-### Aba `apply_last_{APPLY_DAYS}d` / CSV `apply_last_{APPLY_DAYS}d__H{FWD_H}__v2.csv`
-- `Date`, `ticker`, `close`
-- `signal_eod`, `signal`, `use_strategy_flag`
-- `score_0_100`, `score_z`
-- `wf_auc_mean`, `wf_auc_std`, `wf_acc_mean`, `wf_ap_mean`, `wf_logloss`, `wf_brier`
-- `ga_enter_abs`, `ga_exit_abs`, `ga_atr_mult`, `ga_rr_mult`
-- `ga_return_1y`, `ga_mdd_1y`, `ga_sharpe_1y`, `ga_trades_1y`, `ga_exposure_1y`
-- `buyhold_return_1y`
-- `test_return`, `test_mdd`, `test_sharpe`, `test_n_trades`
-- `next_day_filled`
-- `limit_price_next_day`, `best_buy_value`, `best_sell_value`, `entry_ref_price`
-- `stop_abs`, `take_abs`, `stop_pct`, `take_pct`
-- `buy_entry`, `buy_stop`, `buy_take`
-- `sell_entry`, `sell_stop`, `sell_take`
-- `train_start`, `train_end`, `test_start`, `test_end`
-
----
-
-## Fluxo resumido de arquivos
-
-1. STOCK gera os parquets base (`expanded_stock*`).
-2. BIN gera sinais probabilísticos/classificação (`apply_ensemble_signals*`, `ensemble_signals_history*`).
-3. REG gera preços de compra/venda com bandas (`apply_forecast_with_error_band`, `forecast_history_wide`).
-4. FINAL consolida tudo em `history_consolidated*` com EV e sinais finais.
-5. GA gera relatório final (Excel) e CSV de aplicação dos últimos dias.
+Verifica: existência dos arquivos principais, estrutura de notebooks, contrato I/O do GA, schema mínimo do `history_consolidated`.

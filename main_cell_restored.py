@@ -1,6 +1,6 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """
-GA + Walk-Forward ML (OOS) + Intraday (OHLC) Backtest  — v2 (fixed outputs)
+GA + Walk-Forward ML (OOS) + Intraday (OHLC) Backtest  â€” v2 (fixed outputs)
 ============================================================================
 
 Fixes vs previous version:
@@ -80,7 +80,7 @@ from numba import njit
 # ==============================================================================
 # 0) CONFIG
 # ==============================================================================
-HISTORY_CSV_PATH = "./history_consolidated.parquet"
+HISTORY_CSV_PATH = "./output/history_consolidated.parquet"
 OUTPUT_DIR       = "./"
 
 DATE_COL   = "Date"
@@ -180,7 +180,12 @@ MIN_ROWS_TICKER = 350  # enough for MA200 min_periods + some buffer
 MIN_FEAT_NONNA_FRAC = 0.60
 MIN_FEAT_STD = 1e-12
 MIN_VALID_SAMPLES_FOR_CORRELATION = 30
-MAX_FEATURES = 8
+MAX_FEATURES = None
+MIN_FEATURES_PER_TICKER = 5
+FEATURE_KEEP_FRACTION = 0.35
+FEATURE_MIN_CAP = 8
+FEATURE_MAX_CAP = 48
+FEATURE_SIGNIFICANCE_MIN = 0.01
 
 # Intraday entry (limit) based on signal strength
 ENTRY_DISCOUNT_RANGE = (0.0, 0.4)
@@ -189,6 +194,7 @@ SLOW_PERIOD_RANGE = (40, 100)
 SCORE_CROSS_MIN_ABS = 0.05
 ENTRY_SCORE_TRIGGER_ABS = 0.005
 ML_STRONG_SCORE_ABS = 0.08
+MAX_STOP_LOSS_PCT = 0.15
 
 # Avoid "do nothing" strategies
 GA_MIN_TRADES = 25
@@ -201,6 +207,13 @@ GA_MIN_WF_AUC_TO_RUN = 0.53
 GA_MIN_WF_AP_TO_RUN = 0.52
 GA_MIN_WF_QUALITY_TO_RUN = 0.30
 GA_INTERNAL_EXTRA_TRADE_COST_BPS = 30.0
+BACKTEST_ALLOW_SHORTS = False
+CONTEXT_GATE_LONG_MIN = 0.41
+CONTEXT_GATE_SHORT_MIN = 0.46
+REVERSAL_EXIT_CONTEXT = 0.54
+QUICK_MAX_ATTEMPTS = 6
+QUICK_RETRY_POP_STEP = 10
+QUICK_RETRY_NGEN_STEP = 2
 
 # Prints
 PRINT_EVERY = 1
@@ -225,7 +238,7 @@ GA_SELECT_ROBUST_FROM_HOF = True
 GA_RUN_MC_EVERY_WINDOW = False
 GA_EVAL_WORKERS = max(1, (os.cpu_count() or 2) - 1)
 GA_TWO_STAGE = True
-RUN_MODE = "train"  # "load" resume from checkpoints, "train" starts from zero
+RUN_MODE = "hybrid"  # "load" (checkpoint only), "train" (fresh), "hybrid" (reuse checkpoint + retrain)
 SLOW_STEP_PRINT_SEC = 2.0  # print only timings above this per-step threshold
 GA_STAGE1_POP_SIZE = 64
 GA_STAGE1_NGEN = 15
@@ -234,6 +247,23 @@ GA_STAGE2_POP_SIZE = 120
 GA_STAGE2_NGEN = 30
 GA_STAGE2_PADDING_RATIO = 0.60
 GA_STAGE2_MIN_SPAN_RATIO = 0.18
+
+# Runtime profiles for validation
+RUNTIME_MODE_DEFAULT = "full"  # quick | full | quick_then_full
+QUICK_MAX_TICKERS = 20
+QUICK_GA_POP = 12
+QUICK_GA_NGEN = 5
+QUICK_GA_MAX_WINDOWS = 2
+FULL_GA_POP = 100
+FULL_GA_NGEN = 40
+FULL_GA_MAX_WINDOWS = 0  # 0 => all windows
+
+# Objective validation thresholds
+OBJ_MIN_WIN_RATE = 0.54
+OBJ_MIN_BEAT_BH_RATIO = 0.50
+OBJ_MAX_MEDIAN_DD = 0.22
+OBJ_MIN_MEDIAN_TRADES = 8.0
+OBJ_MAX_MEDIAN_TRADES = 70.0
 
 # ==============================================================================
 # 1) DEAP SETUP
@@ -278,7 +308,7 @@ def sanitize_params(p: Params) -> Params:
 
 
 # ==============================================================================
-# 2.1) GLOBAL GA (20 parâmetros)
+# 2.1) GLOBAL GA (20 parÃ¢metros)
 # ==============================================================================
 
 GLOBAL_PARAM_SPECS = [
@@ -291,7 +321,7 @@ GLOBAL_PARAM_SPECS = [
     ("stop_atr_mult", 1.0, 4.0, 0.25, False),
     ("stop_tighten_after_bars", 3.0, 15.0, 1.0, True),
     ("stop_tighten_factor", 0.40, 0.85, 0.05, False),
-    ("max_loss_per_trade_pct", 0.02, 0.12, 0.01, False),
+    ("max_loss_per_trade_pct", 0.02, 0.15, 0.01, False),
     ("reward_risk_ratio", 1.0, 5.0, 0.25, False),
     ("partial_take_pct", 0.0, 0.60, 0.10, False),
     ("partial_take_level", 0.5, 1.5, 0.25, False),
@@ -441,31 +471,50 @@ def rolling_quantile_trigger(arr: np.ndarray, q: float, window: int = SCORE_LOOK
     return out
 
 
-def precompute_global_payloads(windows: List[Tuple[pd.Timestamp, pd.Timestamp, pd.Timestamp, pd.Timestamp]], full_df: pd.DataFrame, feature_cols: List[str]) -> List[Tuple[Dict[str, Dict[str, np.ndarray]], Dict[str, Dict[str, np.ndarray]]]]:
+def slice_payload_by_mask(payload: Dict[str, Any], mask: np.ndarray) -> Optional[Dict[str, Any]]:
+    mask = np.asarray(mask, dtype=bool)
+    if mask.ndim != 1 or int(mask.sum()) < 80:
+        return None
+
+    out: Dict[str, Any] = {}
+    for key, value in payload.items():
+        if isinstance(value, np.ndarray) and value.ndim >= 1 and len(value) == len(mask):
+            out[key] = value[mask]
+        elif key != "valid_mask":
+            out[key] = value
+
+    c = np.asarray(out.get("close", []), dtype=np.float64)
+    atr = np.asarray(out.get("atr", []), dtype=np.float64)
+    x = np.asarray(out.get("score_matrix", []), dtype=np.float64)
+    if len(c) < 80 or len(atr) != len(c) or x.ndim != 2 or x.shape[0] != len(c):
+        return None
+
+    out["vol_rank"] = rolling_percentile_rank(atr / np.maximum(c, ATR_EPS), 252)
+    return out
+
+
+def precompute_global_payloads(
+    windows: List[Tuple[pd.Timestamp, pd.Timestamp, pd.Timestamp, pd.Timestamp]],
+    ticker_payloads: Dict[str, Dict[str, Any]],
+) -> List[Tuple[Dict[str, Dict[str, np.ndarray]], Dict[str, Dict[str, np.ndarray]]]]:
     payloads_by_window = []
     for tr_start, tr_end, te_start, te_end in windows:
-        df_tr = full_df[(full_df[DATE_COL] >= tr_start) & (full_df[DATE_COL] <= tr_end)]
-        df_te = full_df[(full_df[DATE_COL] >= te_start) & (full_df[DATE_COL] <= te_end)]
-        
-        def _build_payload(df_sub):
-            payloads = {}
-            if not df_sub.empty:
-                for tk, g in df_sub.groupby(TICKER_COL, sort=False):
-                    gg = g.sort_values(DATE_COL)
-                    c = gg[CLOSE_COL].to_numpy(np.float64)
-                    atr = gg["atr"].to_numpy(np.float64)
-                    payloads[tk] = {
-                        "open": gg[OPEN_COL].to_numpy(np.float64),
-                        "high": gg[HIGH_COL].to_numpy(np.float64),
-                        "low": gg[LOW_COL].to_numpy(np.float64),
-                        "close": c,
-                        "atr": atr,
-                        "score_matrix": gg[feature_cols].to_numpy(np.float64),
-                        "vol_rank": rolling_percentile_rank(atr / np.maximum(c, ATR_EPS), 252),
-                    }
-            return payloads
-            
-        payloads_by_window.append((_build_payload(df_tr), _build_payload(df_te)))
+        tr_payloads: Dict[str, Dict[str, np.ndarray]] = {}
+        te_payloads: Dict[str, Dict[str, np.ndarray]] = {}
+        for tk, payload in ticker_payloads.items():
+            dates = pd.to_datetime(payload.get("dates"))
+            valid_mask = np.asarray(payload.get("valid_mask", np.ones(len(dates), dtype=bool)), dtype=bool)
+            tr_mask = valid_mask & (dates >= tr_start) & (dates <= tr_end)
+            te_mask = valid_mask & (dates >= te_start) & (dates <= te_end)
+
+            tr_slice = slice_payload_by_mask(payload, tr_mask)
+            te_slice = slice_payload_by_mask(payload, te_mask)
+            if tr_slice is not None:
+                tr_payloads[str(tk)] = tr_slice
+            if te_slice is not None:
+                te_payloads[str(tk)] = te_slice
+
+        payloads_by_window.append((tr_payloads, te_payloads))
     return payloads_by_window
 
 def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalParams, precomputed: Optional[Dict[str, np.ndarray]] = None) -> Dict[str, float]:
@@ -477,24 +526,51 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
     x = np.asarray(score_matrix, dtype=np.float64)
     n = len(c)
     if n < 5 or x.ndim != 2 or x.shape[0] != n:
-        return {"total_return": 0.0, "mdd": 0.0, "sharpe": 0.0, "n_trades": 0.0, "win_rate": 0.0, "avg_trade": 0.0}
+        return {
+            "total_return": 0.0,
+            "mdd": 0.0,
+            "sharpe": 0.0,
+            "n_trades": 0.0,
+            "win_rate": 0.0,
+            "avg_trade": 0.0,
+            "buyhold_return": 0.0,
+            "exposure": 0.0,
+        }
 
     feat_n = max(1, x.shape[1])
+    if precomputed is not None and ("feature_weights" in precomputed):
+        feature_weights = np.asarray(precomputed["feature_weights"], dtype=np.float64).reshape(-1)
+        if len(feature_weights) != feat_n:
+            feature_weights = np.ones(feat_n, dtype=np.float64)
+    else:
+        feature_weights = np.ones(feat_n, dtype=np.float64)
+    feature_weights = np.where(np.isfinite(feature_weights) & (feature_weights > 0), feature_weights, 1.0)
+    weights_2d = feature_weights.reshape(1, -1)
+
     ma = rolling_mean_np(c, int(gp.ma_filter_period), max(20, int(gp.ma_filter_period // 2)))
     if precomputed is not None and ("vol_rank" in precomputed):
         vol_rank = np.asarray(precomputed["vol_rank"], dtype=np.float64)
     else:
         vol_rank = rolling_percentile_rank(atr / np.maximum(c, ATR_EPS), 252)
 
-    votes_long = (x > gp.z_threshold).sum(axis=1) / feat_n
-    votes_short = (x < -gp.z_threshold).sum(axis=1) / feat_n
+    context_long = None
+    context_short = None
+    if precomputed is not None:
+        if "context_long" in precomputed:
+            context_long = np.asarray(precomputed["context_long"], dtype=np.float64)
+        if "context_short" in precomputed:
+            context_short = np.asarray(precomputed["context_short"], dtype=np.float64)
+
+    valid_weights = np.where(np.isfinite(x), weights_2d, 0.0)
+    weight_sum = np.maximum(valid_weights.sum(axis=1), ATR_EPS)
+    votes_long = ((x > gp.z_threshold).astype(np.float64) * valid_weights).sum(axis=1) / weight_sum
+    votes_short = ((x < -gp.z_threshold).astype(np.float64) * valid_weights).sum(axis=1) / weight_sum
     score_raw = votes_long - votes_short
     score_ev = ewm_mean_np(score_raw, int(gp.signal_ema_span))
     score_pctl = rolling_quantile_trigger(score_ev, float(gp.score_percentile_trigger), max(63, SCORE_LOOKBACK))
 
     score95 = np.nanpercentile(np.abs(score_ev), 95) if np.isfinite(np.nanmax(np.abs(score_ev))) else 1.0
     score95 = max(score95, ATR_EPS)
-
 
     equity = 1.0
     peak = 1.0
@@ -508,19 +584,41 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
     consec_short = 0
     consec_stops = 0
     cooldown = 0
+    pos_days = 0
+
+    hard_stop_cap = float(np.clip(gp.max_loss_per_trade_pct, 0.01, MAX_STOP_LOSS_PCT))
 
     for i in range(1, n):
         if cooldown > 0:
             cooldown -= 1
 
         if pos != 0:
+            pos_days += 1
             bars += 1
+            if pos > 0:
+                reverse_signal = (votes_short[i - 1] >= gp.vote_threshold_short) and (-score_ev[i - 1] >= score_pctl[i - 1])
+                if reverse_signal:
+                    ctx_ok = True
+                    if context_short is not None and np.isfinite(context_short[i - 1]):
+                        ctx_ok = bool(context_short[i - 1] >= REVERSAL_EXIT_CONTEXT)
+                    if ctx_ok and np.isfinite(o[i]) and o[i] > 0:
+                        ret = (o[i] / entry_px - 1.0) * pos - 0.0020
+                        equity *= (1.0 + ret)
+                        trade_rets.append(ret)
+                        if ret > 0:
+                            consec_stops = 0
+                        pos = 0
+                        bars = 0
+                        partial_taken = False
+                        continue
+
             stop_mult = gp.stop_atr_mult * (gp.stop_tighten_factor if bars >= gp.stop_tighten_after_bars else 1.0)
             stop_abs = max(ATR_EPS, stop_mult * max(atr[i], ATR_EPS))
+            stop_abs = min(stop_abs, MAX_STOP_LOSS_PCT * max(entry_px, ATR_EPS))
             take_abs = gp.reward_risk_ratio * stop_abs
             hard_loss = abs(o[i] / max(entry_px, ATR_EPS) - 1.0)
 
-            if hard_loss > gp.max_loss_per_trade_pct:
+            if hard_loss > hard_stop_cap:
                 ret = (o[i] / entry_px - 1.0) * pos - 0.0020
                 equity *= (1.0 + ret)
                 trade_rets.append(ret)
@@ -549,7 +647,7 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
                     exit_px = entry_px - np.sign(pos) * stop_abs
                 elif take_hit:
                     exit_px = entry_px + np.sign(pos) * take_abs
-                
+
                 cost = 0.0010 if partial_taken else 0.0020
                 ret = (exit_px / entry_px - 1.0) * pos - cost
                 equity *= (1.0 + ret)
@@ -568,10 +666,9 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
         if pos == 0 and cooldown == 0 and np.isfinite(score_ev[i - 1]) and np.isfinite(score_pctl[i - 1]):
             if gp.volatility_filter_percentile > 0 and np.isfinite(vol_rank[i - 1]) and vol_rank[i - 1] < gp.volatility_filter_percentile:
                 continue
-            
-            # Filtro de liquidez/volume (ex: não operar se volume relativo for muito baixo)
-            # Assumindo que temos acesso ao volume ou podemos usar o ATR como proxy de liquidez
-            if atr[i-1] < 0.01: # Filtro basico de liquidez
+
+            # Filter very low-volatility slices where intraday fills are usually not robust.
+            if atr[i - 1] < 0.01:
                 continue
 
             vl = votes_long[i - 1]
@@ -602,7 +699,12 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
                 if c[i - 1] > ma[i - 1]:
                     short_ok = False
 
-            side = 1 if long_ok else (-1 if short_ok else 0)
+            if long_ok and context_long is not None and np.isfinite(context_long[i - 1]):
+                long_ok = bool(context_long[i - 1] >= CONTEXT_GATE_LONG_MIN)
+            if short_ok and context_short is not None and np.isfinite(context_short[i - 1]):
+                short_ok = bool(context_short[i - 1] >= CONTEXT_GATE_SHORT_MIN)
+
+            side = 1 if long_ok else (-1 if (short_ok and BACKTEST_ALLOW_SHORTS) else 0)
             if side != 0 and np.isfinite(o[i]) and np.isfinite(atr[i]):
                 strength = float(np.clip(abs(score_ev[i - 1]) / score95, 0.0, 1.0))
                 discount = gp.entry_discount_atr_frac * (1.0 - gp.score_strength_scaling * strength)
@@ -617,9 +719,27 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
         peak = max(peak, equity)
         mdd = min(mdd, (equity / max(peak, ATR_EPS)) - 1.0)
 
+    buyhold = buyhold_capped(c)
+    exposure = float(pos_days / max(n - 1, 1))
+
     if len(trade_rets) == 0:
-        return {"total_return": float(equity - 1.0), "mdd": float(mdd), "sharpe": 0.0, "n_trades": 0.0, "win_rate": 0.0, "avg_trade": 0.0}
+        return {
+            "total_return": float(equity - 1.0),
+            "mdd": float(mdd),
+            "sharpe": 0.0,
+            "n_trades": 0.0,
+            "win_rate": 0.0,
+            "avg_trade": 0.0,
+            "buyhold_return": float(buyhold),
+            "exposure": float(exposure),
+        }
+
     tr = np.asarray(trade_rets, dtype=np.float64)
+    wins = tr[tr > 0]
+    losses = tr[tr < 0]
+    gross_profit = float(wins.sum()) if len(wins) else 0.0
+    gross_loss = float(abs(losses.sum())) if len(losses) else 0.0
+    profit_factor = gross_profit / max(gross_loss, 1e-12) if gross_profit > 0 else 0.0
     return {
         "total_return": float(equity - 1.0),
         "mdd": float(mdd),
@@ -628,91 +748,137 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
         "win_rate": float((tr > 0).mean()),
         "avg_trade": float(np.mean(tr)),
         "trade_std": float(np.std(tr)),
+        "profit_factor": float(profit_factor),
+        "avg_win": float(np.mean(wins)) if len(wins) else 0.0,
+        "avg_loss": float(np.mean(losses)) if len(losses) else 0.0,
+        "buyhold_return": float(buyhold),
+        "exposure": float(exposure),
     }
 
 
 def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float:
     if len(per_ticker_stats) == 0:
         return -1e9
-    sharpe = np.array([s.get("sharpe", 0.0) for s in per_ticker_stats], dtype=np.float64)
-    ret = np.array([s.get("total_return", 0.0) for s in per_ticker_stats], dtype=np.float64)
-    ntr = np.array([s.get("n_trades", 0.0) for s in per_ticker_stats], dtype=np.float64)
-    med_sharpe = float(np.median(sharpe))
-    k = max(1, int(np.ceil(0.10 * len(ret))))
-    worst_10 = float(np.mean(np.sort(ret)[:k]))
-    med_trades = float(np.median(ntr))
-    cross_std = float(np.std(ret))
-    if med_trades < 4:
+
+    sharpe = np.array([s.get("sharpe", np.nan) for s in per_ticker_stats], dtype=np.float64)
+    ret = np.array([s.get("total_return", np.nan) for s in per_ticker_stats], dtype=np.float64)
+    buyhold = np.array([s.get("buyhold_return", np.nan) for s in per_ticker_stats], dtype=np.float64)
+    mdd = np.array([s.get("mdd", np.nan) for s in per_ticker_stats], dtype=np.float64)
+    ntr = np.array([s.get("n_trades", np.nan) for s in per_ticker_stats], dtype=np.float64)
+    win = np.array([s.get("win_rate", np.nan) for s in per_ticker_stats], dtype=np.float64)
+    avg_trade = np.array([s.get("avg_trade", np.nan) for s in per_ticker_stats], dtype=np.float64)
+
+    valid = np.isfinite(sharpe) & np.isfinite(ret) & np.isfinite(ntr)
+    if not np.any(valid):
         return -1e9
-    return float(0.40 * med_sharpe + 0.25 * worst_10 - 0.20 * cross_std + 0.15 * np.log(max(med_trades, 1.0)))
 
+    sharpe = sharpe[valid]
+    ret = ret[valid]
+    buyhold = buyhold[valid]
+    mdd = mdd[valid]
+    ntr = ntr[valid]
+    win = win[valid]
+    avg_trade = avg_trade[valid]
+    profit_factor = np.array([s.get("profit_factor", np.nan) for s in per_ticker_stats], dtype=np.float64)[valid]
 
-def evaluate_global_walkforward(genome: List[float], payloads_by_window: List[Tuple[Dict[str, Dict[str, np.ndarray]], Dict[str, Dict[str, np.ndarray]]]]) -> Tuple[float, float, float]:
-    # Returns (fitness, sharpe_train, sharpe_val)
-    train_sharpes = []
-    val_sharpes = []
-    
+    excess = ret - np.nan_to_num(buyhold, nan=0.0)
+    med_trades = float(np.nanmedian(ntr))
+    if med_trades < OBJ_MIN_MEDIAN_TRADES:
+        return -1e9
+
+    k = max(1, int(np.ceil(0.10 * len(excess))))
+    worst_10_excess = float(np.nanmean(np.sort(excess)[:k]))
+    med_sharpe = float(np.nanmedian(sharpe))
+    med_excess = float(np.nanmedian(excess))
+    mean_excess = float(np.nanmean(excess))
+    med_mdd = float(abs(np.nanmedian(mdd)))
+    upper_mdd = float(abs(np.nanquantile(mdd, 0.75))) if len(mdd) > 1 else med_mdd
+    beat_bh_ratio = float(np.nanmean(ret > buyhold))
+    profitable_ratio = float(np.nanmean(ret > 0))
+    med_pf = float(np.nanmedian(np.nan_to_num(profit_factor, nan=0.0, posinf=5.0)))
+
+    win_part = float(np.clip((np.nanmean(win) - 0.52) / 0.10, -1.0, 1.0))
+    avg_trade_part = float(np.clip(np.nanmean(avg_trade) * 55.0, -1.0, 1.0))
+    calmar_like = float(np.clip(med_excess / max(med_mdd, 0.05), -2.0, 2.0))
+    pf_part = float(np.clip((med_pf - 1.05) / 0.80, -1.0, 1.5))
+    bh_part = float(np.clip((beat_bh_ratio - 0.50) / 0.30, -1.0, 1.0))
+    profitable_part = float(np.clip((profitable_ratio - 0.50) / 0.30, -1.0, 1.0))
+
+    trade_low_pen = max(0.0, 12.0 - med_trades)
+    trade_high_pen = max(0.0, med_trades - 60.0)
+    mdd_pen = float(np.nanmean(np.maximum(0.0, np.abs(mdd) - OBJ_MAX_MEDIAN_DD)))
+    tail_dd_pen = max(0.0, upper_mdd - max(OBJ_MAX_MEDIAN_DD, 0.16))
+
+    fitness = (
+        0.24 * med_excess
+        + 0.14 * mean_excess
+        + 0.14 * med_sharpe
+        + 0.10 * worst_10_excess
+        + 0.10 * calmar_like
+        + 0.10 * pf_part
+        + 0.08 * win_part
+        + 0.05 * avg_trade_part
+        + 0.08 * bh_part
+        + 0.05 * profitable_part
+        - 1.20 * mdd_pen
+        - 0.55 * tail_dd_pen
+        - 0.12 * trade_low_pen
+        - 0.05 * trade_high_pen
+    )
+    return float(fitness)
+
+def evaluate_global_walkforward(
+    genome: List[float],
+    payloads_by_window: List[Tuple[Dict[str, Dict[str, np.ndarray]], Dict[str, Dict[str, np.ndarray]]]],
+) -> Tuple[float, float, float]:
+    # Returns (fitness, fitness_train, fitness_oos)
+    train_scores = []
+    oos_scores = []
+
+    gp = decode_global_params(genome)
     for tr_payloads, te_payloads in payloads_by_window:
-        if tr_payloads and te_payloads:
-            # Evaluate on train
-            tr_stats = []
-            gp = decode_global_params(genome)
-            for _, payload in tr_payloads.items():
-                st = backtest_stats_global_intraday(
-                    payload["open"], payload["high"], payload["low"], payload["close"],
-                    payload["score_matrix"], payload["atr"], gp, precomputed=payload,
-                )
-                tr_stats.append(st)
-            
-            # Evaluate on test
-            te_stats = []
-            for _, payload in te_payloads.items():
-                st = backtest_stats_global_intraday(
-                    payload["open"], payload["high"], payload["low"], payload["close"],
-                    payload["score_matrix"], payload["atr"], gp, precomputed=payload,
-                )
-                te_stats.append(st)
-                
-            # Compute metrics
-            active_tr = [s for s in tr_stats if s.get("n_trades", 0) > 0]
-            active_te = [s for s in te_stats if s.get("n_trades", 0) > 0]
-            
-            tr_sharpe = np.median([s.get("sharpe", 0.0) for s in active_tr]) if active_tr else 0.0
-            te_sharpe = np.median([s.get("sharpe", 0.0) for s in active_te]) if active_te else 0.0
-            
-            # Filtros de robustez no treino
-            mdds = [s.get("mdd", 0.0) for s in active_tr]
-            penalty = 0.0
-            if mdds and min(mdds) < -0.50:
-                penalty += abs(min(mdds) + 0.50) * 5.0
-                
-            # Filtros de robustez na validacao
-            te_win_rate = np.mean([s.get("win_rate", 0.0) for s in active_te]) if active_te else 0.0
-            te_avg_trade = np.mean([s.get("avg_trade", 0.0) for s in active_te]) if active_te else 0.0
-            te_trades = sum([s.get("n_trades", 0.0) for s in te_stats])
-            
-            if te_win_rate <= 0.45:
-                penalty += (0.45 - te_win_rate) * 5.0
-            if te_avg_trade <= 0.002:
-                penalty += (0.002 - te_avg_trade) * 500.0
-            if te_trades < 30:
-                penalty += (30 - te_trades) * 0.05
-                
-            train_sharpes.append(tr_sharpe)
-            val_sharpes.append(te_sharpe - penalty)
-            
-    if not val_sharpes:
-        return -1e9, 0.0, 0.0
-        
-    mean_tr_sharpe = float(np.mean(train_sharpes))
-    mean_te_sharpe = float(np.mean(val_sharpes))
-    
-    # Fitness = sharpe_oos - alpha * abs(sharpe_train - sharpe_oos)
-    alpha = 0.5
-    fitness = mean_te_sharpe - alpha * abs(mean_tr_sharpe - mean_te_sharpe)
-    
-    return fitness, mean_tr_sharpe, mean_te_sharpe
+        if not tr_payloads or not te_payloads:
+            continue
 
+        tr_stats = []
+        for payload in tr_payloads.values():
+            st = backtest_stats_global_intraday(
+                payload["open"], payload["high"], payload["low"], payload["close"],
+                payload["score_matrix"], payload["atr"], gp, precomputed=payload,
+            )
+            tr_stats.append(st)
+
+        te_stats = []
+        for payload in te_payloads.values():
+            st = backtest_stats_global_intraday(
+                payload["open"], payload["high"], payload["low"], payload["close"],
+                payload["score_matrix"], payload["atr"], gp, precomputed=payload,
+            )
+            te_stats.append(st)
+
+        tr_fit = global_fitness_from_stats(tr_stats)
+        te_fit = global_fitness_from_stats(te_stats)
+        train_scores.append(tr_fit)
+        oos_scores.append(te_fit)
+
+    if len(oos_scores) == 0:
+        return -1e9, -1e9, -1e9
+
+    mean_train = float(np.mean(train_scores))
+    mean_oos = float(np.mean(oos_scores))
+    median_oos = float(np.median(oos_scores))
+    lower_oos = float(np.quantile(oos_scores, 0.25)) if len(oos_scores) > 1 else mean_oos
+    stability_penalty = float(np.std(oos_scores)) if len(oos_scores) > 1 else 0.0
+
+    # Focus on OOS quality, consistency and small train-test gaps.
+    fitness = (
+        0.55 * mean_oos
+        + 0.25 * median_oos
+        + 0.20 * lower_oos
+        - 0.30 * abs(mean_train - mean_oos)
+        - 0.22 * stability_penalty
+    )
+    return float(fitness), float(mean_train), float(mean_oos)
 # Global variable for multiprocessing to avoid pickling issues
 _GLOBAL_PAYLOADS_BY_WINDOW = None
 
@@ -721,7 +887,14 @@ def _eval_ind_global(ind):
     res = evaluate_global_walkforward(list(ind), _GLOBAL_PAYLOADS_BY_WINDOW)
     return res
 
-def run_global_ga_20params(full_df: pd.DataFrame, feature_cols: List[str], windows: List[Tuple[pd.Timestamp, pd.Timestamp, pd.Timestamp, pd.Timestamp]], pop_size: int = 100, ngen: int = 40, ga_max_windows: int = 4):
+def run_global_ga_20params(
+    ticker_payloads: Dict[str, Dict[str, Any]],
+    windows: List[Tuple[pd.Timestamp, pd.Timestamp, pd.Timestamp, pd.Timestamp]],
+    pop_size: int = 100,
+    ngen: int = 40,
+    ga_max_windows: int = 4,
+    seed_genomes: Optional[List[List[float]]] = None,
+):
     if not hasattr(creator, "Individual_Global20"):
         creator.create("Individual_Global20", list, fitness=creator.FitnessMax_PT)
 
@@ -729,8 +902,9 @@ def run_global_ga_20params(full_df: pd.DataFrame, feature_cols: List[str], windo
     windows_ga = windows[-int(ga_max_windows):] if (ga_max_windows is not None and int(ga_max_windows) > 0) else windows
     
     global _GLOBAL_PAYLOADS_BY_WINDOW
-    _GLOBAL_PAYLOADS_BY_WINDOW = precompute_global_payloads(windows_ga, full_df, feature_cols)
-    print(f"[GLOBAL_GA] config pop={int(pop_size)} ngen={int(ngen)} windows_total={len(windows)} windows_ga={len(windows_ga)} feats={len(feature_cols)}")
+    _GLOBAL_PAYLOADS_BY_WINDOW = precompute_global_payloads(windows_ga, ticker_payloads)
+    feat_union = len({c for payload in ticker_payloads.values() for c in payload.get("feat_cols", [])})
+    print(f"[GLOBAL_GA] config pop={int(pop_size)} ngen={int(ngen)} windows_total={len(windows)} windows_ga={len(windows_ga)} tickers={len(ticker_payloads)} feats_union={feat_union}")
 
     toolbox = base.Toolbox()
     for i, (_, lo, hi, _, _) in enumerate(GLOBAL_PARAM_SPECS):
@@ -752,7 +926,7 @@ def run_global_ga_20params(full_df: pd.DataFrame, feature_cols: List[str], windo
     
     import multiprocessing
     
-    # Cache de avaliações
+    # Cache de avaliaÃ§Ãµes
     eval_cache = {}
     
     def eval_ind_with_cache(ind):
@@ -764,12 +938,42 @@ def run_global_ga_20params(full_df: pd.DataFrame, feature_cols: List[str], windo
     toolbox.register("evaluate", eval_ind_with_cache)
 
     pop = toolbox.population(n=pop_size)
+
+    if seed_genomes:
+        seeded = []
+        max_seed = max(1, int(pop_size // 3))
+        for g in seed_genomes:
+            try:
+                gs = sanitize_global_genome(list(g))
+            except Exception:
+                continue
+            seeded.append(gs)
+            if len(seeded) >= max_seed:
+                break
+
+        expanded = []
+        for gs in seeded:
+            expanded.append(gs)
+            jitter = list(gs)
+            for j, (_, lo, hi, _, _) in enumerate(GLOBAL_PARAM_SPECS):
+                span = float(hi - lo)
+                jitter[j] = float(np.clip(float(jitter[j]) + random.gauss(0.0, 0.03 * span), lo, hi))
+            expanded.append(sanitize_global_genome(jitter))
+
+        for idx_seed, gs in enumerate(expanded[:len(pop)]):
+            pop[idx_seed][:] = gs
     hof = tools.HallOfFame(5) # Top 5
     best_fit_seen = -1e18
     gens_without_improvement = 0
     diversity = 100.0
     
-    pool = multiprocessing.Pool(processes=max(2, multiprocessing.cpu_count() - 1))
+    pool = None
+    use_pool = True
+    try:
+        pool = multiprocessing.Pool(processes=max(2, multiprocessing.cpu_count() - 1))
+    except Exception as e:
+        use_pool = False
+        print(f"[WARN] multiprocessing disabled ({e}); using sequential evaluation.")
     
     for gen in range(1, int(ngen) + 1):
         gen_t0 = time.perf_counter()
@@ -777,7 +981,7 @@ def run_global_ga_20params(full_df: pd.DataFrame, feature_cols: List[str], windo
         
         # Paralelizar com multiprocessing
         if invalid:
-            results = pool.map(_eval_ind_global, invalid)
+            results = (pool.map(_eval_ind_global, invalid) if use_pool else list(map(_eval_ind_global, invalid)))
             for ind, res in zip(invalid, results):
                 ind.fitness.values = (res[0],)
                 ind.sharpe_train = res[1]
@@ -806,7 +1010,7 @@ def run_global_ga_20params(full_df: pd.DataFrame, feature_cols: List[str], windo
 
         invalid_off = [ind for ind in offspring if not hasattr(ind, 'fitness') or not ind.fitness.valid]
         if invalid_off:
-            results = pool.map(_eval_ind_global, invalid_off)
+            results = (pool.map(_eval_ind_global, invalid_off) if use_pool else list(map(_eval_ind_global, invalid_off)))
             for ind, res in zip(invalid_off, results):
                 ind.fitness.values = (res[0],)
                 ind.sharpe_train = res[1]
@@ -852,8 +1056,9 @@ def run_global_ga_20params(full_df: pd.DataFrame, feature_cols: List[str], windo
             print(f"[GA] Early stopping at generation {gen} (no improvement in 10 gens)")
             break
             
-    pool.close()
-    pool.join()
+    if pool is not None:
+        pool.close()
+        pool.join()
     
     print("\n[GA] Top 5 cromossomos:")
     for i, ind in enumerate(hof):
@@ -1028,25 +1233,64 @@ def add_technical_features(df: pd.DataFrame) -> pd.DataFrame:
         lambda x: x - x.shift(5)
     )
 
+    prev_close = grouped[CLOSE_COL].shift(1)
+    range_den = (df[HIGH_COL] - df[LOW_COL]).replace(0, np.nan)
+    df['gap_open_pct'] = (df[OPEN_COL] / prev_close.replace(0, np.nan)) - 1.0
+    df['intraday_range_pct'] = (df[HIGH_COL] - df[LOW_COL]) / df[CLOSE_COL].replace(0, np.nan)
+    df['close_to_high'] = (df[CLOSE_COL] - df[LOW_COL]) / range_den
+    df['close_to_low'] = (df[HIGH_COL] - df[CLOSE_COL]) / range_den
+
     # Volatilidade relativa (ATR / Close)
     df['vol_rel_atr'] = df['atr'] / df[CLOSE_COL].replace(0, np.nan)
 
-    # Distância da média longa (Close vs SMA200)
+    # DistÃ¢ncia da mÃ©dia longa (Close vs SMA200)
     if 'sma200' in df.columns:
         df['dist_sma200'] = (df[CLOSE_COL] - df['sma200']) / df['sma200'].replace(0, np.nan)
     else:
         df['dist_sma200'] = np.nan
 
-    # Padrão de volume (volume / média de 20 dias)
+    # PadrÃ£o de volume (volume / mÃ©dia de 20 dias)
     df['volume_pattern_20'] = df['rel_volume']
 
-    # Regime de mercado proxy (inclinação da SMA200)
+    # Regime de mercado proxy (inclinaÃ§Ã£o da SMA200)
     if 'sma200_slope' in df.columns:
         df['regime_sma200_slope'] = df['sma200_slope']
         df['regime_bull'] = (df['sma200_slope'] > 0).astype(float)
     else:
         df['regime_sma200_slope'] = np.nan
         df['regime_bull'] = np.nan
+
+    if 'volume' in df.columns:
+        df['dollar_volume'] = pd.to_numeric(df['volume'], errors='coerce') * df[CLOSE_COL]
+        df['dollar_volume_20'] = grouped['dollar_volume'].transform(
+            lambda x: x.rolling(20, min_periods=1).mean()
+        )
+        df['dollar_volume_rel'] = df['dollar_volume'] / df['dollar_volume_20'].replace(0, np.nan)
+    else:
+        df['dollar_volume'] = np.nan
+        df['dollar_volume_20'] = np.nan
+        df['dollar_volume_rel'] = np.nan
+
+    if 'risk_return' in df.columns:
+        rr_clip = pd.to_numeric(df['risk_return'], errors='coerce').fillna(0.0).clip(lower=0.0)
+        df['rr_log_score'] = np.log1p(rr_clip) / np.log1p(50.0)
+    else:
+        df['rr_log_score'] = np.nan
+
+    if 'buy_trust' in df.columns and 'sell_trust' in df.columns:
+        buy_trust = pd.to_numeric(df['buy_trust'], errors='coerce').fillna(0.0).clip(0.0, 1.0)
+        sell_trust = pd.to_numeric(df['sell_trust'], errors='coerce').fillna(0.0).clip(0.0, 1.0)
+        df['trust_spread'] = buy_trust - sell_trust
+    else:
+        buy_trust = pd.Series(0.0, index=df.index)
+        sell_trust = pd.Series(0.0, index=df.index)
+        df['trust_spread'] = np.nan
+
+    ev_series = pd.to_numeric(df.get('EV_buy_fund_3', df.get('EV_buy', 0.0)), errors='coerce').fillna(0.0).clip(-1.0, 1.0)
+    rr_log = pd.to_numeric(df['rr_log_score'], errors='coerce').fillna(0.0).clip(0.0, 1.0)
+    df['ev_rr_combo'] = ev_series * rr_log
+    df['buy_setup_quality'] = ev_series.clip(lower=0.0) * rr_log * buy_trust
+    df['sell_setup_quality'] = (-ev_series).clip(lower=0.0) * (1.0 - rr_log) * sell_trust
 
     return df
 
@@ -1061,7 +1305,7 @@ def regime_ok(sig: int, price: float, sma200: float, sma_slope: float, ml_score:
         if (price < sma200) and (not strong_buy) and (not decent_signal):
             return False
 
-    # MA rule: relaxed — decent signals can override MA filter
+    # MA rule: relaxed â€” decent signals can override MA filter
     if sig > 0:
         if REQUIRE_MA_FOR_ENTRY:
             if (sma200 is None) or (not np.isfinite(sma200)):
@@ -1079,7 +1323,7 @@ def regime_ok(sig: int, price: float, sma200: float, sma_slope: float, ml_score:
         else:
             ok_ma = True
 
-    # slope rule: relaxed — decent signals bypass slope filter
+    # slope rule: relaxed â€” decent signals bypass slope filter
     if USE_MA_SLOPE_FILTER:
         if (sma_slope is None) or (not np.isfinite(sma_slope)):
             ok_sl = decent_signal
@@ -1148,26 +1392,113 @@ def score_0_100_from_ev(
     recent_scores_ev: np.ndarray,
     quality: float,
 ) -> float:
-    if (not np.isfinite(score_ev)):
+    if not np.isfinite(score_ev):
         return 50.0
+
     recent = recent_scores_ev[np.isfinite(recent_scores_ev)] if recent_scores_ev is not None else np.array([], dtype=np.float64)
     if len(recent) == 0:
-        pct_rank = 0.5
+        scale = max(abs(float(score_ev)), 1e-6)
     else:
-        pct_rank = float(np.mean(recent <= score_ev))
-    
-    # Usar percentil rank direto (0-100)
-    score = pct_rank * 100.0
+        scale = float(np.nanpercentile(np.abs(recent), 90))
+        scale = max(scale, 1e-6)
+
+    signed_strength = float(np.tanh(float(score_ev) / scale))
+    amp = 0.55 + 0.45 * float(np.clip(quality, 0.0, 1.0))
+    score = 50.0 + 50.0 * amp * signed_strength
     return float(np.clip(score, 0.0, 100.0))
 
-def compute_quality_factor(test_sharpe: float, test_return: float, trades_1y: float) -> float:
+
+def compute_quality_factor(
+    test_sharpe: float,
+    test_return: float,
+    trades_1y: float,
+    win_rate: float = np.nan,
+    excess_vs_buyhold: float = np.nan,
+) -> float:
     q_sh = _sigmoid((float(test_sharpe) - 0.10) / 0.30) if np.isfinite(test_sharpe) else 0.5
     q_ret = _sigmoid(float(test_return) / 0.15) if np.isfinite(test_return) else 0.5
-    q_tr = _sigmoid((float(trades_1y) - 8.0) / 4.0) if np.isfinite(trades_1y) else 0.3
-    return float(0.50 * q_sh + 0.30 * q_ret + 0.20 * q_tr)
+    q_tr = _sigmoid((float(trades_1y) - 10.0) / 5.0) if np.isfinite(trades_1y) else 0.35
+    q_wr = _sigmoid((float(win_rate) - 0.52) / 0.06) if np.isfinite(win_rate) else 0.5
+    q_ex = _sigmoid(float(excess_vs_buyhold) / 0.08) if np.isfinite(excess_vs_buyhold) else 0.5
+    return float(np.clip(0.30 * q_sh + 0.22 * q_ret + 0.18 * q_tr + 0.18 * q_wr + 0.12 * q_ex, 0.0, 1.0))
 
 
-def build_direct_feature_signal(frame: pd.DataFrame, feat_cols: List[str]) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+def confidence_0_100_from_context(
+    score_ev: float,
+    recent_scores_ev: np.ndarray,
+    stats: Dict[str, float],
+) -> float:
+    if not np.isfinite(score_ev):
+        return 0.0
+
+    recent = recent_scores_ev[np.isfinite(recent_scores_ev)] if recent_scores_ev is not None else np.array([], dtype=np.float64)
+    if len(recent) == 0:
+        strength = 0.35
+    else:
+        scale = max(float(np.nanpercentile(np.abs(recent), 90)), 1e-6)
+        strength = float(np.clip(abs(float(score_ev)) / scale, 0.0, 1.0))
+
+    win_rate = float(stats.get("win_rate", np.nan))
+    sharpe = float(stats.get("sharpe", np.nan))
+    ret = float(stats.get("total_return", np.nan))
+    bh = float(stats.get("buyhold_return", np.nan))
+    mdd = float(stats.get("mdd", np.nan))
+    n_trades = float(stats.get("n_trades", np.nan))
+
+    q_wr = _sigmoid((win_rate - 0.52) / 0.06) if np.isfinite(win_rate) else 0.5
+    q_sh = _sigmoid((sharpe - 0.10) / 0.35) if np.isfinite(sharpe) else 0.5
+    q_tr = _sigmoid((n_trades - OBJ_MIN_MEDIAN_TRADES) / 6.0) if np.isfinite(n_trades) else 0.35
+    q_ex = _sigmoid(((ret - bh) if (np.isfinite(ret) and np.isfinite(bh)) else 0.0) / 0.08)
+    q_dd = 1.0 - np.clip(abs(mdd) / max(OBJ_MAX_MEDIAN_DD, 1e-6), 0.0, 1.0) if np.isfinite(mdd) else 0.4
+
+    conf = 0.24 * strength + 0.19 * q_wr + 0.18 * q_sh + 0.16 * q_tr + 0.13 * q_ex + 0.10 * q_dd
+    return float(np.clip(conf * 100.0, 0.0, 100.0))
+
+
+def build_context_filters(frame: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
+    idx = frame.index
+    rr = pd.to_numeric(frame.get("risk_return", pd.Series(np.nan, index=idx)), errors="coerce").fillna(0.0).clip(lower=0.0)
+    rr_score = np.log1p(rr) / np.log1p(50.0)
+
+    ev = pd.to_numeric(
+        frame.get("EV_buy_fund_3", frame.get("EV_buy", pd.Series(0.0, index=idx))),
+        errors="coerce",
+    ).fillna(0.0).clip(-1.0, 1.0)
+    buy_trust = pd.to_numeric(frame.get("buy_trust", pd.Series(0.0, index=idx)), errors="coerce").fillna(0.0).clip(0.0, 1.0)
+    sell_trust = pd.to_numeric(frame.get("sell_trust", pd.Series(0.0, index=idx)), errors="coerce").fillna(0.0).clip(0.0, 1.0)
+    err_buy = pd.to_numeric(frame.get("err_buy_pct", pd.Series(0.20, index=idx)), errors="coerce").fillna(0.20).clip(0.0, 1.0)
+    err_sell = pd.to_numeric(frame.get("err_sell_pct", pd.Series(0.20, index=idx)), errors="coerce").fillna(0.20).clip(0.0, 1.0)
+
+    if "sma200" in frame.columns:
+        sma200 = pd.to_numeric(frame["sma200"], errors="coerce")
+        close = pd.to_numeric(frame[CLOSE_COL], errors="coerce")
+        regime = ((close - sma200) / sma200.replace(0.0, np.nan)).clip(-1.0, 1.0).fillna(0.0)
+    else:
+        regime = pd.Series(0.0, index=idx)
+
+    err_cap = 0.20
+    long_ctx = (
+        0.34 * ev.clip(lower=0.0)
+        + 0.22 * buy_trust
+        + 0.18 * rr_score
+        + 0.14 * regime.clip(lower=0.0)
+        + 0.12 * (1.0 - err_buy / err_cap)
+    ).clip(0.0, 1.0)
+    short_ctx = (
+        0.34 * (-ev).clip(lower=0.0)
+        + 0.22 * sell_trust
+        + 0.18 * (1.0 - rr_score)
+        + 0.14 * (-regime).clip(lower=0.0)
+        + 0.12 * (1.0 - err_sell / err_cap)
+    ).clip(0.0, 1.0)
+    return long_ctx.to_numpy(np.float64), short_ctx.to_numpy(np.float64)
+
+
+def build_direct_feature_signal(
+    frame: pd.DataFrame,
+    feat_cols: List[str],
+    feat_strengths: Optional[Dict[str, float]] = None,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Build per-column directed z-scores (no single-feature model)."""
     feat = frame[feat_cols].apply(pd.to_numeric, errors="coerce").copy()
     roll_mean = feat.rolling(SCORE_LOOKBACK, min_periods=60).mean()
@@ -1175,24 +1506,49 @@ def build_direct_feature_signal(frame: pd.DataFrame, feat_cols: List[str]) -> Tu
     z = (feat - roll_mean) / roll_std
     z = z.replace([np.inf, -np.inf], np.nan).clip(-4.0, 4.0)
 
-    bearish_tokens = ("risk", "down", "dd", "sell", "err_buy", "pe", "price_to_book")
+    bearish_tokens = ("risk", "down", "dd", "sell", "err_buy", "pe", "price_to_book", "close_to_low", "volatility")
     signs = []
     for c in feat_cols:
         lc = str(c).lower()
         sign = -1.0 if any(tok in lc for tok in bearish_tokens) else 1.0
         signs.append(sign)
     sign_arr = np.asarray(signs, dtype=np.float64)
+    if feat_strengths:
+        weights_raw = np.array([float(feat_strengths.get(c, 0.0)) for c in feat_cols], dtype=np.float64)
+        wmax = float(np.nanmax(weights_raw)) if len(weights_raw) else 0.0
+        if wmax > 0:
+            weight_arr = 0.35 + 0.65 * (weights_raw / wmax)
+        else:
+            weight_arr = np.ones(len(feat_cols), dtype=np.float64)
+    else:
+        weight_arr = np.ones(len(feat_cols), dtype=np.float64)
 
     z_np = z.to_numpy(np.float64)
     directed = z_np * sign_arr
     valid_counts = np.isfinite(directed).sum(axis=1)
-    long_votes = np.nanmean((directed > 0.35).astype(np.float64), axis=1)
-    short_votes = np.nanmean((directed < -0.35).astype(np.float64), axis=1)
+    weights_2d = weight_arr.reshape(1, -1)
+    valid_weights = np.where(np.isfinite(directed), weights_2d, 0.0)
+    denom = np.maximum(valid_weights.sum(axis=1), ATR_EPS)
+    long_votes = ((directed > 0.35).astype(np.float64) * valid_weights).sum(axis=1) / denom
+    short_votes = ((directed < -0.35).astype(np.float64) * valid_weights).sum(axis=1) / denom
     long_votes = np.where(valid_counts > 0, long_votes, np.nan)
     short_votes = np.where(valid_counts > 0, short_votes, np.nan)
-    return directed.astype(np.float64), long_votes.astype(np.float64), short_votes.astype(np.float64)
+    return directed.astype(np.float64), long_votes.astype(np.float64), short_votes.astype(np.float64), weight_arr.astype(np.float64)
+
+
+def resolve_history_input_path(preferred_path: str) -> str:
+    candidates = []
+    for p in [preferred_path, "./output/history_consolidated.parquet", "./history_consolidated.parquet"]:
+        if p and p not in candidates:
+            candidates.append(p)
+
+    existing = [p for p in candidates if os.path.exists(p)]
+    if not existing:
+        return preferred_path
+    return max(existing, key=lambda p: os.path.getmtime(p))
 
 def load_full_history_all_cols(path: str) -> pd.DataFrame:
+    path = resolve_history_input_path(path)
     if path.endswith('.parquet'):
         df = pd.read_parquet(path)
     else:
@@ -1238,8 +1594,15 @@ def generate_signal_global(payload: Dict[str, Any], gp: GlobalParams, day_index:
         return "hold"
 
     feat_n = max(1, x.shape[1])
-    votes_long = (x > gp.z_threshold).sum(axis=1) / feat_n
-    votes_short = (x < -gp.z_threshold).sum(axis=1) / feat_n
+    weights = np.asarray(payload.get("feature_weights", np.ones(feat_n, dtype=np.float64)), dtype=np.float64).reshape(-1)
+    if len(weights) != feat_n:
+        weights = np.ones(feat_n, dtype=np.float64)
+    weights = np.where(np.isfinite(weights) & (weights > 0), weights, 1.0)
+    weights_2d = weights.reshape(1, -1)
+    valid_weights = np.where(np.isfinite(x), weights_2d, 0.0)
+    denom = np.maximum(valid_weights.sum(axis=1), ATR_EPS)
+    votes_long = ((x > gp.z_threshold).astype(np.float64) * valid_weights).sum(axis=1) / denom
+    votes_short = ((x < -gp.z_threshold).astype(np.float64) * valid_weights).sum(axis=1) / denom
     score_raw = votes_long - votes_short
     score_ev = pd.Series(score_raw).ewm(span=int(gp.signal_ema_span), adjust=False).mean().to_numpy()
 
@@ -1273,6 +1636,8 @@ def generate_signal_global(payload: Dict[str, Any], gp: GlobalParams, day_index:
 
     long_ok = consec_long >= gp.entry_confirmation_days
     short_ok = consec_short >= gp.entry_confirmation_days
+    context_long = np.asarray(payload.get("context_long", np.full(len(c), np.nan)), dtype=np.float64)
+    context_short = np.asarray(payload.get("context_short", np.full(len(c), np.nan)), dtype=np.float64)
 
     if gp.volatility_filter_percentile > 0 and np.isfinite(vol_rank[day_index - 1]) and vol_rank[day_index - 1] < gp.volatility_filter_percentile:
         long_ok = False
@@ -1289,6 +1654,11 @@ def generate_signal_global(payload: Dict[str, Any], gp: GlobalParams, day_index:
         if c[day_index - 1] > ma[day_index - 1]:
             short_ok = False
 
+    if long_ok and np.isfinite(context_long[day_index - 1]):
+        long_ok = bool(context_long[day_index - 1] >= CONTEXT_GATE_LONG_MIN)
+    if short_ok and np.isfinite(context_short[day_index - 1]):
+        short_ok = bool(context_short[day_index - 1] >= CONTEXT_GATE_SHORT_MIN)
+
     if long_ok:
         return "buy"
     if (not LONG_ONLY) and short_ok:
@@ -1299,35 +1669,255 @@ def generate_signal_global(payload: Dict[str, Any], gp: GlobalParams, day_index:
 # ==============================================================================
 # 4) MAIN
 # ==============================================================================
-def run():
+def resolve_runtime_profile(runtime_mode: str, n_tickers: int, attempt: int = 1) -> Dict[str, Any]:
+    mode = str(runtime_mode or "").strip().lower()
+    if mode not in {"quick", "full"}:
+        mode = "full"
+
+    if mode == "quick":
+        attempt = max(1, int(attempt))
+        return {
+            "mode": "quick",
+            "max_tickers": int(max(10, min(QUICK_MAX_TICKERS, n_tickers))),
+            "ga_pop": int(QUICK_GA_POP + (attempt - 1) * QUICK_RETRY_POP_STEP),
+            "ga_ngen": int(QUICK_GA_NGEN + (attempt - 1) * QUICK_RETRY_NGEN_STEP),
+            "ga_max_windows": int(max(QUICK_GA_MAX_WINDOWS, QUICK_GA_MAX_WINDOWS + max(0, attempt - 1))),
+        }
+
+    return {
+        "mode": "full",
+        "max_tickers": int(max(1, n_tickers)),
+        "ga_pop": int(FULL_GA_POP),
+        "ga_ngen": int(FULL_GA_NGEN),
+        "ga_max_windows": int(FULL_GA_MAX_WINDOWS),
+    }
+
+
+def select_dynamic_feature_subset(feat_correlations: List[Tuple[str, float]]) -> List[str]:
+    ranked = [c for c, v in feat_correlations if np.isfinite(v) and float(v) >= FEATURE_SIGNIFICANCE_MIN]
+    if len(ranked) < MIN_FEATURES_PER_TICKER:
+        ranked = [c for c, _ in feat_correlations]
+
+    if len(ranked) == 0:
+        return []
+
+    cap = min(int(FEATURE_MAX_CAP), len(ranked))
+    target = max(int(FEATURE_MIN_CAP), int(math.ceil(len(ranked) * FEATURE_KEEP_FRACTION)))
+    target = min(target, cap)
+
+    if isinstance(MAX_FEATURES, (int, float)) and (MAX_FEATURES is not None) and int(MAX_FEATURES) > 0:
+        target = min(target, int(MAX_FEATURES))
+
+    target = max(MIN_FEATURES_PER_TICKER, target)
+    return ranked[:target]
+
+
+def genome_to_param_values(genome: List[float]) -> Dict[str, float]:
+    gg = sanitize_global_genome(list(genome))
+    return {spec[0]: gg[i] for i, spec in enumerate(GLOBAL_PARAM_SPECS)}
+
+
+def align_checkpoint_genome(record: Dict[str, Any]) -> Optional[List[float]]:
+    if not isinstance(record, dict):
+        return None
+
+    param_values = record.get("param_values", None)
+    if not isinstance(param_values, dict):
+        param_values = {}
+        param_names = record.get("param_names", None)
+        genome = record.get("genome", None)
+        if isinstance(param_names, list) and isinstance(genome, list):
+            for name, value in zip(param_names, genome):
+                param_values[str(name)] = value
+
+    genome_curr = []
+    raw_genome = record.get("genome", None)
+    for idx, spec in enumerate(GLOBAL_PARAM_SPECS):
+        name, lo, hi, _, _ = spec
+        if name in param_values:
+            value = param_values[name]
+        elif isinstance(raw_genome, list) and idx < len(raw_genome):
+            value = raw_genome[idx]
+        else:
+            value = 0.5 * (lo + hi)
+        genome_curr.append(value)
+
+    try:
+        return sanitize_global_genome(genome_curr)
+    except Exception:
+        return None
+
+
+def extract_seed_genomes_from_checkpoint(ck: Dict[str, Any], limit: int = 8) -> List[List[float]]:
+    seeds = []
+
+    g0 = align_checkpoint_genome(ck)
+    if isinstance(g0, list):
+        seeds.append(g0)
+
+    history = ck.get("history", [])
+    if isinstance(history, list):
+        hist_sorted = sorted(
+            [h for h in history if isinstance(h, dict)],
+            key=lambda x: float(x.get("fitness", -1e9)),
+            reverse=True,
+        )
+        for h in hist_sorted:
+            g = align_checkpoint_genome(h)
+            if isinstance(g, list):
+                seeds.append(g)
+                if len(seeds) >= limit:
+                    break
+
+    dedup = []
+    seen = set()
+    for g in seeds:
+        key = tuple(round(float(v), 8) for v in g)
+        if key in seen:
+            continue
+        seen.add(key)
+        dedup.append(list(g))
+    return dedup
+
+
+def build_checkpoint_payload(
+    prev_ck: Dict[str, Any],
+    genome: List[float],
+    fitness: float,
+    runtime_mode: str,
+    feature_cols: List[str],
+) -> Dict[str, Any]:
+    now = pd.Timestamp.utcnow().isoformat()
+    record = {
+        "timestamp": now,
+        "runtime_mode": str(runtime_mode),
+        "fitness": float(fitness),
+        "genome": list(genome),
+        "param_names": [spec[0] for spec in GLOBAL_PARAM_SPECS],
+        "param_values": genome_to_param_values(genome),
+        "feature_count": int(len(feature_cols)),
+    }
+
+    history_prev = prev_ck.get("history", []) if isinstance(prev_ck, dict) else []
+    history = [h for h in history_prev if isinstance(h, dict)] + [record]
+    history = sorted(history, key=lambda x: float(x.get("fitness", -1e9)), reverse=True)[:30]
+
+    best_fit = float(fitness)
+    best_genome = list(genome)
+    prev_fit = float(prev_ck.get("fitness", np.nan)) if isinstance(prev_ck, dict) else float("nan")
+    prev_genome = align_checkpoint_genome(prev_ck) if isinstance(prev_ck, dict) else None
+    if np.isfinite(prev_fit) and isinstance(prev_genome, list) and len(prev_genome) == len(genome):
+        if prev_fit > best_fit:
+            best_fit = prev_fit
+            best_genome = list(prev_genome)
+
+    return {
+        "updated_at": now,
+        "fitness": float(best_fit),
+        "genome": list(best_genome),
+        "param_names": [spec[0] for spec in GLOBAL_PARAM_SPECS],
+        "param_values": genome_to_param_values(best_genome),
+        "history": history,
+    }
+
+
+def validate_objectives(summary_df: pd.DataFrame, apply_df: pd.DataFrame, mode_label: str) -> Dict[str, Any]:
+    if summary_df.empty:
+        return {
+            "mode": mode_label,
+            "pass": False,
+            "reason": "summary_empty",
+        }
+
+    win_rate_mean = float(summary_df["test_win_rate"].mean())
+    beat_bh_ratio = float((summary_df["test_return"] > summary_df["buy_hold_return"]).mean())
+    median_mdd = float(summary_df["test_mdd"].median())
+    median_trades = float(summary_df["test_trades"].median())
+
+    stop_ok = True
+    max_stop = float("nan")
+    if (not apply_df.empty) and ("stop_pct" in apply_df.columns):
+        max_stop = float(np.nanmax(apply_df["stop_pct"].values.astype(float)))
+        stop_ok = bool(max_stop <= (MAX_STOP_LOSS_PCT + 1e-9))
+
+    checks = {
+        "high_win_rate": bool(win_rate_mean >= OBJ_MIN_WIN_RATE),
+        "beat_buy_hold": bool(beat_bh_ratio >= OBJ_MIN_BEAT_BH_RATIO),
+        "controlled_drawdown": bool(abs(median_mdd) <= OBJ_MAX_MEDIAN_DD),
+        "trade_volume_balance": bool((median_trades >= OBJ_MIN_MEDIAN_TRADES) and (median_trades <= OBJ_MAX_MEDIAN_TRADES)),
+        "stop_loss_cap_15pct": bool(stop_ok),
+    }
+
+    report = {
+        "mode": mode_label,
+        "pass": bool(all(checks.values())),
+        "metrics": {
+            "win_rate_mean": win_rate_mean,
+            "beat_buy_hold_ratio": beat_bh_ratio,
+            "median_mdd": median_mdd,
+            "median_trades": median_trades,
+            "max_stop_pct": max_stop,
+        },
+        "checks": checks,
+    }
+
+    print(f"\n[VALIDATION:{mode_label}] pass={report['pass']}")
+    print(
+        f"  win_rate_mean={win_rate_mean:.3f} | beat_bh_ratio={beat_bh_ratio:.3f} | "
+        f"median_mdd={median_mdd:.3f} | median_trades={median_trades:.1f} | max_stop_pct={max_stop:.3f}"
+    )
+    for k, v in checks.items():
+        print(f"  - {k}: {'OK' if v else 'FAIL'}")
+
+    return report
+
+
+def run(runtime_mode: str = "full", attempt: int = 1):
     print("=== GA + Walk-Forward ML (OOS) + Intraday Backtest (v2) ===")
     random.seed(RANDOM_SEED)
     np.random.seed(RANDOM_SEED)
 
-    df = load_full_history_all_cols(HISTORY_CSV_PATH)
+    history_path = resolve_history_input_path(HISTORY_CSV_PATH)
+    print(f"[INPUT] history source: {history_path}")
+    df = load_full_history_all_cols(history_path)
     exclude = {DATE_COL, TICKER_COL, OPEN_COL, HIGH_COL, LOW_COL, CLOSE_COL, "sma200", "sma200_slope", "atr"}
-    num_cols = [c for c in df.columns if c not in exclude and pd.api.types.is_numeric_dtype(df[c])]
-    base_feat_cols = num_cols[:MAX_FEATURES]
+    num_cols = sorted([c for c in df.columns if c not in exclude and pd.api.types.is_numeric_dtype(df[c])])
+    if len(num_cols) == 0:
+        raise RuntimeError("Nenhuma feature num?rica dispon?vel para o GA.")
 
-    tickers = df[TICKER_COL].dropna().unique().tolist()
-    total_tickers = len(tickers)
+    tickers_all = df[TICKER_COL].dropna().astype(str).unique().tolist()
+
     if EVAL_ONLY_TICKER:
         t_req = str(EVAL_ONLY_TICKER).strip().upper()
-        tickers = [t for t in tickers if str(t).upper() in {t_req, f"{t_req}.SA"}]
+        tickers_all = [t for t in tickers_all if str(t).upper() in {t_req, f"{t_req}.SA"}]
     elif TEST_ONLY_PREFIX_C_TICKERS:
-        tickers = [t for t in tickers if str(t).startswith(TEST_TICKER_PREFIX)]
+        tickers_all = [t for t in tickers_all if str(t).startswith(TEST_TICKER_PREFIX)]
 
-    print(f"[FEATS] numeric candidates: {len(base_feat_cols)} (using up to {MAX_FEATURES})")
-    print(f"[DATA] {len(df)} rows, {len(tickers)} tickers (out of {total_tickers})")
+    profile = resolve_runtime_profile(runtime_mode, len(tickers_all), attempt=attempt)
+    tickers = tickers_all[: profile["max_tickers"]]
+    mode = profile["mode"]
+
+    print(f"[MODE] {mode} | attempt={attempt} | tickers={len(tickers)}/{len(tickers_all)} | pop={profile['ga_pop']} ngen={profile['ga_ngen']}")
+    print(f"[INPUT] numeric features available for GA: {len(num_cols)}")
 
     out_global_ckpt = os.path.join(OUTPUT_DIR, "global_ga_checkpoint.json")
-    out_xlsx = os.path.join(OUTPUT_DIR, f"summary_latest.xlsx")
-    out_apply_csv = os.path.join(OUTPUT_DIR, f"apply_last_{APPLY_DAYS}d__H{FWD_H}.csv")
+    out_xlsx = os.path.join(OUTPUT_DIR, f"summary_latest__{mode}.xlsx")
+    out_apply_csv = os.path.join(OUTPUT_DIR, f"apply_last_{APPLY_DAYS}d__H{FWD_H}__{mode}.csv")
+    out_val_json = os.path.join(OUTPUT_DIR, f"ga_validation__{mode}.json")
+    out_feat_csv = os.path.join(OUTPUT_DIR, f"ga_input_feature_audit__{mode}.csv")
+    out_feat_usage_csv = os.path.join(OUTPUT_DIR, f"ga_feature_usage__{mode}.csv")
 
-    # FASE 1: Preparar payloads
+    feat_audit = pd.DataFrame({
+        "feature": num_cols,
+        "nonnull_frac": [float(df[c].notna().mean()) for c in num_cols],
+        "std": [float(pd.to_numeric(df[c], errors="coerce").std(skipna=True)) for c in num_cols],
+    }).sort_values(["nonnull_frac", "std"], ascending=[False, False])
+    feat_audit.to_csv(out_feat_csv, index=False, encoding="utf-8")
+
     prep_t0 = time.perf_counter()
     ticker_payloads: Dict[str, Dict[str, Any]] = {}
     reasons: Dict[str, int] = {}
+    feat_usage_rows: List[Dict[str, Any]] = []
 
     for ix_tkr, tkr in enumerate(tickers, 1):
         g = df[df[TICKER_COL] == tkr].copy()
@@ -1347,29 +1937,31 @@ def run():
         y_event_temp[~np.isfinite(ret_fwd_temp)] = np.nan
         y_event_temp[~np.isfinite(thr_temp)] = np.nan
 
-        feat_correlations: List[tuple] = []
-        for ccol in base_feat_cols:
+        feat_correlations: List[Tuple[str, float]] = []
+        for ccol in num_cols:
             s_col = pd.to_numeric(g[ccol], errors="coerce")
             if float(s_col.notna().mean()) < MIN_FEAT_NONNA_FRAC:
                 continue
             if float(s_col.std(skipna=True)) <= MIN_FEAT_STD:
                 continue
+            valid_idx_temp = np.isfinite(s_col.to_numpy()) & np.isfinite(y_event_temp)
+            if int(valid_idx_temp.sum()) <= MIN_VALID_SAMPLES_FOR_CORRELATION:
+                continue
             try:
-                valid_idx_temp = np.isfinite(s_col.to_numpy()) & np.isfinite(y_event_temp)
-                if valid_idx_temp.sum() > MIN_VALID_SAMPLES_FOR_CORRELATION:
-                    corr, _ = spearmanr(s_col.to_numpy()[valid_idx_temp], y_event_temp[valid_idx_temp])
-                    if np.isfinite(corr):
-                        feat_correlations.append((ccol, abs(corr)))
+                corr, _ = spearmanr(s_col.to_numpy()[valid_idx_temp], y_event_temp[valid_idx_temp])
             except ValueError:
-                pass
+                continue
+            if np.isfinite(corr):
+                feat_correlations.append((ccol, abs(float(corr))))
 
         feat_correlations.sort(key=lambda x: x[1], reverse=True)
-        feat_cols = [col for col, _ in feat_correlations[:MAX_FEATURES]]
-        if len(feat_cols) < 5:
+        feat_cols = select_dynamic_feature_subset(feat_correlations)
+        if len(feat_cols) < MIN_FEATURES_PER_TICKER:
             reasons["few_feats"] = reasons.get("few_feats", 0) + 1
             continue
 
-        directed_cols, long_votes, short_votes = build_direct_feature_signal(g, feat_cols)
+        feat_strength_map = {name: float(score) for name, score in feat_correlations}
+        directed_cols, long_votes, short_votes, feature_weights = build_direct_feature_signal(g, feat_cols, feat_strength_map)
         dates = pd.to_datetime(g[DATE_COL], errors="coerce").to_numpy()
         o = g[OPEN_COL].to_numpy(np.float64)
         h = g[HIGH_COL].to_numpy(np.float64)
@@ -1377,45 +1969,74 @@ def run():
         c = g[CLOSE_COL].to_numpy(np.float64)
         atr = g["atr"].to_numpy(np.float64)
         ma = g["sma200"].to_numpy(np.float64)
+        context_long, context_short = build_context_filters(g)
 
         valid_cols = np.isfinite(directed_cols).any(axis=1)
         valid_mask = np.isfinite(o) & np.isfinite(h) & np.isfinite(l) & np.isfinite(c) & np.isfinite(atr) & valid_cols
-        if valid_mask.sum() < ML_MIN_TRAIN:
+        if int(valid_mask.sum()) < ML_MIN_TRAIN:
             reasons["few_valid"] = reasons.get("few_valid", 0) + 1
             continue
 
+        feat_usage_rows.append({
+            "ticker": str(tkr),
+            "feature_count": int(len(feat_cols)),
+            "features": ",".join(feat_cols),
+        })
+
         ticker_payloads[str(tkr)] = {
-            "open": o, "high": h, "low": l, "close": c, "atr": atr,
-            "score_matrix": directed_cols, "dates": dates, "ma": ma,
-            "feat_cols": feat_cols, "valid_mask": valid_mask,
-            "long_votes": long_votes, "short_votes": short_votes,
+            "open": o,
+            "high": h,
+            "low": l,
+            "close": c,
+            "atr": atr,
+            "score_matrix": directed_cols,
+            "dates": dates,
+            "ma": ma,
+            "feat_cols": feat_cols,
+            "feature_weights": feature_weights,
+            "valid_mask": valid_mask,
+            "long_votes": long_votes,
+            "short_votes": short_votes,
+            "context_long": context_long,
+            "context_short": context_short,
         }
+
         if (ix_tkr % max(1, PRINT_EVERY)) == 0 or ix_tkr == len(tickers):
             dt = time.perf_counter() - prep_t0
             print(f"[PHASE1] prep {ix_tkr}/{len(tickers)} | payloads={len(ticker_payloads)} | elapsed={dt:.1f}s")
 
+    pd.DataFrame(feat_usage_rows).to_csv(out_feat_usage_csv, index=False, encoding="utf-8")
     prep_dt = time.perf_counter() - prep_t0
-    print(f"[PHASE1] done payloads={len(ticker_payloads)} in {prep_dt:.1f}s")
+    print(f"[PHASE1] done payloads={len(ticker_payloads)} in {prep_dt:.1f}s | skip_reasons={reasons}")
 
     if not ticker_payloads:
         print("Nenhum ticker preparado.")
-        return
+        return {"mode": mode, "pass": False, "reason": "no_payloads"}
 
-    # FASE 2: GA global (uma vez) com checkpoint
-    run_mode = str(RUN_MODE).strip().lower()
+    run_mode = str(os.getenv("GA_RUN_MODE", RUN_MODE)).strip().lower()
     global_params = None
     global_genome = None
     global_fit = float("nan")
-    if run_mode == "load" and os.path.exists(out_global_ckpt):
+    ck_prev: Dict[str, Any] = {}
+
+    if os.path.exists(out_global_ckpt):
         try:
-            ck = json.load(open(out_global_ckpt, "r", encoding="utf-8"))
-            global_genome = ck.get("genome", None)
-            if global_genome is not None:
-                global_params = decode_global_params(global_genome)
-                global_fit = float(ck.get("fitness", np.nan))
-                print(f"[GLOBAL_GA] loaded from checkpoint fit={global_fit:.4f}")
+            with open(out_global_ckpt, "r", encoding="utf-8") as f:
+                ck_prev = json.load(f)
         except Exception as e:
-            print(f"[WARN] global checkpoint load failed: {e}")
+            print(f"[WARN] checkpoint read failed: {e}")
+            ck_prev = {}
+
+    seed_genomes = extract_seed_genomes_from_checkpoint(ck_prev)
+
+    if run_mode == "load" and isinstance(ck_prev.get("genome", None), list):
+        try:
+            global_genome = align_checkpoint_genome(ck_prev)
+            global_params = decode_global_params(global_genome)
+            global_fit = float(ck_prev.get("fitness", np.nan))
+            print(f"[GLOBAL_GA] loaded from checkpoint fit={global_fit:.4f}")
+        except Exception as e:
+            print(f"[WARN] checkpoint decode failed: {e}")
 
     if global_params is None:
         dmin = pd.to_datetime(df[DATE_COL].min())
@@ -1423,23 +2044,32 @@ def run():
         windows = build_temporal_windows(dmin, dmax, train_years=3, test_months=6, step_months=6)
         if not windows:
             windows = [(dmin, dmax - pd.Timedelta(days=180), dmax - pd.Timedelta(days=179), dmax)]
-        print(f"[GLOBAL_GA] start (windows={len(windows)}, tickers={len(ticker_payloads)})")
+
+        ga_max_windows = profile["ga_max_windows"]
+        ga_max_windows = None if ga_max_windows == 0 else ga_max_windows
+
+        print(f"[GLOBAL_GA] start (windows={len(windows)}, tickers={len(ticker_payloads)}, seeds={len(seed_genomes)})")
         global_params, global_genome, global_fit = run_global_ga_20params(
-            full_df=df,
-            feature_cols=base_feat_cols,
+            ticker_payloads=ticker_payloads,
             windows=windows,
-            pop_size=40,
-            ngen=20,
-            ga_max_windows=2
+            pop_size=int(profile["ga_pop"]),
+            ngen=int(profile["ga_ngen"]),
+            ga_max_windows=ga_max_windows,
+            seed_genomes=seed_genomes,
         )
+
+        ck_payload = build_checkpoint_payload(ck_prev, list(global_genome), float(global_fit), mode, num_cols)
         try:
             with open(out_global_ckpt, "w", encoding="utf-8") as f:
-                json.dump({"fitness": float(global_fit), "genome": list(global_genome)}, f, ensure_ascii=False, indent=2)
+                json.dump(ck_payload, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            print(f"[WARN] global checkpoint save failed: {e}")
+            print(f"[WARN] checkpoint save failed: {e}")
+
+        global_fit = float(ck_payload.get("fitness", global_fit))
+        global_genome = sanitize_global_genome(list(ck_payload.get("genome", global_genome)))
+        global_params = decode_global_params(global_genome)
         print(f"[GLOBAL_GA] done fit={global_fit:.4f}")
 
-    # FASE 3: apply rápido sem GA por ticker
     results_summary: List[Dict[str, Any]] = []
     results_apply: List[Dict[str, Any]] = []
 
@@ -1450,122 +2080,196 @@ def run():
         if n < 252:
             continue
 
-        # Backtest full history with global params
         st = backtest_stats_global_intraday(
             payload["open"], payload["high"], payload["low"], payload["close"],
-            payload["score_matrix"], payload["atr"], global_params, precomputed=payload
+            payload["score_matrix"], payload["atr"], global_params, precomputed=payload,
         )
 
-        # Generate apply signals for last APPLY_DAYS
+        x = np.asarray(payload["score_matrix"], dtype=np.float64)
+        feat_n = max(1, x.shape[1])
+        votes_long = (x > global_params.z_threshold).sum(axis=1) / feat_n
+        votes_short = (x < -global_params.z_threshold).sum(axis=1) / feat_n
+        score_raw = votes_long - votes_short
+        score_ev = pd.Series(score_raw).ewm(span=int(global_params.signal_ema_span), adjust=False).mean().to_numpy()
+
+        trades_1y = float(st.get("n_trades", 0.0)) / max(n / 252.0, 1.0)
+        quality = compute_quality_factor(
+            float(st.get("sharpe", np.nan)),
+            float(st.get("total_return", np.nan)),
+            trades_1y,
+            float(st.get("win_rate", np.nan)),
+            float(st.get("total_return", np.nan) - st.get("buyhold_return", np.nan)),
+        )
+
         for i in range(max(0, n - APPLY_DAYS), n):
             sig = generate_signal_global(payload, global_params, i)
-            
-            # Calculate score_ev for the day
-            x = np.asarray(payload["score_matrix"], dtype=np.float64)
-            feat_n = max(1, x.shape[1])
-            votes_long = (x > global_params.z_threshold).sum(axis=1) / feat_n
-            votes_short = (x < -global_params.z_threshold).sum(axis=1) / feat_n
-            score_raw = votes_long - votes_short
-            score_ev = pd.Series(score_raw).ewm(span=int(global_params.signal_ema_span), adjust=False).mean().to_numpy()
-            
-            # Calculate quality factor
-            quality = compute_quality_factor(st["sharpe"], st["total_return"], st["n_trades"] / (n / 252))
-            
-            # Calculate 0-100 score
             lookback = max(63, SCORE_LOOKBACK)
             recent_scores = score_ev[max(0, i - lookback + 1):i + 1]
-            score_100 = score_0_100_from_ev(score_ev[i], recent_scores, quality)
+            ev_i = float(score_ev[i]) if np.isfinite(score_ev[i]) else np.nan
 
-            # Calculate next day entry levels
-            atr_val = payload["atr"][i]
-            close_val = c[i]
-            
-            # Calculate strength
+            score_100 = score_0_100_from_ev(ev_i, recent_scores, quality)
+            confidence_100 = confidence_0_100_from_context(ev_i, recent_scores, st)
+
+            atr_val = float(payload["atr"][i]) if np.isfinite(payload["atr"][i]) else np.nan
+            close_val = float(c[i]) if np.isfinite(c[i]) else np.nan
+
             score95 = np.nanpercentile(np.abs(score_ev), 95) if np.isfinite(np.nanmax(np.abs(score_ev))) else 1.0
             score95 = max(score95, ATR_EPS)
-            strength = float(np.clip(abs(score_ev[i]) / score95, 0.0, 1.0))
-            
+            strength = float(np.clip(abs(ev_i) / score95, 0.0, 1.0)) if np.isfinite(ev_i) else 0.0
             discount = global_params.entry_discount_atr_frac * (1.0 - global_params.score_strength_scaling * strength)
-            
-            best_buy = close_val - discount * atr_val
-            best_sell = close_val + discount * atr_val
-            
-            # Check if filled next day
+
+            best_buy = close_val - discount * atr_val if (np.isfinite(close_val) and np.isfinite(atr_val)) else np.nan
+            best_sell = close_val + discount * atr_val if (np.isfinite(close_val) and np.isfinite(atr_val)) else np.nan
+
+            stop_pct = np.nan
+            if np.isfinite(close_val) and close_val > 0 and np.isfinite(atr_val):
+                raw_stop_pct = float(global_params.stop_atr_mult) * float(atr_val) / float(close_val)
+                stop_pct = float(min(MAX_STOP_LOSS_PCT, max(0.0, raw_stop_pct)))
+
             next_day_filled = False
             entry_ref_price = np.nan
             if i + 1 < n:
-                next_o = payload["open"][i+1]
-                next_h = payload["high"][i+1]
-                next_l = payload["low"][i+1]
-                
-                if sig == "buy":
-                    limit_px = next_o - discount * payload["atr"][i+1]
-                    next_day_filled = (next_l <= limit_px <= next_h)
-                    entry_ref_price = limit_px if next_day_filled else next_o
-                elif sig == "sell":
-                    limit_px = next_o + discount * payload["atr"][i+1]
-                    next_day_filled = (next_l <= limit_px <= next_h)
-                    entry_ref_price = limit_px if next_day_filled else next_o
-            
+                next_o = float(payload["open"][i + 1])
+                next_h = float(payload["high"][i + 1])
+                next_l = float(payload["low"][i + 1])
+                next_atr = float(payload["atr"][i + 1]) if np.isfinite(payload["atr"][i + 1]) else np.nan
+
+                if sig == "buy" and np.isfinite(next_atr):
+                    limit_px = next_o - discount * next_atr
+                    next_day_filled = bool(next_l <= limit_px <= next_h)
+                    entry_ref_price = float(limit_px if next_day_filled else next_o)
+                elif sig == "sell" and np.isfinite(next_atr):
+                    limit_px = next_o + discount * next_atr
+                    next_day_filled = bool(next_l <= limit_px <= next_h)
+                    entry_ref_price = float(limit_px if next_day_filled else next_o)
+
             results_apply.append({
                 "Date": pd.to_datetime(dates[i]).strftime("%Y-%m-%d"),
                 "ticker": tkr,
                 "close": close_val,
                 "signal_eod": sig,
-                "score_100": score_100,
+                "signal": sig,
+                "score_0_100": float(score_100),
+                "confidence_0_100": float(confidence_100),
+                "score_ev": ev_i,
                 "best_buy_value": best_buy if sig == "buy" else np.nan,
                 "best_sell_value": best_sell if sig == "sell" else np.nan,
-                "next_day_filled": next_day_filled,
-                "entry_ref_price": entry_ref_price
+                "next_day_filled": bool(next_day_filled),
+                "entry_ref_price": entry_ref_price,
+                "stop_pct": float(stop_pct) if np.isfinite(stop_pct) else np.nan,
+                "ga_stop_loss_cap_pct": float(MAX_STOP_LOSS_PCT),
+                "ga_return": float(st.get("total_return", np.nan)),
+                "ga_mdd": float(st.get("mdd", np.nan)),
+                "ga_trades": float(st.get("n_trades", np.nan)),
+                "buy_hold_return": float(st.get("buyhold_return", np.nan)),
             })
+
+        latest_i = n - 1
+        latest_recent = score_ev[max(0, latest_i - max(63, SCORE_LOOKBACK) + 1): latest_i + 1]
+        latest_ev = float(score_ev[latest_i]) if np.isfinite(score_ev[latest_i]) else np.nan
+        latest_score = score_0_100_from_ev(latest_ev, latest_recent, quality)
+        latest_conf = confidence_0_100_from_context(latest_ev, latest_recent, st)
 
         results_summary.append({
             "ticker": tkr,
-            "test_return": st["total_return"],
-            "test_mdd": st["mdd"],
-            "test_sharpe": st["sharpe"],
-            "test_trades": st["n_trades"],
-            "test_win_rate": st["win_rate"],
-            "test_avg_trade": st["avg_trade"],
-            "buy_hold_return": buyhold_capped(c),
+            "feat_count_used": int(len(payload["feat_cols"])),
+            "feat_cols_used": ",".join(payload["feat_cols"]),
+            "test_return": float(st.get("total_return", np.nan)),
+            "test_mdd": float(st.get("mdd", np.nan)),
+            "test_sharpe": float(st.get("sharpe", np.nan)),
+            "test_trades": float(st.get("n_trades", np.nan)),
+            "test_win_rate": float(st.get("win_rate", np.nan)),
+            "test_avg_trade": float(st.get("avg_trade", np.nan)),
+            "buy_hold_return": float(st.get("buyhold_return", np.nan)),
+            "ga_fitness": float(global_fit),
+            "score_0_100": float(latest_score),
+            "confidence_0_100": float(latest_conf),
+            "latest_date": pd.to_datetime(dates[latest_i]).strftime("%Y-%m-%d"),
+            "latest_close": float(c[latest_i]),
+            "signal": generate_signal_global(payload, global_params, latest_i),
         })
 
     df_sum = pd.DataFrame(results_summary)
     df_app = pd.DataFrame(results_apply)
 
-    if not df_sum.empty:
-        df_sum = df_sum.sort_values("test_sharpe", ascending=False)
-        
-        # Resumo Pós-Phase3
-        pct_ret_pos = (df_sum["test_return"] > 0).mean() * 100
-        pct_sharpe_pos = (df_sum["test_sharpe"] > 0).mean() * 100
-        mean_ret = df_sum["test_return"].mean()
-        med_ret = df_sum["test_return"].median()
-        mean_bh = df_sum["buy_hold_return"].mean()
-        
-        print("\n=== RESUMO PÓS-PHASE3 ===")
-        print(f"% tickers com test_return > 0: {pct_ret_pos:.1f}%")
-        print(f"% tickers com test_sharpe > 0: {pct_sharpe_pos:.1f}%")
-        print(f"Média test_return: {mean_ret:.4f} | Mediana: {med_ret:.4f}")
-        print(f"Comparação: média test_return ({mean_ret:.4f}) vs média buy_hold ({mean_bh:.4f})")
+    if df_sum.empty:
+        print("Nenhum ticker gerou resultado.")
+        return {"mode": mode, "pass": False, "reason": "no_results"}
 
-        try:
-            with pd.ExcelWriter(out_xlsx, engine="xlsxwriter") as writer:
-                df_sum.to_excel(writer, sheet_name="Summary", index=False)
-                if not df_app.empty:
-                    df_app.to_excel(writer, sheet_name="Apply", index=False)
-        except Exception as e:
-            print(f"[WARN] xlsxwriter failed, trying openpyxl: {e}")
-            with pd.ExcelWriter(out_xlsx, engine="openpyxl") as writer:
-                df_sum.to_excel(writer, sheet_name="Summary", index=False)
-                if not df_app.empty:
-                    df_app.to_excel(writer, sheet_name="Apply", index=False)
-
+    df_sum = df_sum.sort_values(["score_0_100", "confidence_0_100", "ga_fitness"], ascending=[False, False, False])
     if not df_app.empty:
-        df_app.to_csv(out_apply_csv, index=False)
+        df_app = df_app.sort_values(["ticker", "Date"], ascending=[True, False])
 
-    print(f"Saved: {out_xlsx} | {out_apply_csv}")
+    try:
+        with pd.ExcelWriter(out_xlsx, engine="xlsxwriter") as writer:
+            df_sum.to_excel(writer, sheet_name="Summary", index=False)
+            if not df_app.empty:
+                df_app.to_excel(writer, sheet_name="Apply", index=False)
+    except Exception as e:
+        print(f"[WARN] xlsxwriter failed, trying openpyxl: {e}")
+        with pd.ExcelWriter(out_xlsx, engine="openpyxl") as writer:
+            df_sum.to_excel(writer, sheet_name="Summary", index=False)
+            if not df_app.empty:
+                df_app.to_excel(writer, sheet_name="Apply", index=False)
+
+    df_app.to_csv(out_apply_csv, index=False, encoding="utf-8")
+
+    report = validate_objectives(df_sum, df_app, mode)
+    with open(out_val_json, "w", encoding="utf-8") as f:
+        json.dump(report, f, ensure_ascii=False, indent=2)
+
+    if mode == "full":
+        compat_xlsx = os.path.join(OUTPUT_DIR, "summary_latest.xlsx")
+        compat_csv = os.path.join(OUTPUT_DIR, f"apply_last_{APPLY_DAYS}d__H{FWD_H}.csv")
+        try:
+            df_sum.to_excel(compat_xlsx, index=False)
+            df_app.to_csv(compat_csv, index=False, encoding="utf-8")
+        except Exception:
+            pass
+
+    print(f"Saved: {out_xlsx} | {out_apply_csv} | {out_val_json}")
+    return report
+
+
+def run_quick_until_pass(max_attempts: int = QUICK_MAX_ATTEMPTS) -> List[Dict[str, Any]]:
+    reports: List[Dict[str, Any]] = []
+    for attempt in range(1, max(1, int(max_attempts)) + 1):
+        report = run("quick", attempt=attempt)
+        reports.append(report)
+        if bool(report.get("pass", False)):
+            print(f"[QUICK] objectives reached on attempt {attempt}.")
+            break
+        print(f"[QUICK] objectives not reached on attempt {attempt}; retrying from latest checkpoint.")
+    return reports
 
 
 if __name__ == "__main__":
-    run()
+    requested_mode = os.getenv("GA_RUNTIME_MODE", RUNTIME_MODE_DEFAULT).strip().lower()
+    reports = []
+    if requested_mode in {"quick_then_full", "both"}:
+        quick_reports = run_quick_until_pass(int(os.getenv("GA_QUICK_MAX_ATTEMPTS", QUICK_MAX_ATTEMPTS)))
+        reports.extend(quick_reports)
+        reports.append(run("full", attempt=1))
+    elif requested_mode == "quick":
+        reports.extend(run_quick_until_pass(int(os.getenv("GA_QUICK_MAX_ATTEMPTS", QUICK_MAX_ATTEMPTS))))
+    else:
+        reports.append(run(requested_mode, attempt=1))
+
+    if len(reports) > 1:
+        print("\n=== VALIDATION SUMMARY ===")
+        for rep in reports:
+            print(f"  {rep.get('mode')}: pass={rep.get('pass')}")
+
+
+
+
+
+
+
+
+
+
+
+
+
+

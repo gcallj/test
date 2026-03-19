@@ -50,6 +50,7 @@ def run_etl():
     SAVE_PARQUET = True
     SAVE_CSV_FALLBACK = False
     OUTPUT_PATH = "./output/data/expanded_stock.parquet"
+    SKIP_MI_REDUCTION = True   # skip slow MI-based feature reduction; GA does its own Spearman selection
 
     # ============================
     # Listas de tickers
@@ -127,6 +128,12 @@ def run_etl():
         # BDR / ETF internacional
         "XPBR31.SA",
 
+        # Construção civil (adicionados)
+        "TCSA3.SA",
+
+        # ETF internacional (adicionado)
+        "IVVB11.SA",
+
     ]
 
     # FIIs Brasil (mix: logística, shoppings, lajes, papel, FoF)
@@ -140,7 +147,7 @@ def run_etl():
         # Híbridos / renda urbana
         "ALZR11.SA", "TRXF11.SA", "RBRP11.SA",
         # Papel / crédito
-        "KNCR11.SA", "KNSC11.SA", "KNHY11.SA", "CPTS11.SA", "IRDM11.SA",
+        "KNCR11.SA", "KNSC11.SA", "KNHY11.SA", "CPTS11.SA", "IRDM11.SA", "IRIM11.SA",
         # FoF
         "BCFF11.SA", "HFOF11.SA", "KFOF11.SA", "RBRF11.SA",
         # Saúde / biotech
@@ -328,7 +335,7 @@ def run_etl():
     if dropped_after_valid_prices[:20]:
         print("  ex:", dropped_after_valid_prices[:20])
 
-    print(f"Período: {data.index.min().date()} → {data.index.max().date()}")
+    print(f"Período: {data.index.min().date()} -> {data.index.max().date()}")
     print(f"Tickers com dados (válidos): {len(tickers)}")
 
 
@@ -556,6 +563,29 @@ def run_etl():
                     feats[crossname] = cross
 
         feats['pct_change'] = ohlcv_num[close_col].pct_change()
+
+        # ── Phase 3.3: Microstructure features ──
+        _close = ohlcv_num[close_col]
+        _volume = ohlcv_num['Volume']
+        _high = ohlcv_num['High']
+        _low = ohlcv_num['Low']
+        _open = ohlcv_num['Open']
+
+        # Volume relative (volume / 20-day avg)
+        vol_avg_20 = _volume.rolling(20, min_periods=5).mean()
+        feats['vol_relative_20d'] = _volume / vol_avg_20.replace(0, np.nan)
+
+        # Amihud illiquidity ratio: |return| / dollar_volume (rolling 20d avg)
+        abs_ret = _close.pct_change().abs()
+        dollar_vol = (_close * _volume).replace(0, np.nan)
+        amihud_raw = abs_ret / dollar_vol
+        feats['amihud_illiquidity_20d'] = amihud_raw.rolling(20, min_periods=5).mean()
+
+        # Garman-Klass volatility (uses OHLC, better than close-to-close)
+        log_hl = np.log(_high / _low.replace(0, np.nan)) ** 2
+        log_co = np.log(_close / _open.replace(0, np.nan)) ** 2
+        gk_daily = 0.5 * log_hl - (2 * np.log(2) - 1) * log_co
+        feats['gk_volatility_20d'] = gk_daily.rolling(20, min_periods=5).mean().apply(np.sqrt)
 
         if shift_features > 0:
             feats = feats.shift(shift_features)
@@ -838,7 +868,7 @@ def run_etl():
 
         if verbose:
             after_cnt = X_red.shape[1]
-            print(f"[Feature reduction] columns: {before_cnt} → {after_cnt} ({100.0*after_cnt/before_cnt:.1f}% kept)")
+            print(f"[Feature reduction] columns: {before_cnt} -> {after_cnt} ({100.0*after_cnt/before_cnt:.1f}% kept)")
         return X_red
     import re
 
@@ -1064,8 +1094,8 @@ def run_etl():
         return out
 
 
-    MIN_TARGET_RATE = 0.01  # pelo menos 1% de positivos
-    MAX_TARGET_RATE = 0.98  # no máximo 98% de positivos
+    MIN_TARGET_RATE = 0.005  # pelo menos 0.5% de positivos (relaxed for FIIs/crypto)
+    MAX_TARGET_RATE = 0.995  # no máximo 99.5% de positivos (relaxed for FIIs/crypto)
 
     skip_reasons = Counter()
     valid_tickers = []
@@ -1098,12 +1128,15 @@ def run_etl():
             rate_up = float(y_up20.mean()) if len(y_up20) else 0.0
             rate_dd = float(y_dd5.mean()) if len(y_dd5) else 0.0
 
-            if not (MIN_TARGET_RATE <= rate_up <= MAX_TARGET_RATE):
-                skip_reasons[f"degenerate_up20_{tk}"] += 1
-                continue
-            if not (MIN_TARGET_RATE <= rate_dd <= MAX_TARGET_RATE):
-                skip_reasons[f"degenerate_dd5_{tk}"] += 1
-                continue
+            # FIIs (ending in 11.SA) are low-volatility: skip degeneracy for them
+            is_fii = tk.endswith("11.SA")
+            if not is_fii:
+                if not (MIN_TARGET_RATE <= rate_up <= MAX_TARGET_RATE):
+                    skip_reasons[f"degenerate_up20_{tk}"] += 1
+                    continue
+                if not (MIN_TARGET_RATE <= rate_dd <= MAX_TARGET_RATE):
+                    skip_reasons[f"degenerate_dd5_{tk}"] += 1
+                    continue
 
             valid_tickers.append(tk)
 
@@ -1133,6 +1166,77 @@ def run_etl():
     skip_reasons = Counter()
 
 
+
+    # ============================
+    # Pre-compute market reference data for cross-ticker features
+    # ============================
+    _ibov_sym = None
+    for _try_sym in ['^BVSP', '^BVSP.SA']:
+        try:
+            _ibov_ohlcv = data.xs(_try_sym, level=1, axis=1)
+            if 'Close' in _ibov_ohlcv.columns and _ibov_ohlcv['Close'].notna().sum() > 100:
+                _ibov_sym = _try_sym
+                break
+        except (KeyError, ValueError):
+            continue
+    if _ibov_sym:
+        _ibov_ret = data.xs(_ibov_sym, level=1, axis=1)['Close'].pct_change()
+        print(f"[cross-features] IBOV reference: {_ibov_sym} ({_ibov_ret.notna().sum()} returns)")
+    else:
+        _ibov_ret = None
+        print("[cross-features] WARNING: IBOV not found, skipping beta/relative-strength")
+
+    _vix_data = None
+    for _try_vix in ['^VIX', '^VIX.SA']:
+        try:
+            _vix_ohlcv = data.xs(_try_vix, level=1, axis=1)
+            if 'Close' in _vix_ohlcv.columns and _vix_ohlcv['Close'].notna().sum() > 100:
+                _vix_data = _vix_ohlcv['Close']
+                break
+        except (KeyError, ValueError):
+            continue
+    if _vix_data is not None:
+        _vix_pctl_252 = _vix_data.rolling(252, min_periods=60).rank(pct=True)
+        print(f"[cross-features] VIX reference: {_vix_data.notna().sum()} values")
+    else:
+        _vix_pctl_252 = None
+        print("[cross-features] WARNING: VIX not found, skipping VIX percentile")
+
+    def compute_cross_ticker_features(tk, ohlcv, ibov_ret, vix_pctl, shift_features=1):
+        """Compute cross-ticker features: rolling beta, relative strength, VIX percentile."""
+        close_col = 'Adj Close' if 'Adj Close' in ohlcv.columns else 'Close'
+        tk_ret = ohlcv[close_col].pct_change()
+        cross_feats = pd.DataFrame(index=ohlcv.index)
+
+        # Rolling beta with IBOV (60-day)
+        if ibov_ret is not None:
+            aligned = pd.DataFrame({'tk': tk_ret, 'ibov': ibov_ret}).dropna()
+            if len(aligned) > 60:
+                cov_roll = aligned['tk'].rolling(60, min_periods=30).cov(aligned['ibov'])
+                var_roll = aligned['ibov'].rolling(60, min_periods=30).var()
+                beta_raw = cov_roll / var_roll.replace(0, np.nan)
+                cross_feats['beta_ibov_60d'] = beta_raw.reindex(ohlcv.index)
+
+            # Relative strength vs IBOV: ticker return 20d / ibov return 20d
+            tk_ret20 = ohlcv[close_col].pct_change(20)
+            ibov_ret20 = ibov_ret.rolling(20).sum()  # approx 20d return
+            ibov_ret20_aligned = ibov_ret20.reindex(ohlcv.index)
+            cross_feats['rel_strength_ibov_20d'] = tk_ret20 - ibov_ret20_aligned
+
+            # Correlation rolling 60d with IBOV
+            if len(aligned) > 60:
+                corr_roll = aligned['tk'].rolling(60, min_periods=30).corr(aligned['ibov'])
+                cross_feats['corr_ibov_60d'] = corr_roll.reindex(ohlcv.index)
+
+        # VIX percentile (252d)
+        if vix_pctl is not None:
+            cross_feats['vix_percentile_252d'] = vix_pctl.reindex(ohlcv.index)
+
+        if shift_features > 0:
+            cross_feats = cross_feats.shift(shift_features)
+
+        cross_feats = to_float32_safe(cross_feats)
+        return cross_feats
 
     # ============================
     # Construção por ticker
@@ -1175,8 +1279,9 @@ def run_etl():
                 continue
 
             fund = fundamentals_daily_for_ticker(tk, ohlcv.index, shift_features=SHIFT_FEATURES)
+            cross = compute_cross_ticker_features(tk, ohlcv, _ibov_ret, _vix_pctl_252, shift_features=SHIFT_FEATURES)
 
-            X_tk = pd.concat([feats, pats, fund], axis=1)
+            X_tk = pd.concat([feats, pats, fund, cross], axis=1)
             X_tk = fill_100pct(X_tk, allow_bfill=ALLOW_BFILL_EXOGENOUS)
             if X_tk.shape[1] == 0:
                 skip_reasons['empty_after_fill'] += 1
@@ -1262,19 +1367,23 @@ def run_etl():
     # ============================
     # Feature reduction (per ticker, MI vs targets)
     # ============================
-    # y_up and y_dd views (ensure they exist)
-    y_up = y.loc[:, y.columns.get_level_values(0) == 'target_up20']
-    y_dd = y.loc[:, y.columns.get_level_values(0) == 'target_dd5']
+    if SKIP_MI_REDUCTION:
+        print("[ETL] SKIP_MI_REDUCTION=True -> using full feature set as 'reduced' (GA does Spearman selection)")
+        X_reduced = X.copy()
+    else:
+        # y_up and y_dd views (ensure they exist)
+        y_up = y.loc[:, y.columns.get_level_values(0) == 'target_up20']
+        y_dd = y.loc[:, y.columns.get_level_values(0) == 'target_dd5']
 
-    X_reduced = reduce_features_automatic(
-        X, y_up, y_dd,
-        top_fraction=0.85,   # pega ~85% por MI antes de deduplicar
-        min_keep=96,         # garanta pelo menos ~100 por ticker (se existirem)
-        var_thr=None,        # não remova por variância agora
-        corr_thr=0.9995,     # só remove quase idênticos
-        always_keep_prefixes=("pct_change","SMA_","tri_","sr_","Close","Adj Close","close"),  # Close obrigatório para reg
-        verbose=True
-    )
+        X_reduced = reduce_features_automatic(
+            X, y_up, y_dd,
+            top_fraction=0.85,   # pega ~85% por MI antes de deduplicar
+            min_keep=96,         # garanta pelo menos ~100 por ticker (se existirem)
+            var_thr=None,        # nao remova por variancia agora
+            corr_thr=0.9995,     # so remove quase identicos
+            always_keep_prefixes=("pct_change","SMA_","tri_","sr_","Close","Adj Close","close"),  # Close obrigatorio para reg
+            verbose=True
+        )
 
 
 
