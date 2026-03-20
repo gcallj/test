@@ -39,7 +39,7 @@ def run_etl():
     SHIFT_FEATURES = 1
 
     # Médias móveis a usar (manteremos TODOS cruzamentos slow > fast)
-    AVERAGES = [1, 2, 5, 10, 15, 20, 25, 50, 100]
+    AVERAGES = [1, 2, 5, 10, 15, 20, 25, 50, 100, 150, 200]
 
     # Horizonte para cálculo de alvos
     HORIZON = 90
@@ -587,11 +587,82 @@ def run_etl():
         gk_daily = 0.5 * log_hl - (2 * np.log(2) - 1) * log_co
         feats['gk_volatility_20d'] = gk_daily.rolling(20, min_periods=5).mean().apply(np.sqrt)
 
+        # ── Minervini Trend Template (SEPA) criteria ──────────────────────
+        # All 7 criteria from Mark Minervini's momentum strategy
+        sma50  = feats.get('SMA_50',  _close.rolling(50, min_periods=30).mean())
+        sma150 = feats.get('SMA_150', _close.rolling(150, min_periods=100).mean())
+        sma200 = feats.get('SMA_200', _close.rolling(200, min_periods=130).mean())
+
+        # 52-week (252 trading days) high and low
+        high_52w = _high.rolling(252, min_periods=126).max()
+        low_52w  = _low.rolling(252, min_periods=126).min()
+
+        # 1. Price > SMA150 AND Price > SMA200
+        feats['miner_price_above_150_200'] = ((_close > sma150) & (_close > sma200)).astype('int8')
+
+        # 2. SMA150 > SMA200
+        feats['miner_sma150_above_200'] = (sma150 > sma200).astype('int8')
+
+        # 3. SMA200 trending up for at least 1 month (20 trading days)
+        sma200_1m_ago = sma200.shift(20)
+        feats['miner_sma200_trending_up'] = (sma200 > sma200_1m_ago).astype('int8')
+        # Stronger version: trending up for 4-5 months (~100 trading days)
+        sma200_5m_ago = sma200.shift(100)
+        feats['miner_sma200_trend_5m'] = (sma200 > sma200_5m_ago).astype('int8')
+
+        # 4. SMA50 > SMA150 AND SMA50 > SMA200
+        feats['miner_sma50_above_150_200'] = ((sma50 > sma150) & (sma50 > sma200)).astype('int8')
+
+        # 5. Price > SMA50
+        feats['miner_price_above_50'] = (_close > sma50).astype('int8')
+
+        # 6. Price >= 30% above 52-week low
+        pct_above_low = (_close - low_52w) / low_52w.replace(0, np.nan)
+        feats['miner_pct_above_52w_low'] = to_float32_safe(pct_above_low)
+        feats['miner_30pct_above_low'] = (pct_above_low >= 0.30).astype('int8')
+
+        # 7. Price within 25% of 52-week high (closer to high = better)
+        pct_from_high = (high_52w - _close) / high_52w.replace(0, np.nan)
+        feats['miner_pct_from_52w_high'] = to_float32_safe(pct_from_high)
+        feats['miner_within_25pct_high'] = (pct_from_high <= 0.25).astype('int8')
+
+        # COMPOSITE: All 7 Minervini criteria pass = 1 (strong trend template)
+        feats['miner_trend_template'] = (
+            feats['miner_price_above_150_200'] &
+            feats['miner_sma150_above_200'] &
+            feats['miner_sma200_trending_up'] &
+            feats['miner_sma50_above_150_200'] &
+            feats['miner_price_above_50'] &
+            feats['miner_30pct_above_low'] &
+            feats['miner_within_25pct_high']
+        ).astype('int8')
+
+        # Count of how many criteria pass (0-7, useful as continuous signal)
+        feats['miner_criteria_count'] = (
+            feats['miner_price_above_150_200'] +
+            feats['miner_sma150_above_200'] +
+            feats['miner_sma200_trending_up'] +
+            feats['miner_sma50_above_150_200'] +
+            feats['miner_price_above_50'] +
+            feats['miner_30pct_above_low'] +
+            feats['miner_within_25pct_high']
+        ).astype('int8')
+
+        # Additional useful derived features
+        # Distance from 52w high (0 = at high, negative = below)
+        feats['dist_52w_high_pct'] = to_float32_safe((_close - high_52w) / high_52w.replace(0, np.nan))
+        # Distance from 52w low (0 = at low, positive = above)
+        feats['dist_52w_low_pct'] = to_float32_safe(pct_above_low)
+        # SMA slope indicators
+        feats['sma50_slope_20d'] = to_float32_safe((sma50 - sma50.shift(20)) / sma50.shift(20).replace(0, np.nan))
+        feats['sma150_slope_20d'] = to_float32_safe((sma150 - sma150.shift(20)) / sma150.shift(20).replace(0, np.nan))
+        feats['sma200_slope_20d'] = to_float32_safe((sma200 - sma200.shift(20)) / sma200.shift(20).replace(0, np.nan))
+
         if shift_features > 0:
             feats = feats.shift(shift_features)
 
         # >>> FIX: garantir que colunas discretas não tenham NaN antes do astype(int8)
-        int_cols = [c for c in feats.columns if str(c).startswith("cross_")]
+        int_cols = [c for c in feats.columns if str(c).startswith("cross_") or str(c).startswith("miner_")]
         feats[int_cols] = feats[int_cols].fillna(0).astype('int8')
 
         # floats podem ficar com NaN (você já zera depois no fill_100pct), mas pode manter assim:
@@ -620,9 +691,86 @@ def run_etl():
         patt_cols = [c for c in P.columns if c.endswith('pattern')]
         P[patt_cols] = P[patt_cols].fillna(0).astype('int8')  # <<< FIX
 
-        other_cols = [c for c in P.columns if c not in patt_cols]
+        # ── Rolling pattern aggregations: daily(5d), weekly(5d), monthly(20d) ──
+        # For each pattern column, create:
+        #   _bull_5d  = count of bullish signals (==1) in last 5 days
+        #   _bear_5d  = count of bearish signals (==-1) in last 5 days
+        #   _net_5d   = bull - bear in last 5 days (positive = bullish bias)
+        #   _bull_20d = count of bullish in last 20 days (~monthly)
+        #   _bear_20d = count of bearish in last 20 days
+        #   _net_20d  = bull - bear in last 20 days
+        #   _any_bull_5d = 1 if any bullish in last 5d, 0 otherwise
+        #   _any_bear_5d = 1 if any bearish in last 5d, 0 otherwise
+        for pcol in patt_cols:
+            s = P[pcol]
+            bull = (s == 1).astype('int8')
+            bear = (s == -1).astype('int8')
+
+            # Daily / Weekly window (5 trading days)
+            P[pcol + '_bull_5d'] = bull.rolling(5, min_periods=1).sum().astype('int8')
+            P[pcol + '_bear_5d'] = bear.rolling(5, min_periods=1).sum().astype('int8')
+            P[pcol + '_net_5d']  = (P[pcol + '_bull_5d'] - P[pcol + '_bear_5d']).astype('int8')
+            P[pcol + '_any_bull_5d'] = (P[pcol + '_bull_5d'] > 0).astype('int8')
+            P[pcol + '_any_bear_5d'] = (P[pcol + '_bear_5d'] > 0).astype('int8')
+
+            # Monthly window (20 trading days)
+            P[pcol + '_bull_20d'] = bull.rolling(20, min_periods=1).sum().astype('int8')
+            P[pcol + '_bear_20d'] = bear.rolling(20, min_periods=1).sum().astype('int8')
+            P[pcol + '_net_20d']  = (P[pcol + '_bull_20d'] - P[pcol + '_bear_20d']).astype('int8')
+
+        other_cols = [c for c in P.columns if c not in patt_cols and not any(c.startswith(p) for p in patt_cols)]
         P[other_cols] = to_float32_safe(P[other_cols])
         return P
+
+
+    def patterns_weekly_monthly(ohlcv: pd.DataFrame) -> pd.DataFrame:
+        """Detect chart patterns on weekly and monthly resampled OHLC candles,
+        then forward-fill back to daily frequency for alignment."""
+        out = pd.DataFrame(index=ohlcv.index)
+        ohlcv_idx = ohlcv.copy()
+        if not isinstance(ohlcv_idx.index, pd.DatetimeIndex):
+            if 'Date' in ohlcv_idx.columns:
+                ohlcv_idx = ohlcv_idx.set_index('Date')
+            else:
+                return out  # can't resample without dates
+
+        for tf_label, tf_rule in [('W', 'W-FRI'), ('M', 'ME')]:
+            try:
+                resampled = ohlcv_idx.resample(tf_rule).agg({
+                    'Open': 'first', 'High': 'max', 'Low': 'min',
+                    'Close': 'last', 'Volume': 'sum'
+                }).dropna(subset=['Close'])
+            except Exception:
+                continue
+
+            if len(resampled) < 5:
+                continue
+
+            # Run pattern detection on resampled data
+            patt_funcs = [
+                detect_head_shoulder(resampled, prefix=f"hs_{tf_label}_"),
+                detect_triangle_pattern(resampled, prefix=f"tri_{tf_label}_"),
+                detect_wedge(resampled, prefix=f"wed_{tf_label}_"),
+                detect_channel(resampled, prefix=f"chan_{tf_label}_"),
+                detect_double_top_bottom(resampled, prefix=f"dbl_{tf_label}_"),
+            ]
+            tf_patt = pd.concat(patt_funcs, axis=1)
+
+            # Keep only pattern columns (not roll_max/min intermediates)
+            keep_cols = [c for c in tf_patt.columns if c.endswith('pattern')]
+            tf_patt = tf_patt[keep_cols].fillna(0).astype('int8')
+
+            # Shift by 1 to avoid look-ahead
+            tf_patt = tf_patt.shift(1)
+
+            # Reindex to daily (forward-fill: weekly/monthly signal persists until next candle)
+            tf_daily = tf_patt.reindex(ohlcv_idx.index, method='ffill').fillna(0).astype('int8')
+
+            # Reset index to match original
+            tf_daily.index = ohlcv.index
+            out = pd.concat([out, tf_daily], axis=1)
+
+        return out
 
 
     # ============================
@@ -1274,6 +1422,7 @@ def run_etl():
             # Build features
             feats = indicators_for_ticker(ohlcv, shift_features=SHIFT_FEATURES)
             pats  = patterns_for_ticker(ohlcv, shift_features=SHIFT_FEATURES)
+            pats_wm = patterns_weekly_monthly(ohlcv)  # weekly + monthly pattern detection
             if feats is None or feats.shape[1] == 0:
                 skip_reasons['empty_feats'] += 1
                 continue
@@ -1281,7 +1430,7 @@ def run_etl():
             fund = fundamentals_daily_for_ticker(tk, ohlcv.index, shift_features=SHIFT_FEATURES)
             cross = compute_cross_ticker_features(tk, ohlcv, _ibov_ret, _vix_pctl_252, shift_features=SHIFT_FEATURES)
 
-            X_tk = pd.concat([feats, pats, fund, cross], axis=1)
+            X_tk = pd.concat([feats, pats, pats_wm, fund, cross], axis=1)
             X_tk = fill_100pct(X_tk, allow_bfill=ALLOW_BFILL_EXOGENOUS)
             if X_tk.shape[1] == 0:
                 skip_reasons['empty_after_fill'] += 1
