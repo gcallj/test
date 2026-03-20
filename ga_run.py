@@ -74,7 +74,8 @@ from deap import base, creator, tools, algorithms
 from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import roc_auc_score, accuracy_score, log_loss, brier_score_loss
-from scipy.stats import spearmanr
+from scipy.stats import spearmanr, pointbiserialr
+from sklearn.feature_selection import mutual_info_classif
 from numba import njit
 
 
@@ -186,6 +187,8 @@ MIN_FEAT_STD = 1e-12
 MIN_VALID_SAMPLES_FOR_CORRELATION = 30
 MAX_FEATURES = 60  # per-ticker Spearman-ranked features; increased from 40 to leverage richer ETL feature pool (~189 candidates)
 FEAT_DEDUP_CORR_THRESH = 0.80  # max pairwise |r| allowed between selected features (greedy dedup)
+BINARY_NUNIQUE_THRESH = 3      # features with <=3 unique non-null values treated as binary
+MI_TOP_K_PREFILTER = 150       # pre-filter continuous features before MI (speed)
 
 # Intraday entry (limit) based on signal strength
 ENTRY_DISCOUNT_RANGE = (0.0, 0.4)
@@ -1749,7 +1752,7 @@ def load_etl_features_long(etl_path: str, ticker_filter=None) -> pd.DataFrame:
     # Skip features already present in consolidated or added by add_technical_features
     skip_prefixes = (
         "target_", "Open", "High", "Low", "Close", "Adj Close", "Volume",
-        "SMA_",   # basic SMAs already added by GA
+        # SMA_ no longer skipped: SMA_150/200 useful for Minervini features; dedup handles redundancy
     )
     feat_names = sorted(set(
         f for f in df_wide.columns.get_level_values(0).unique()
@@ -1903,13 +1906,125 @@ def run():
     elif TEST_ONLY_PREFIX_C_TICKERS:
         tickers = [t for t in tickers if str(t).startswith(TEST_TICKER_PREFIX)]
 
-    print(f"[FEATS] numeric candidates: {len(base_feat_cols)} -> Spearman selects top {MAX_FEATURES} per ticker")
+    print(f"[FEATS] numeric candidates: {len(base_feat_cols)} -> hybrid selects top {MAX_FEATURES} per ticker")
     print(f"[DATA] {len(df)} rows, {len(tickers)} tickers (out of {total_tickers})")
     print(f"[SYSTEM] CPUs available={multiprocessing.cpu_count()} | configured_workers={GA_EVAL_WORKERS}")
 
     out_global_ckpt = os.path.join(OUTPUT_DIR, "global_ga_checkpoint.json")
     out_xlsx = os.path.join(OUTPUT_DIR, f"summary_latest.xlsx")
     out_apply_csv = os.path.join(OUTPUT_DIR, f"apply_last_{APPLY_DAYS}d__H{FWD_H}.csv")
+
+    # ── Hybrid feature selection function ──────────────────────────────
+    def hybrid_feature_selection(
+        g: pd.DataFrame,
+        candidate_cols: List[str],
+        y_event: np.ndarray,
+    ) -> Tuple[List[str], List[tuple]]:
+        """Select features using point-biserial (binary) + MI+Spearman (continuous).
+        Returns (feat_cols, sel_corrs) with up to MAX_FEATURES features."""
+        import warnings as _w
+        _w.filterwarnings("ignore", category=RuntimeWarning)
+
+        binary_scores: List[tuple] = []
+        continuous_scores_spear: List[tuple] = []
+
+        for ccol in candidate_cols:
+            s = pd.to_numeric(g[ccol], errors="coerce")
+            if float(s.notna().mean()) < MIN_FEAT_NONNA_FRAC:
+                continue
+            if float(s.std(skipna=True)) <= MIN_FEAT_STD:
+                continue
+
+            arr = s.to_numpy(dtype=np.float64)
+            valid = np.isfinite(arr) & np.isfinite(y_event)
+            if valid.sum() < MIN_VALID_SAMPLES_FOR_CORRELATION:
+                continue
+
+            n_unique = len(np.unique(arr[valid & np.isfinite(arr)]))
+
+            if n_unique <= BINARY_NUNIQUE_THRESH:
+                # Binary feature -> point-biserial correlation
+                try:
+                    r_pb, _ = pointbiserialr(arr[valid], y_event[valid])
+                    if np.isfinite(r_pb):
+                        binary_scores.append((ccol, abs(r_pb), arr))
+                except (ValueError, TypeError):
+                    pass
+            else:
+                # Continuous -> Spearman pre-filter
+                try:
+                    r_sp, _ = spearmanr(arr[valid], y_event[valid])
+                    if np.isfinite(r_sp):
+                        continuous_scores_spear.append((ccol, abs(r_sp), arr))
+                except ValueError:
+                    pass
+
+        # Sort continuous by Spearman, keep top MI_TOP_K_PREFILTER
+        continuous_scores_spear.sort(key=lambda x: x[1], reverse=True)
+        top_continuous = continuous_scores_spear[:MI_TOP_K_PREFILTER]
+
+        # Run MI on top continuous candidates
+        continuous_final: List[tuple] = []
+        if len(top_continuous) >= 5:
+            try:
+                X_mi = np.column_stack([t[2] for t in top_continuous])
+                y_mi = y_event.copy()
+                # Handle NaN: fill with column median for MI computation
+                for j in range(X_mi.shape[1]):
+                    col = X_mi[:, j]
+                    mask_nan = ~np.isfinite(col)
+                    if mask_nan.any():
+                        med = np.nanmedian(col)
+                        col[mask_nan] = med if np.isfinite(med) else 0.0
+                # MI needs finite y too
+                y_valid = np.isfinite(y_mi)
+                X_mi = X_mi[y_valid]
+                y_mi = y_mi[y_valid]
+
+                mi_scores = mutual_info_classif(X_mi, y_mi.astype(int),
+                                                 discrete_features=False,
+                                                 n_neighbors=5, random_state=42)
+                # Normalize both Spearman and MI to [0, 1]
+                spear_vals = np.array([t[1] for t in top_continuous])
+                sp_max = spear_vals.max() if spear_vals.max() > 0 else 1.0
+                mi_max = mi_scores.max() if mi_scores.max() > 0 else 1.0
+
+                for i, (ccol, sp_r, arr) in enumerate(top_continuous):
+                    sp_norm = sp_r / sp_max
+                    mi_norm = mi_scores[i] / mi_max
+                    combined = 0.5 * sp_norm + 0.5 * mi_norm
+                    continuous_final.append((ccol, combined, arr))
+            except Exception:
+                # Fallback to pure Spearman if MI fails
+                continuous_final = [(c, s, a) for c, s, a in top_continuous]
+        else:
+            continuous_final = [(c, s, a) for c, s, a in top_continuous]
+
+        # Merge binary + continuous, sort by score
+        all_scored = binary_scores + continuous_final
+        all_scored.sort(key=lambda x: x[1], reverse=True)
+
+        # Greedy dedup: keep features with pairwise |Spearman r| < threshold
+        _sel_cols: List[str] = []
+        _sel_arrays: List[np.ndarray] = []
+        _sel_corrs: List[tuple] = []
+        for _ccol, _score, _arr in all_scored:
+            _redundant = False
+            for _prev_arr in _sel_arrays:
+                _valid = np.isfinite(_arr) & np.isfinite(_prev_arr)
+                if _valid.sum() > MIN_VALID_SAMPLES_FOR_CORRELATION:
+                    _r_pair, _ = spearmanr(_arr[_valid], _prev_arr[_valid])
+                    if np.isfinite(_r_pair) and abs(_r_pair) > FEAT_DEDUP_CORR_THRESH:
+                        _redundant = True
+                        break
+            if not _redundant:
+                _sel_cols.append(_ccol)
+                _sel_arrays.append(_arr)
+                _sel_corrs.append((_ccol, _score))
+            if len(_sel_cols) >= MAX_FEATURES:
+                break
+
+        return _sel_cols, _sel_corrs
 
     # FASE 1: Preparar payloads
     prep_t0 = time.perf_counter()
@@ -1934,47 +2049,8 @@ def run():
         y_event_temp[~np.isfinite(ret_fwd_temp)] = np.nan
         y_event_temp[~np.isfinite(thr_temp)] = np.nan
 
-        feat_correlations: List[tuple] = []
-        for ccol in base_feat_cols:
-            s_col = pd.to_numeric(g[ccol], errors="coerce")
-            if float(s_col.notna().mean()) < MIN_FEAT_NONNA_FRAC:
-                continue
-            if float(s_col.std(skipna=True)) <= MIN_FEAT_STD:
-                continue
-            try:
-                valid_idx_temp = np.isfinite(s_col.to_numpy()) & np.isfinite(y_event_temp)
-                if valid_idx_temp.sum() > MIN_VALID_SAMPLES_FOR_CORRELATION:
-                    corr, _ = spearmanr(s_col.to_numpy()[valid_idx_temp], y_event_temp[valid_idx_temp])
-                    if np.isfinite(corr):
-                        feat_correlations.append((ccol, abs(corr)))
-            except ValueError:
-                pass
-
-        feat_correlations.sort(key=lambda x: x[1], reverse=True)
-        # Greedy dedup: keep the highest-r feature first; skip any later feature whose
-        # pairwise |Spearman r| with ANY already-selected feature exceeds FEAT_DEDUP_CORR_THRESH.
-        # This removes quasi-identical signals (e.g. EV_buy variants r=1.00) without
-        # discarding genuinely independent lower-ranked features.
-        _sel_cols: List[str] = []
-        _sel_arrays: List[np.ndarray] = []
-        _sel_corrs: List[tuple] = []
-        for _ccol, _abs_r in feat_correlations:
-            _arr = pd.to_numeric(g[_ccol], errors="coerce").to_numpy(np.float64)
-            _redundant = False
-            for _prev_arr in _sel_arrays:
-                _valid = np.isfinite(_arr) & np.isfinite(_prev_arr)
-                if _valid.sum() > MIN_VALID_SAMPLES_FOR_CORRELATION:
-                    _r_pair, _ = spearmanr(_arr[_valid], _prev_arr[_valid])
-                    if np.isfinite(_r_pair) and abs(_r_pair) > FEAT_DEDUP_CORR_THRESH:
-                        _redundant = True
-                        break
-            if not _redundant:
-                _sel_cols.append(_ccol)
-                _sel_arrays.append(_arr)
-                _sel_corrs.append((_ccol, _abs_r))
-            if len(_sel_cols) >= MAX_FEATURES:
-                break
-        feat_cols = _sel_cols
+        # Hybrid feature selection: point-biserial (binary) + MI+Spearman (continuous)
+        feat_cols, _sel_corrs = hybrid_feature_selection(g, base_feat_cols, y_event_temp)
         if len(feat_cols) < 5:
             reasons["few_feats"] = reasons.get("few_feats", 0) + 1
             continue
@@ -2279,7 +2355,7 @@ def run():
         # -- Feature importance per ticker ---------------------------------
         # Derived purely from data already in ticker_payloads (no logic change).
         # Metrics:
-        #   spearman_abs_r   – |Spearman r| with forward-return event (feature selection criterion)
+        #   relevance_score   – |Spearman r| with forward-return event (feature selection criterion)
         #   mean_abs_zscore  – mean |directed z-score| across all history (signal magnitude)
         #   pct_days_active  – % days where |z| > 0.35 (feature fires a vote)
         _feat_imp_rows: List[Dict] = []
@@ -2295,7 +2371,7 @@ def run():
                     "ticker":           _tkr,
                     "rank":             _rank0 + 1,
                     "feature":          _feat,
-                    "spearman_abs_r":   round(float(_abs_r), 4),
+                    "relevance_score":   round(float(_abs_r), 4),
                     "mean_abs_zscore":  round(_mean_abs_z, 4),
                     "pct_days_active_%": round(_pct_active, 1),
                 })
