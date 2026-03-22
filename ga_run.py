@@ -244,7 +244,7 @@ GA_STAGE2_MIN_SPAN_RATIO = 0.18
 
 # -- Fast / Full mode --------------------------------------------------------
 # Set FAST_MODE = True for quick validation; False for full production run.
-FAST_MODE = False   # <- FULL production mode
+FAST_MODE = os.getenv("GA_FAST_MODE", "false").lower() == "true"  # env var or default False
 
 if FAST_MODE:
     # Small population, moderate gens, 4 uniformly-sampled windows from full history
@@ -1937,8 +1937,8 @@ def generate_signal_global(payload: Dict[str, Any], gp: GlobalParams, day_index:
     return "hold"
 
 # -- Telegram notification -------------------------------------------------
-TELEGRAM_BOT_TOKEN = "8666128576:AAE0YltD0Pj_oG836EZ7BWshYqiBM7pt-1s"
-TELEGRAM_CHAT_ID   = -5240835501
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8666128576:AAE0YltD0Pj_oG836EZ7BWshYqiBM7pt-1s")
+TELEGRAM_CHAT_ID   = int(os.getenv("TELEGRAM_CHAT_ID", "-5240835501"))
 
 
 def _send_telegram(filepath: str, caption: str = "") -> None:
