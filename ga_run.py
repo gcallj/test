@@ -236,7 +236,7 @@ GA_RUN_MC_EVERY_WINDOW = False
 import platform as _platform
 GA_EVAL_WORKERS = 1 if _platform.system() == "Windows" else max(1, min(8, (os.cpu_count() or 2)))
 GA_TWO_STAGE = True
-RUN_MODE = "train"  # "train" always retrains (seeding from checkpoint), "load" skips GA entirely
+RUN_MODE = os.getenv("GA_RUN_MODE", "train")  # "train" retrains, "load" skips GA (daily use)
 SLOW_STEP_PRINT_SEC = 2.0  # print only timings above this per-step threshold
 GA_STAGE1_TOP_N = 6
 GA_STAGE2_PADDING_RATIO = 0.60

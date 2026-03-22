@@ -13,7 +13,8 @@ jobs:
     env:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-      GA_FAST_MODE: "true"
+      GA_RUN_MODE: "load"      # daily = load checkpoint, no retrain
+      GA_FAST_MODE: "true"     # ignored in load mode, but set for safety
 
     steps:
       - name: Checkout
