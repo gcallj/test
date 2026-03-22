@@ -236,7 +236,7 @@ GA_RUN_MC_EVERY_WINDOW = False
 import platform as _platform
 GA_EVAL_WORKERS = 1 if _platform.system() == "Windows" else max(1, min(8, (os.cpu_count() or 2)))
 GA_TWO_STAGE = True
-RUN_MODE = "load"  # "train" always retrains (seeding from checkpoint), "load" skips GA entirely
+RUN_MODE = "train"  # "train" always retrains (seeding from checkpoint), "load" skips GA entirely
 SLOW_STEP_PRINT_SEC = 2.0  # print only timings above this per-step threshold
 GA_STAGE1_TOP_N = 6
 GA_STAGE2_PADDING_RATIO = 0.60
@@ -1936,6 +1936,45 @@ def generate_signal_global(payload: Dict[str, Any], gp: GlobalParams, day_index:
         return "sell"
     return "hold"
 
+# -- Telegram notification -------------------------------------------------
+TELEGRAM_BOT_TOKEN = "8666128576:AAE0YltD0Pj_oG836EZ7BWshYqiBM7pt-1s"
+TELEGRAM_CHAT_ID   = -5240835501
+
+
+def _send_telegram(filepath: str, caption: str = "") -> None:
+    """Send a file to the Telegram group via Bot API."""
+    import urllib.request, urllib.error
+    try:
+        import io, mimetypes
+        boundary = "----FormBoundary7MA4YWxkTrZu0gW"
+        fname = os.path.basename(filepath)
+        mime = mimetypes.guess_type(fname)[0] or "application/octet-stream"
+
+        with open(filepath, "rb") as f:
+            file_data = f.read()
+
+        if not caption:
+            caption = f"GA summary ({pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')})"
+
+        body = (
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="chat_id"\r\n\r\n{TELEGRAM_CHAT_ID}\r\n'
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="caption"\r\n\r\n{caption}\r\n'
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="document"; filename="{fname}"\r\n'
+            f"Content-Type: {mime}\r\n\r\n"
+        ).encode("utf-8") + file_data + f"\r\n--{boundary}--\r\n".encode("utf-8")
+
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendDocument"
+        req = urllib.request.Request(url, data=body, method="POST")
+        req.add_header("Content-Type", f"multipart/form-data; boundary={boundary}")
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            print(f"[TELEGRAM] Sent {fname} to group ({resp.status})")
+    except Exception as e:
+        print(f"[TELEGRAM] Failed to send: {e}")
+
+
 # 4) MAIN
 # ==============================================================================
 def run():
@@ -2376,16 +2415,14 @@ def run():
                 "close": round(close_val, 4),
                 "signal": sig,
                 "confidence": round(confidence, 1),
-                # -- New entry --
+                # -- Nova entrada --
                 "entrada": best_buy,
                 "stop": stop_loss,
                 "alvo": take_profit,
-                "venda_pct": sell_pct_at_take,
-                # -- Position management (apply to YOUR entry price) --
+                # -- Gestao de posicao (aplique ao SEU preco de entrada) --
                 "ATR": round(atr_val, 4),
                 "stop_dist": stop_distance,
                 "alvo_dist": take_distance,
-                "trailing": trailing_label,
                 "tight_stop": tight_stop_dist,
                 "tight_dias": int(global_params.stop_tighten_after_bars),
                 "time_stop": int(global_params.time_stop_bars),
@@ -2487,6 +2524,10 @@ def run():
             with pd.ExcelWriter(out_xlsx, engine="xlsxwriter") as writer:
                 wb = writer.book
 
+                # -- Apply sheet FIRST (most used) --------------------------
+                if not df_app.empty:
+                    df_app.to_excel(writer, sheet_name="Apply", index=False)
+
                 # -- Summary sheet ------------------------------------------
                 df_sum.to_excel(writer, sheet_name="Summary", index=False)
                 ws_sum = writer.sheets["Summary"]
@@ -2501,29 +2542,26 @@ def run():
                 ws_sum.freeze_panes(1, 0)
                 ws_sum.autofilter(0, 0, len(df_sum), len(df_sum.columns) - 1)
 
-                # -- Apply sheet --------------------------------------------
+                # -- Apply sheet formatting ----------------------------------
                 if not df_app.empty:
-                    df_app.to_excel(writer, sheet_name="Apply", index=False)
                     ws_app = writer.sheets["Apply"]
 
                     # Header comments explaining each column
                     col_comments = {
-                        "Date": "Data do sinal (fechamento do dia)",
-                        "ticker": "Codigo do ativo na bolsa",
-                        "close": "Preco de fechamento do dia",
-                        "signal": "Sinal do GA: buy=comprar, hold=manter/aguardar",
-                        "confidence": "Confianca do sinal (0-100). Combina: qualidade do backtest (30%), forca do sinal (25%), qtd trades historicos (15%), concordancia entre features (30%)",
-                        "entrada": "Preco ideal de entrada (close - desconto ATR). Use como limite de compra",
-                        "stop": "Stop loss para NOVA entrada (= entrada - stop_dist)",
-                        "alvo": "Take profit para NOVA entrada (= entrada + alvo_dist)",
-                        "venda_pct": "% da posicao a vender quando atingir o alvo",
-                        "ATR": "Average True Range atual. Mede volatilidade diaria em R$",
-                        "stop_dist": "Distancia do stop em R$. Posicao existente: stop = SEU_PRECO_ENTRADA - este valor. Atualiza diariamente com ATR",
-                        "alvo_dist": "Distancia do alvo em R$. Posicao existente: alvo = SEU_PRECO_ENTRADA + este valor. Atualiza diariamente com ATR",
-                        "trailing": "Modo de trailing stop: fixed=fixo, breakeven=move stop p/ entrada apos lucro>stop_dist, trail-50%=acompanha 50% do lucro maximo",
-                        "tight_stop": "Stop apertado em R$. Apos 'tight_dias' dias, stop = SEU_PRECO_ENTRADA - este valor (mais apertado que stop_dist)",
-                        "tight_dias": "Apos quantos dias o stop aperta para tight_stop",
-                        "time_stop": "Sai da posicao apos este numero de dias se nao atingiu 50% do alvo",
+                        "Date": "Data do pregao (fechamento)",
+                        "ticker": "Codigo do ativo (ex: PETR4.SA, BTC-USD)",
+                        "close": "Preco de fechamento no dia",
+                        "signal": "buy = abrir posicao comprada\nhold = aguardar, nao comprar agora",
+                        "confidence": "0 a 100: quao confiavel e o sinal\n30% backtest (sharpe+winrate)\n25% forca direcional\n15% qtd trades historicos\n30% concordancia entre features",
+                        "entrada": "Preco sugerido de compra (close ajustado por ATR).\nUse como ordem limite.",
+                        "stop": "Stop loss se comprar HOJE no preco 'entrada'.\n= entrada - stop_dist",
+                        "alvo": "Take profit se comprar HOJE no preco 'entrada'.\n= entrada + alvo_dist\nVender 100% ao atingir.",
+                        "ATR": "Average True Range: volatilidade diaria em R$.\nBase para calcular stop e alvo.\nAtualiza todo dia.",
+                        "stop_dist": "Distancia do stop em R$ (= 1x ATR).\nJA COMPRADO? Seu stop = SEU_PRECO - stop_dist\nAtualiza diariamente.",
+                        "alvo_dist": "Distancia do alvo em R$ (= 1x ATR).\nJA COMPRADO? Seu alvo = SEU_PRECO + alvo_dist\nAtualiza diariamente.",
+                        "tight_stop": "Stop apertado (= 0.4x ATR) ativado apos 'tight_dias'.\nJA COMPRADO ha N dias? Seu stop = SEU_PRECO - tight_stop",
+                        "tight_dias": "Apos quantos dias de posicao o stop aperta.\nEx: 3 = apos 3 dias, stop encurta de stop_dist para tight_stop.",
+                        "time_stop": "Dias maximo na posicao. Se nao atingiu 50% do alvo ate aqui, saia.\nTrailing: apos lucro > stop_dist, stop sobe para preco de entrada (breakeven).",
                     }
 
                     # Write headers with comments
@@ -2535,10 +2573,10 @@ def run():
                     # Column widths
                     apply_widths = {
                         "Date": 12, "ticker": 12, "close": 10,
-                        "signal": 9, "confidence": 12,
-                        "entrada": 10, "stop": 10, "alvo": 10, "venda_pct": 9,
-                        "ATR": 9, "stop_dist": 11, "alvo_dist": 11,
-                        "trailing": 12, "tight_stop": 11, "tight_dias": 10, "time_stop": 10,
+                        "signal": 8, "confidence": 12,
+                        "entrada": 10, "stop": 10, "alvo": 10,
+                        "ATR": 9, "stop_dist": 10, "alvo_dist": 10,
+                        "tight_stop": 10, "tight_dias": 10, "time_stop": 10,
                     }
                     for col_idx, col_name in enumerate(df_app.columns):
                         ws_app.set_column(col_idx, col_idx, apply_widths.get(col_name, 11))
@@ -2554,6 +2592,7 @@ def run():
                     int_hold   = wb.add_format({"num_format": "0"})
 
                     price_cols = {"close", "entrada", "stop", "alvo", "ATR", "stop_dist", "alvo_dist", "tight_stop"}
+                    # Note: venda_pct and trailing removed (always 100% and breakeven with current genome)
                     score_cols = {"confidence"}
                     int_cols = {"tight_dias", "time_stop"}
 
@@ -2591,15 +2630,18 @@ def run():
             print(f"[WARN] xlsxwriter failed, trying openpyxl: {e}")
             try:
                 with pd.ExcelWriter(out_xlsx, engine="openpyxl") as writer:
-                    df_sum.to_excel(writer, sheet_name="Summary", index=False)
                     if not df_app.empty:
                         df_app.to_excel(writer, sheet_name="Apply", index=False)
+                    df_sum.to_excel(writer, sheet_name="Summary", index=False)
                     if not df_feat_imp.empty:
                         df_feat_imp.to_excel(writer, sheet_name="Feature_Importance", index=False)
             except Exception as e2:
-                print(f"[WARN] xlsx save failed (file open in Excel?): {e2} — CSV already saved.")
+                print(f"[WARN] xlsx save failed (file open in Excel?): {e2} -- CSV already saved.")
 
     print(f"Saved: {out_xlsx} | {out_apply_csv}")
+
+    # -- Send to Telegram --------------------------------------------------
+    _send_telegram(out_xlsx)
 
 
 if __name__ == "__main__":

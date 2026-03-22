@@ -157,7 +157,7 @@ ap_enriched.to_csv(out_csv, index=False)
 print(f"Saved: {out_csv} ({ap_enriched.shape})")
 
 # Print summary for top buys
-buys = ap_enriched[ap_enriched["signal_eod"] == "buy"].sort_values("confidence", ascending=False)
+buys = ap_enriched[ap_enriched["signal"] == "buy"].sort_values("confidence", ascending=False)
 pattern_cols = [c for c in ap_enriched.columns if c not in ap.columns and c != "ticker"]
 print(f"\nTop 10 BUY signals with pattern analysis:")
 for _, r in buys.head(10).iterrows():
@@ -474,12 +474,10 @@ def plot_candle_chart(df, ticker, gp, pattern_info, output_dir="charts"):
     # Stats box
     conf = ap[ap["ticker"] == ticker]["confidence"].values
     conf_str = f"{conf[0]:.1f}" if len(conf) > 0 else "?"
-    score = ap[ap["ticker"] == ticker]["score_100"].values
-    score_str = f"{score[0]:.1f}" if len(score) > 0 else "?"
-    sig = ap[ap["ticker"] == ticker]["signal_eod"].values
+    sig = ap[ap["ticker"] == ticker]["signal"].values
     sig_str = sig[0] if len(sig) > 0 else "?"
 
-    stats = f"Sinal atual: {sig_str.upper()} | Conf: {conf_str} | Score: {score_str} | Stop: {gp.stop_atr_mult}x ATR | R:R {gp.reward_risk_ratio}:1"
+    stats = f"Sinal atual: {sig_str.upper()} | Conf: {conf_str} | Stop: {gp.stop_atr_mult}x ATR | R:R {gp.reward_risk_ratio}:1"
     ax.text(0.5, 0.02, stats, transform=ax.transAxes, fontsize=10,
             ha="center", va="bottom",
             bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.9, edgecolor="gray"))
