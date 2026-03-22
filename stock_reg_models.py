@@ -10,8 +10,23 @@ os.makedirs('./output/data/models', exist_ok=True)
 os.makedirs('./output', exist_ok=True)
 
 
-def run_reg_models():
-    """Run the pipeline step."""
+def run_reg_models(mode: str = "full"):
+    """Run the pipeline step.
+
+    Parameters
+    ----------
+    mode : str
+        "full"      – run rolling-baseline regression and produce forecast parquet (default).
+        "data-only" – skip entirely if the forecast output file already exists;
+                      use cached regression predictions from the last full run.
+    """
+    import os as _os
+    if mode == "data-only":
+        _out = "./output/forecast_history_wide.parquet"
+        if _os.path.exists(_out):
+            print(f"[reg_models] data-only: usando cache -> {_out}  (skipping regression)")
+            return
+        print(f"[reg_models] data-only: nenhum cache em {_out} — executando normalmente.")
     # -*- coding: utf-8 -*-
     """reg_Stock_modelos_individuais.ipynb
 
@@ -262,11 +277,22 @@ def run_reg_models():
         close_like = [c for c in df.columns if c[1] == tk and "close" in str(c[0]).lower()]
         return close_like[0] if close_like else None
 
-    def is_good_close(s: pd.Series, min_frac=0.80) -> bool:
+    def is_good_close(s: pd.Series, min_frac=0.80, min_trading_days=250) -> bool:
+        """Valida se uma série de fechamento tem dados suficientes para modelagem.
+        Usa apenas preços positivos (exclui zeros pré-IPO), exige >= min_trading_days
+        de pregões reais e mediana positiva. min_frac ainda é checado nos últimos
+        2 anos (~504 pregões) para garantir continuidade recente."""
         if s is None: return False
-        frac = float(s.notna().mean())
-        med = float(np.nanmedian(s.values)) if np.isfinite(np.nanmedian(s.values)) else np.nan
-        return (frac >= min_frac) and np.isfinite(med) and (med > 0)
+        s_pos = s[s > 0]                       # apenas dias com pregão real (exclui zeros pré-IPO)
+        if len(s_pos) < min_trading_days:      # exige ao menos ~1 ano de dados reais
+            return False
+        med = float(np.nanmedian(s_pos.values))
+        if not (np.isfinite(med) and med > 0):
+            return False
+        # checar continuidade recente: nos últimos 504 dias, ao menos min_frac com preço > 0
+        recent = s.iloc[-504:]
+        frac_recent = float((recent > 0).mean())
+        return frac_recent >= min_frac
 
     def asset_class(ticker: str) -> str:
         t = str(ticker)
@@ -656,7 +682,7 @@ def run_reg_models():
     lvl1 = df.columns.get_level_values(1).astype(str)
 
     tickers_valid = sorted(set(lvl1[lvl0 == REG_TARGETS[0]]) & set(lvl1[lvl0 == REG_TARGETS[1]]))
-    print(f"  ✓ Tickers válidos: {len(tickers_valid)}")
+    print(f"  [OK] Tickers válidos: {len(tickers_valid)}")
 
     ALL_DATES = df.index
     INVALID_Y_DATES = set(ALL_DATES[-HORIZON:]) if len(ALL_DATES) >= HORIZON else set(ALL_DATES)
@@ -675,7 +701,7 @@ def run_reg_models():
             close_map[tk] = pd.to_numeric(df[cc], errors="coerce").astype("float64")
 
     if missing_close:
-        print(f"  ⚠️ Close não encontrado no parquet para {len(missing_close)} tickers. Baixando via yfinance (auto_adjust=True)...")
+        print(f"  [WARN] Close não encontrado no parquet para {len(missing_close)} tickers. Baixando via yfinance (auto_adjust=True)...")
         tmp = yf.download(
             missing_close,
             start=str(df.index.min().date()),
@@ -707,15 +733,104 @@ def run_reg_models():
 
     tickers_valid = [tk for tk in tickers_valid if tk in close_map]
     if bad_close:
-        print(f"  ⚠️ Removidos por Close inválido ({len(bad_close)}): {bad_close[:10]}{'...' if len(bad_close)>10 else ''}")
-    print(f"  ✓ Close disponível para {len(close_map)} tickers")
+        print(f"  [WARN] Removidos por Close inválido ({len(bad_close)}): {bad_close[:10]}{'...' if len(bad_close)>10 else ''}")
+    print(f"  [OK] Close disponível para {len(close_map)} tickers")
 
     # =========================
     # [3] Preparar séries e escolher baseline (tipo+alpha+calib)
     # =========================
+    # Phase 2.4: LightGBM regression alongside baseline
+    USE_ML_REGRESSION = True
+    ML_REG_BLEND_WEIGHT = 0.35  # weight for ML prediction (0.35 ML + 0.65 baseline)
+    ML_REG_MIN_TRAIN_ROWS = 300
+    ML_REG_MIN_VALID_ROWS = 60
+
+    try:
+        import lightgbm as lgb_reg
+        HAS_LGB_REG = True
+    except ImportError:
+        HAS_LGB_REG = False
+        USE_ML_REGRESSION = False
+
+    def _extract_features_for_ticker(df_full, tk, feature_cols_cache={}):
+        """Extract feature columns for a specific ticker from the MultiIndex parquet."""
+        if tk in feature_cols_cache:
+            return feature_cols_cache[tk]
+
+        lvl0 = df_full.columns.get_level_values(0).astype(str)
+        lvl1 = df_full.columns.get_level_values(1).astype(str)
+
+        # Get feature columns for this ticker (exclude target columns)
+        target_prefixes = ("target_", "Close", "Adj Close", "Open", "High", "Low", "Volume")
+        mask = (lvl1 == tk)
+        feat_cols = []
+        for idx in np.where(mask)[0]:
+            fname = str(lvl0[idx])
+            if not any(fname.startswith(p) for p in target_prefixes):
+                feat_cols.append(df_full.columns[idx])
+
+        if len(feat_cols) == 0:
+            feature_cols_cache[tk] = None
+            return None
+
+        X = df_full[feat_cols].astype("float32")
+        X.columns = [str(c[0]) for c in X.columns]  # flatten to feature names
+        feature_cols_cache[tk] = X
+        return X
+
+    def _train_lgbm_regressor(X_features, y_logret, train_dates, valid_dates, tgt):
+        """Train a LightGBM regressor on available features."""
+        X_tr = X_features.reindex(train_dates)
+        y_tr = y_logret.reindex(train_dates)
+        X_va = X_features.reindex(valid_dates)
+        y_va = y_logret.reindex(valid_dates)
+
+        # Drop rows with NaN target
+        mask_tr = y_tr.notna() & X_tr.notna().all(axis=1)
+        mask_va = y_va.notna() & X_va.notna().all(axis=1)
+
+        if mask_tr.sum() < ML_REG_MIN_TRAIN_ROWS or mask_va.sum() < ML_REG_MIN_VALID_ROWS:
+            return None
+
+        X_tr_clean = X_tr[mask_tr].fillna(0).values
+        y_tr_clean = y_tr[mask_tr].values
+        X_va_clean = X_va[mask_va].fillna(0).values
+        y_va_clean = y_va[mask_va].values
+
+        params = {
+            "num_leaves": 31,
+            "learning_rate": 0.03,
+            "n_estimators": 300,
+            "objective": "regression_l1",
+            "subsample": 0.8,
+            "colsample_bytree": 0.7,
+            "reg_lambda": 1.0,
+            "min_child_samples": 30,
+            "random_state": 42,
+            "verbosity": -1,
+            "n_jobs": 1,
+        }
+
+        try:
+            model = lgb_reg.LGBMRegressor(**params)
+            model.fit(
+                X_tr_clean, y_tr_clean,
+                eval_set=[(X_va_clean, y_va_clean)],
+                callbacks=[lgb_reg.early_stopping(20, verbose=False), lgb_reg.log_evaluation(period=0)]
+            )
+            return model
+        except Exception:
+            return None
+
     print("\n[3/7] Preparando séries e escolhendo baseline + banda WFcal/class-fallback...")
+    if USE_ML_REGRESSION and HAS_LGB_REG:
+        print(f"  ML Regression: ON (blend={ML_REG_BLEND_WEIGHT:.0%} ML + {1-ML_REG_BLEND_WEIGHT:.0%} baseline)")
+    else:
+        print("  ML Regression: OFF")
+
     prepared = {}
     meta_best = {}
+    _feat_cache = {}
 
     for tk in tqdm(tickers_valid, desc="Tickers", leave=False):
         close = close_map.get(tk)
@@ -799,13 +914,41 @@ def run_reg_models():
                 ratio = np.clip(ratio, VOLADAPT_CLIP[0], VOLADAPT_CLIP[1])
                 vol_factor = ratio
 
+            # Phase 2.4: Train LightGBM regressor and blend with baseline
+            lgbm_model = None
+            ml_pred_pct_center = None
+            if USE_ML_REGRESSION and HAS_LGB_REG:
+                X_feats = _extract_features_for_ticker(df, tk, _feat_cache)
+                if X_feats is not None and len(X_feats.columns) >= 5:
+                    lgbm_model = _train_lgbm_regressor(X_feats, y_logret, train_dates, valid_dates, tgt)
+                    if lgbm_model is not None:
+                        # Generate ML predictions for the full series
+                        X_full = X_feats.reindex(ALL_DATES).fillna(0).values
+                        ml_pred_log = lgbm_model.predict(X_full).astype("float64")
+                        ml_pred_log = np.clip(ml_pred_log, lo_h, hi_h)
+                        if tgt == "target_best_entry":
+                            ml_pred_log = np.minimum(ml_pred_log, 0.0)
+                        else:
+                            ml_pred_log = np.maximum(ml_pred_log, 0.0)
+                        ml_pred_pct = logret_to_pct(ml_pred_log)
+                        ml_pred_pct = np.clip(ml_pred_pct, lo_pct_h, hi_pct_h)
+                        ml_pred_pct = np.clip(ml_pred_pct, yq_lo_pct, yq_hi_pct)
+
+                        # Blend: weighted average of baseline and ML
+                        blended = (1 - ML_REG_BLEND_WEIGHT) * pred_pct_center + ML_REG_BLEND_WEIGHT * ml_pred_pct
+                        blended = np.clip(blended, cap_lo, cap_hi)
+                        ml_pred_pct_center = blended
+
+            # Use blended if available, otherwise pure baseline
+            final_pred_pct = ml_pred_pct_center if ml_pred_pct_center is not None else pred_pct_center
+
             prepared[(tk, tgt)] = {
                 "ticker": tk,
                 "target": tgt,
                 "asset_class": asset_class(tk),
                 "y_logret": y_logret,
                 "y_true_pct_full": pd.Series(y_true_pct, index=ALL_DATES),
-                "pred_pct_center_full": pd.Series(pred_pct_center, index=ALL_DATES),
+                "pred_pct_center_full": pd.Series(final_pred_pct, index=ALL_DATES),
                 "vol_factor_full": pd.Series(vol_factor, index=ALL_DATES),
                 "close": close_safe,
                 "train_dates": train_dates,
@@ -813,11 +956,12 @@ def run_reg_models():
                 "test_dates": test_dates,
                 "apply_dates": apply_dates,
                 "best": best,
+                "used_ml": lgbm_model is not None,
             }
 
             meta_best[f"{tk}|||{tgt}"] = best
 
-    print(f"  ✓ Séries preparadas: {len(prepared)} (ticker,target)")
+    print(f"  [OK] Séries preparadas: {len(prepared)} (ticker,target)")
 
     # =========================
     # [4] Calibração WF do band_scale + fallback por asset_class
@@ -957,7 +1101,7 @@ def run_reg_models():
         else:
             pair_band[(tk,tgt)]["band_scale_fallback"] = False
 
-    print("  ✓ band_scale: WF+fallback pronto.")
+    print("  [OK] band_scale: WF+fallback pronto.")
 
     # =========================
     # [5] Gerar VALID, TEST e APPLY (com banda)
@@ -1024,7 +1168,7 @@ def run_reg_models():
                 "target": tgt,
                 "asset_class": pack["asset_class"],
                 "model": f"baseline_{best['baseline_type']}_a{best['alpha']:.2f}_cal({best['cal_a']:+.3f},{best['cal_b']:.3f})",
-                "used_ml": False,
+                "used_ml": pack.get("used_ml", False),
                 "alpha": float(best["alpha"]),
                 "band_q_lo": float(RESID_Q_LO),
                 "band_q_hi": float(RESID_Q_HI),
@@ -1112,9 +1256,9 @@ def run_reg_models():
     TEST_COMPARE  = pd.concat(test_frames,  axis=0).sort_values(["Date","ticker","target"]) if test_frames  else pd.DataFrame()
     APPLY_VIEW    = pd.concat(apply_frames, axis=0).sort_values(["Date","ticker","target"]) if apply_frames else pd.DataFrame()
 
-    print(f"  ✓ VALID_COMPARE rows: {len(VALID_COMPARE)}")
-    print(f"  ✓ TEST_COMPARE  rows: {len(TEST_COMPARE)}")
-    print(f"  ✓ APPLY_VIEW    rows: {len(APPLY_VIEW)}")
+    print(f"  [OK] VALID_COMPARE rows: {len(VALID_COMPARE)}")
+    print(f"  [OK] TEST_COMPARE  rows: {len(TEST_COMPARE)}")
+    print(f"  [OK] APPLY_VIEW    rows: {len(APPLY_VIEW)}")
 
     def summarize_block(df_cmp: pd.DataFrame, name="VALID_COMPARE"):
         if df_cmp is None or df_cmp.empty:
@@ -1140,8 +1284,8 @@ def run_reg_models():
 
         print(f"\n===== {name} (GERAL) =====")
         print(f"rows (com y_true): {int(m.sum())}")
-        print(f"MAE: {mae_g:.6f}   (≈ {100*mae_g:.2f} p.p.)")
-        print(f"P95 abs err: {p95_g:.6f}   (≈ {100*p95_g:.2f} p.p.)")
+        print(f"MAE: {mae_g:.6f}   (~ {100*mae_g:.2f} p.p.)")
+        print(f"P95 abs err: {p95_g:.6f}   (~ {100*p95_g:.2f} p.p.)")
         print(f"coverage UNCAPPED: {covU:.3f}")
         print(f"coverage CAPPED   : {covC:.3f}")
         print(f"cap_hit_rate (média por ticker/target): {cap_hit_g:.3f}")
@@ -1208,13 +1352,13 @@ def run_reg_models():
         with open(os.path.join(OUT_DIR, "meta_best.json"), "w") as f:
             json.dump(meta_best, f, indent=2)
 
-    print("\n[Concluído ✅]")
-    print(f"📁 Outputs em: {OUT_DIR}")
+    print("\n[Concluído [OK]]")
+    print(f"[DIR] Outputs em: {OUT_DIR}")
 
     # Export “final” para a raiz do Drive (pra consolidar fácil)
     if not APPLY_VIEW.empty:
         normalize_before_save(APPLY_VIEW).to_csv(REG_APPLY_CSV_OUT, index=False)
-        print(f"✅ APPLY exportado para: {REG_APPLY_CSV_OUT}")
+        print(f"[OK] APPLY exportado para: {REG_APPLY_CSV_OUT}")
 
     # ============================================================
     # [EXTRA] Export FULL/HISTORY forecast (FORMATO WIDE / LARGO)

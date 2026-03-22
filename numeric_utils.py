@@ -68,8 +68,12 @@ def normalize_before_save(df: pd.DataFrame) -> pd.DataFrame:
 
     # numeric columns: only inf cleanup (cheap)
     num_cols = out.select_dtypes(include=[np.number, "bool", "boolean"]).columns
-    if len(num_cols):
-        out.loc[:, num_cols] = out.loc[:, num_cols].replace([np.inf, -np.inf], np.nan)
+    for col in num_cols:
+        s = out[col]
+        vals = s.to_numpy(copy=False)
+        if np.isfinite(vals).all():
+            continue
+        out[col] = pd.Series(np.where(np.isfinite(vals), vals, np.nan), index=out.index)
 
     # object/string columns: attempt numeric conversion only when mostly numeric-like
     obj_cols = out.select_dtypes(include=["object", "string"]).columns

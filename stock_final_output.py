@@ -42,12 +42,14 @@ def run_final_output():
     # ============================================================
     # CHUNKING
     # ============================================================
-    START_DATE = "2005-01-01"
-    END_DATE   = "2026-12-31"
+    START_DATE = os.getenv("FINAL_OUTPUT_START_DATE", "2010-01-01")
+    END_DATE   = os.getenv("FINAL_OUTPUT_END_DATE", "2026-12-31")
     CHUNK_DAYS = 60
 
     WRITE_PARQUET = True
     OVERWRITE_OUTPUTS = True
+    ONLY_SA = False
+    ALLOWED_SUFFIXES = (".SA", "-USD")  # .SA = Brasil, -USD = crypto
 
     # ============================================================
     # PARAMS
@@ -87,7 +89,7 @@ def run_final_output():
     # ============================================================
     FINAL_COLS = [
         "Date","ticker","split",
-        "price","open","high","low","close",
+        "price","open","high","low","close","volume",
         "best_buy_value","best_sell_value",
         "err_buy_pct","err_sell_pct",
         "downside_pct","upside_pct","risk_return",
@@ -117,7 +119,7 @@ def run_final_output():
 
     def looks_like_equity_br(t: str) -> bool:
         t = str(t).upper().strip()
-        return t.endswith(".SA") and ("=" not in t) and ("^" not in t) and ("-USD" not in t)
+        return (t.endswith(".SA") or t.endswith("-USD")) and ("=" not in t) and ("^" not in t)
 
     def to_prob(series):
         s = series.astype(str).str.strip()
@@ -207,16 +209,16 @@ def run_final_output():
             data = yf.download(tickers, start=sd, end=ed, auto_adjust=False, progress=True, threads=True)
 
             if data.empty:
-                return pd.DataFrame(columns=["Date", "ticker", "open", "high", "low", "close"])
+                return pd.DataFrame(columns=["Date", "ticker", "open", "high", "low", "close", "volume"])
 
             # Seleciona apenas as colunas de interesse
             # O yfinance retorna MultiIndex nas colunas: (Price, Ticker)
-            target_cols = ["Open", "High", "Low", "Close"]
+            target_cols = ["Open", "High", "Low", "Close", "Volume"]
 
             # Verifica se as colunas existem (pode variar se baixou só 1 ticker ou vários)
             available_cols = [c for c in target_cols if c in data.columns.get_level_values(0)]
             if not available_cols:
-                return pd.DataFrame(columns=["Date", "ticker", "open", "high", "low", "close"])
+                return pd.DataFrame(columns=["Date", "ticker", "open", "high", "low", "close", "volume"])
 
             df_slice = data[available_cols].copy()
 
@@ -235,22 +237,23 @@ def run_final_output():
                 "Open": "open",
                 "High": "high",
                 "Low": "low",
-                "Close": "close"
+                "Close": "close",
+                "Volume": "volume"
             }, inplace=True)
 
             # Normalização final
             df_reset["Date"] = norm_date_str(df_reset["Date"])
             df_reset["ticker"] = df_reset["ticker"].astype(str).str.upper().str.strip()
 
-            for c in ["open", "high", "low", "close"]:
+            for c in ["open", "high", "low", "close", "volume"]:
                 df_reset[c] = pd.to_numeric(df_reset[c], errors="coerce")
 
             print(f"[yahoo] Download concluído. Linhas carregadas: {len(df_reset)}")
-            return df_reset[["Date", "ticker", "open", "high", "low", "close"]]
+            return df_reset[["Date", "ticker", "open", "high", "low", "close", "volume"]]
 
         except Exception as e:
             print(f"[yahoo] Erro crítico no download OHLC: {e}")
-            return pd.DataFrame(columns=["Date", "ticker", "open", "high", "low", "close"])
+            return pd.DataFrame(columns=["Date", "ticker", "open", "high", "low", "close", "volume"])
 
 
     def build_fund_table(tickers, max_workers=8):
@@ -291,10 +294,10 @@ def run_final_output():
         fu = fund_df.copy()
         fu["ticker"] = fu["ticker"].astype(str).str.upper().str.strip()
 
-        dy_s = pct_rank_score(fu["dividend_yield"], higher_is_better=True)   # DY ↑
-        pe_s = pct_rank_score(fu["trailing_pe"],     higher_is_better=False) # PE ↓
-        pb_s = pct_rank_score(fu["price_to_book"],   higher_is_better=False) # PB ↓
-        mc_s = pct_rank_score(fu["market_cap"],      higher_is_better=True)  # MC ↑
+        dy_s = pct_rank_score(fu["dividend_yield"], higher_is_better=True)   # DY ^
+        pe_s = pct_rank_score(fu["trailing_pe"],     higher_is_better=False) # PE v
+        pb_s = pct_rank_score(fu["price_to_book"],   higher_is_better=False) # PB v
+        mc_s = pct_rank_score(fu["market_cap"],      higher_is_better=True)  # MC ^
 
         scores = pd.concat([dy_s, pe_s, pb_s, mc_s], axis=1)
         scores.columns = ["s_dy","s_pe","s_pb","s_mc"]
@@ -606,7 +609,7 @@ def run_final_output():
         out = out[FINAL_COLS].copy()
 
         num_cols = [
-            "price","open","high","low","close","best_buy_value","best_sell_value","err_buy_pct","err_sell_pct",
+            "price","open","high","low","close","volume","best_buy_value","best_sell_value","err_buy_pct","err_sell_pct",
             "downside_pct","upside_pct","risk_return",
             "p_up20","p_dd5","pred_up20","pred_dd5",
             "buy_trust","sell_trust",
@@ -692,13 +695,30 @@ def run_final_output():
     # ============================================================
     # MAIN (CHUNKED)
     # ============================================================
-    ensure_exists(HIST_ENS_PATH, "HIST_ENS_PATH")
     ensure_exists(HIST_REG_WIDE_PATH, "HIST_REG_WIDE_PATH")
 
-    ens_ds = open_parquet_dataset_with_retry(HIST_ENS_PATH, format="parquet")
-    reg_ds = open_parquet_dataset_with_retry(HIST_REG_WIDE_PATH, format="parquet")
+    # ENS pode estar corrompido ou desatualizado — lidar graciosamente
+    ens_ds = None
+    ens_date_type = None
+    ENS_AVAILABLE = False
+    if HIST_ENS_PATH.exists():
+        try:
+            import pyarrow.parquet as _pqtest
+            _pqtest.read_metadata(str(HIST_ENS_PATH))
+            _test_tbl = _pqtest.read_table(str(HIST_ENS_PATH), columns=["Date"])
+            print(f"[ens] ENS parquet OK ({_test_tbl.num_rows} rows)")
+            del _test_tbl
+            ens_ds = open_parquet_dataset_with_retry(HIST_ENS_PATH, format="parquet")
+            ens_date_type = ens_ds.schema.field("Date").type if "Date" in ens_ds.schema.names else None
+            ENS_AVAILABLE = True
+        except Exception as e_ens:
+            print(f"[ens] ENS parquet CORROMPIDO ou ilegivel: {e_ens}")
+            print(f"[ens] Continuando SEM sinais ensemble — apenas REG + OHLC + fundamentais")
+            ens_ds = None
+    else:
+        print(f"[ens] ENS parquet nao encontrado em {HIST_ENS_PATH}. Continuando sem ensemble.")
 
-    ens_date_type = ens_ds.schema.field("Date").type if "Date" in ens_ds.schema.names else None
+    reg_ds = open_parquet_dataset_with_retry(HIST_REG_WIDE_PATH, format="parquet")
     reg_date_type = reg_ds.schema.field("Date").type if "Date" in reg_ds.schema.names else None
 
     if OVERWRITE_OUTPUTS and OUT_HIST_PARQUET.exists() and WRITE_PARQUET:
@@ -730,10 +750,10 @@ def run_final_output():
         fund_all = ensure_fund_score_column(fund_all)
         print("[fund] nenhum .SA no histórico (fund_score neutro=0.5)")
 
-    ens_cols = [c for c in ["Date","ticker","split","p_up20","p_dd5","pred_up20","pred_dd5"] if c in ens_ds.schema.names]
+    ens_cols = [c for c in ["Date","ticker","split","p_up20","p_dd5","pred_up20","pred_dd5"] if ENS_AVAILABLE and c in ens_ds.schema.names]
     reg_cols = [c for c in ["Date","ticker","best_buy_price","buy_err_lo","buy_err_hi","best_sell_price","sell_err_lo","sell_err_hi"] if c in reg_ds.schema.names]
 
-    print(f"[cols] ens_cols={ens_cols}")
+    print(f"[cols] ENS_AVAILABLE={ENS_AVAILABLE}, ens_cols={ens_cols}")
     print(f"[cols] reg_cols={reg_cols}")
 
     parquet_writer = None
@@ -742,81 +762,110 @@ def run_final_output():
         # Baixa de 2005 a 2026 de uma vez só
         all_closes_df = preload_yahoo_history(tickers_sa, START_DATE, END_DATE)
     rows_total = 0
+    _loop_count = 0
 
     for s, e in date_windows(START_DATE, END_DATE, CHUNK_DAYS):
-        ens_f = (ds.field("Date") >= arrow_date_scalar(s, ens_date_type)) & (ds.field("Date") < arrow_date_scalar(e, ens_date_type)) if ens_date_type is not None else None
-        reg_f = (ds.field("Date") >= arrow_date_scalar(s, reg_date_type)) & (ds.field("Date") < arrow_date_scalar(e, reg_date_type)) if reg_date_type is not None else None
+        _loop_count += 1
+        if _loop_count <= 5 or _loop_count % 20 == 0:
+            print(f"[DEBUG loop] iter={_loop_count} window={s} -> {e}", flush=True)
+        try:
+            print(f"  [DBG] building filters...", flush=True)
+            ens_f = (ds.field("Date") >= arrow_date_scalar(s, ens_date_type)) & (ds.field("Date") < arrow_date_scalar(e, ens_date_type)) if (ENS_AVAILABLE and ens_date_type is not None) else None
+            reg_f = (ds.field("Date") >= arrow_date_scalar(s, reg_date_type)) & (ds.field("Date") < arrow_date_scalar(e, reg_date_type)) if reg_date_type is not None else None
+            print(f"  [DBG] reading reg_tbl...", flush=True)
 
-        reg_tbl = dataset_to_table_with_retry(reg_ds, columns=reg_cols, filter_expr=reg_f)
-        if reg_tbl.num_rows == 0:
+            reg_tbl = dataset_to_table_with_retry(reg_ds, columns=reg_cols, filter_expr=reg_f)
+            print(f"  [DBG] reg_tbl rows={reg_tbl.num_rows}", flush=True)
+            if reg_tbl.num_rows == 0:
+                del reg_tbl
+                continue
+
+            print(f"  [DBG] safe_to_pandas...", flush=True)
+            reg_chunk = safe_to_pandas(reg_tbl)
             del reg_tbl
+            print(f"  [DBG] prepare_regression_wide...", flush=True)
+            reg_p = prepare_regression_wide(reg_chunk)
+            print(f"  [DBG] filtering tickers (tickers_sa_set has {len(tickers_sa_set)} items)...", flush=True)
+            # Include all allowed suffixes, not just .SA
+            if ALLOWED_SUFFIXES:
+                allowed_mask = reg_p["ticker"].apply(lambda t: any(t.endswith(sfx) for sfx in ALLOWED_SUFFIXES))
+                reg_p = reg_p[allowed_mask]
+            else:
+                reg_p = reg_p[reg_p["ticker"].isin(tickers_sa_set)]
+            del reg_chunk
+            print(f"  [DBG] reg_p rows after filter={len(reg_p)}", flush=True)
+            if reg_p.empty:
+                del reg_p
+                continue
+
+            if ENS_AVAILABLE and ens_ds is not None:
+                print(f"  [DBG] reading ens_tbl...", flush=True)
+                ens_tbl = dataset_to_table_with_retry(ens_ds, columns=ens_cols, filter_expr=ens_f)
+                print(f"  [DBG] ens_tbl rows={ens_tbl.num_rows}", flush=True)
+                if ens_tbl.num_rows > 0:
+                    ens_chunk = safe_to_pandas(ens_tbl)
+                    ens_k = normalize_ensemble(ens_chunk)
+                    del ens_chunk
+                else:
+                    ens_k = pd.DataFrame(columns=["Date","ticker","split","p_up20","p_dd5","pred_up20","pred_dd5","up20_bin","dd5_bin"])
+                del ens_tbl
+            else:
+                ens_k = pd.DataFrame(columns=["Date","ticker","split","p_up20","p_dd5","pred_up20","pred_dd5","up20_bin","dd5_bin"])
+
+            print(f"  [DBG] merge_reg_ens...", flush=True)
+            df = merge_reg_ens(reg_p, ens_k)
+            del reg_p, ens_k
+            if not all_closes_df.empty:
+                # Filtra fatia de data
+                mask_ohlc = (all_closes_df["Date"] >= s) & (all_closes_df["Date"] < e)
+                chunk_ohlc = all_closes_df[mask_ohlc]
+
+                # Merge com todas as colunas (open, high, low, close)
+                df = df.merge(chunk_ohlc, on=["Date", "ticker"], how="left")
+
+            # Garante que as colunas existam mesmo se o merge falhar (preenche NaN)
+            for col in ["open", "high", "low", "close", "volume"]:
+                if col not in df.columns:
+                    df[col] = np.nan
+
+            if "close" not in df.columns:
+                df["close"] = np.nan
+
+            df = df.dropna(subset=["open", "high", "low", "close"]).copy()
+            if df.empty:
+                continue
+
+            print(f"  [DBG] compute_core_metrics + finalize...", flush=True)
+            df = compute_core_metrics(df)
+            df = add_fund_and_3_evfund(df, fund_all)
+            df["price"] = df["close"]
+            out = finalize_chunk(df)
+            del df
+
+            n = len(out)
+            rows_total += n
+            print(f"[chunk] {s} -> {e} | rows={n:,} | total={rows_total:,}", flush=True)
+
+            if WRITE_PARQUET:
+                out["Date"] = out["Date"].astype("string")
+                out["ticker"] = out["ticker"].astype("string")
+                if "split" in out.columns:
+                    out["split"] = out["split"].astype("string").fillna("")
+
+                out = normalize_before_save(out)
+                table = pa.Table.from_pandas(out, preserve_index=False)
+                if parquet_writer is None:
+                    parquet_writer = pq.ParquetWriter(str(OUT_HIST_PARQUET), table.schema, compression="snappy")
+                parquet_writer.write_table(table)
+                del table
+
+            del out
+            gc.collect()
+        except Exception as exc:
+            import traceback
+            print(f"[ERROR] iter={_loop_count} window={s}->{e}: {exc}", flush=True)
+            traceback.print_exc()
             continue
-
-        reg_chunk = safe_to_pandas(reg_tbl)
-        del reg_tbl
-        reg_p = prepare_regression_wide(reg_chunk)
-        reg_p = reg_p[reg_p["ticker"].isin(tickers_sa_set)]
-        del reg_chunk
-        if reg_p.empty:
-            del reg_p
-            continue
-
-        ens_tbl = dataset_to_table_with_retry(ens_ds, columns=ens_cols, filter_expr=ens_f)
-        if ens_tbl.num_rows > 0:
-            ens_chunk = safe_to_pandas(ens_tbl)
-            ens_k = normalize_ensemble(ens_chunk)
-            del ens_chunk
-        else:
-            ens_k = pd.DataFrame(columns=["Date","ticker","split","p_up20","p_dd5","pred_up20","pred_dd5","up20_bin","dd5_bin"])
-        del ens_tbl
-
-        df = merge_reg_ens(reg_p, ens_k)
-        del reg_p, ens_k
-        if not all_closes_df.empty:
-            # Filtra fatia de data
-            mask_ohlc = (all_closes_df["Date"] >= s) & (all_closes_df["Date"] < e)
-            chunk_ohlc = all_closes_df[mask_ohlc]
-
-            # Merge com todas as colunas (open, high, low, close)
-            df = df.merge(chunk_ohlc, on=["Date", "ticker"], how="left")
-
-        # Garante que as colunas existam mesmo se o merge falhar (preenche NaN)
-        for col in ["open", "high", "low", "close"]:
-            if col not in df.columns:
-                df[col] = np.nan
-
-        if "close" not in df.columns:
-            df["close"] = np.nan
-
-        df = df.dropna(subset=["open", "high", "low", "close"]).copy()
-        if df.empty:
-            continue
-
-        df = compute_core_metrics(df)
-        df = add_fund_and_3_evfund(df, fund_all)
-        df["price"] = df["close"]
-        out = finalize_chunk(df)
-        del df
-
-        n = len(out)
-        rows_total += n
-        print(f"[chunk] {s} -> {e} | rows={n:,} | total={rows_total:,}")
-
-        if WRITE_PARQUET:
-            out["Date"] = out["Date"].astype("string")
-            out["ticker"] = out["ticker"].astype("string")
-            if "split" in out.columns:
-                out["split"] = out["split"].astype("string").fillna("")
-
-            out = normalize_before_save(out)
-            table = pa.Table.from_pandas(out, preserve_index=False)
-            if parquet_writer is None:
-                parquet_writer = pq.ParquetWriter(str(OUT_HIST_PARQUET), table.schema, compression="snappy")
-            parquet_writer.write_table(table)
-            del table
-
-        del out
-        gc.collect()
 
     if parquet_writer is not None:
         parquet_writer.close()
@@ -855,7 +904,8 @@ def run_final_output():
     # ==============================================================================
     HISTORY_PARQUET_PATH = "./output/history_consolidated.parquet"
     SCORE_COL = "EV_buy_fund_3"
-    ONLY_SA = True
+    ONLY_SA = False  # replaced by ALLOWED_SUFFIXES in ga_run.py; keep False to include crypto
+    ALLOWED_SUFFIXES = (".SA", "-USD")
 
     # ==============================================================================
     # 1. CORRELAÇÃO SCORE × RETORNO FUTURO
@@ -927,12 +977,12 @@ def run_final_output():
         q1 = valid[valid["quintile"] == "Q1_Worst"][f"fwd_ret_{horizon}"].mean()
         ls = q5 - q1
 
-        print(f"\n📊 LONG-SHORT (Q5 - Q1): {ls*100:.3f}%")
+        print(f"\n[CHART] LONG-SHORT (Q5 - Q1): {ls*100:.3f}%")
 
         if ls > 0:
-            print("✅ Score tem poder preditivo POSITIVO")
+            print("[OK] Score tem poder preditivo POSITIVO")
         else:
-            print("❌ Score NÃO tem poder preditivo (ou é inverso!)")
+            print("[X] Score NÃO tem poder preditivo (ou é inverso!)")
 
         return summary
 
@@ -978,11 +1028,11 @@ def run_final_output():
         print(f"IC > 0:  {(ic_df['IC'] > 0).sum() / len(ic_df) * 100:.1f}% das vezes")
 
         if mean_ic > 0.02:
-            print("✅ IC consistentemente positivo - score funciona")
+            print("[OK] IC consistentemente positivo - score funciona")
         elif mean_ic > 0:
-            print("⚠️ IC fraco mas positivo - score tem algum poder")
+            print("[WARN] IC fraco mas positivo - score tem algum poder")
         else:
-            print("❌ IC negativo ou zero - score NÃO funciona")
+            print("[X] IC negativo ou zero - score NÃO funciona")
 
         return ic_df
 
@@ -1059,7 +1109,9 @@ def run_final_output():
         df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
         df = df.dropna()
 
-        if ONLY_SA:
+        if ALLOWED_SUFFIXES:
+            df = df[df["ticker"].apply(lambda t: any(str(t).endswith(s) for s in ALLOWED_SUFFIXES))]
+        elif ONLY_SA:
             df = df[df["ticker"].str.endswith(".SA", na=False)]
 
         df = df.sort_values(["ticker", "Date"])
@@ -1081,14 +1133,14 @@ def run_final_output():
         ls_ret = strat_results["LongShort"].mean()
 
         if mean_ic > 0.02 and ls_ret > 0:
-            print("✅ Score EV_buy_fund_3 TEM poder preditivo")
-            print("   → Prossiga com otimização de estratégia")
+            print("[OK] Score EV_buy_fund_3 TEM poder preditivo")
+            print("   -> Prossiga com otimização de estratégia")
         elif mean_ic > 0 or ls_ret > 0:
-            print("⚠️ Score EV_buy_fund_3 tem ALGUM poder (fraco)")
-            print("   → Considere melhorar o score ou usar outro")
+            print("[WARN] Score EV_buy_fund_3 tem ALGUM poder (fraco)")
+            print("   -> Considere melhorar o score ou usar outro")
         else:
-            print("❌ Score EV_buy_fund_3 NÃO funciona")
-            print("   → PARE! Use outro score ou método")
+            print("[X] Score EV_buy_fund_3 NÃO funciona")
+            print("   -> PARE! Use outro score ou método")
 
     if __name__ == "__main__":
         main()

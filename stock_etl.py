@@ -39,7 +39,7 @@ def run_etl():
     SHIFT_FEATURES = 1
 
     # Médias móveis a usar (manteremos TODOS cruzamentos slow > fast)
-    AVERAGES = [1, 2, 5, 10, 15, 20, 25, 50, 100]
+    AVERAGES = [1, 2, 5, 10, 15, 20, 25, 50, 100, 150, 200]
 
     # Horizonte para cálculo de alvos
     HORIZON = 90
@@ -50,6 +50,7 @@ def run_etl():
     SAVE_PARQUET = True
     SAVE_CSV_FALLBACK = False
     OUTPUT_PATH = "./output/data/expanded_stock.parquet"
+    SKIP_MI_REDUCTION = True   # skip slow MI-based feature reduction; GA does its own Spearman selection
 
     # ============================
     # Listas de tickers
@@ -115,6 +116,24 @@ def run_etl():
         # Química / materiais
         "UNIP6.SA",
 
+        # Construção civil / incorporação
+        "EZTC3.SA",
+
+        # Frigoríficos / alimentos
+        "MLAS3.SA",
+
+        # Turismo / lazer
+        "CVCB3.SA",
+
+        # BDR / ETF internacional
+        "XPBR31.SA",
+
+        # Construção civil (adicionados)
+        "TCSA3.SA",
+
+        # ETF internacional (adicionado)
+        "IVVB11.SA",
+
     ]
 
     # FIIs Brasil (mix: logística, shoppings, lajes, papel, FoF)
@@ -128,9 +147,13 @@ def run_etl():
         # Híbridos / renda urbana
         "ALZR11.SA", "TRXF11.SA", "RBRP11.SA",
         # Papel / crédito
-        "KNCR11.SA", "KNSC11.SA", "KNHY11.SA", "CPTS11.SA", "IRDM11.SA",
+        "KNCR11.SA", "KNSC11.SA", "KNHY11.SA", "CPTS11.SA", "IRDM11.SA", "IRIM11.SA",
         # FoF
         "BCFF11.SA", "HFOF11.SA", "KFOF11.SA", "RBRF11.SA",
+        # Saúde / biotech
+        "RBRX11.SA",
+        # Híbridos / diversificados
+        "BCIA11.SA",
     ]
 
     # Índices globais + proxies macro (inclui Suécia e juros EUA)
@@ -312,7 +335,7 @@ def run_etl():
     if dropped_after_valid_prices[:20]:
         print("  ex:", dropped_after_valid_prices[:20])
 
-    print(f"Período: {data.index.min().date()} → {data.index.max().date()}")
+    print(f"Período: {data.index.min().date()} -> {data.index.max().date()}")
     print(f"Tickers com dados (válidos): {len(tickers)}")
 
 
@@ -541,11 +564,105 @@ def run_etl():
 
         feats['pct_change'] = ohlcv_num[close_col].pct_change()
 
+        # ── Phase 3.3: Microstructure features ──
+        _close = ohlcv_num[close_col]
+        _volume = ohlcv_num['Volume']
+        _high = ohlcv_num['High']
+        _low = ohlcv_num['Low']
+        _open = ohlcv_num['Open']
+
+        # Volume relative (volume / 20-day avg)
+        vol_avg_20 = _volume.rolling(20, min_periods=5).mean()
+        feats['vol_relative_20d'] = _volume / vol_avg_20.replace(0, np.nan)
+
+        # Amihud illiquidity ratio: |return| / dollar_volume (rolling 20d avg)
+        abs_ret = _close.pct_change().abs()
+        dollar_vol = (_close * _volume).replace(0, np.nan)
+        amihud_raw = abs_ret / dollar_vol
+        feats['amihud_illiquidity_20d'] = amihud_raw.rolling(20, min_periods=5).mean()
+
+        # Garman-Klass volatility (uses OHLC, better than close-to-close)
+        log_hl = np.log(_high / _low.replace(0, np.nan)) ** 2
+        log_co = np.log(_close / _open.replace(0, np.nan)) ** 2
+        gk_daily = 0.5 * log_hl - (2 * np.log(2) - 1) * log_co
+        feats['gk_volatility_20d'] = gk_daily.rolling(20, min_periods=5).mean().apply(np.sqrt)
+
+        # ── Minervini Trend Template (SEPA) criteria ──────────────────────
+        # All 7 criteria from Mark Minervini's momentum strategy
+        sma50  = feats.get('SMA_50',  _close.rolling(50, min_periods=30).mean())
+        sma150 = feats.get('SMA_150', _close.rolling(150, min_periods=100).mean())
+        sma200 = feats.get('SMA_200', _close.rolling(200, min_periods=130).mean())
+
+        # 52-week (252 trading days) high and low
+        high_52w = _high.rolling(252, min_periods=126).max()
+        low_52w  = _low.rolling(252, min_periods=126).min()
+
+        # 1. Price > SMA150 AND Price > SMA200
+        feats['miner_price_above_150_200'] = ((_close > sma150) & (_close > sma200)).astype('int8')
+
+        # 2. SMA150 > SMA200
+        feats['miner_sma150_above_200'] = (sma150 > sma200).astype('int8')
+
+        # 3. SMA200 trending up for at least 1 month (20 trading days)
+        sma200_1m_ago = sma200.shift(20)
+        feats['miner_sma200_trending_up'] = (sma200 > sma200_1m_ago).astype('int8')
+        # Stronger version: trending up for 4-5 months (~100 trading days)
+        sma200_5m_ago = sma200.shift(100)
+        feats['miner_sma200_trend_5m'] = (sma200 > sma200_5m_ago).astype('int8')
+
+        # 4. SMA50 > SMA150 AND SMA50 > SMA200
+        feats['miner_sma50_above_150_200'] = ((sma50 > sma150) & (sma50 > sma200)).astype('int8')
+
+        # 5. Price > SMA50
+        feats['miner_price_above_50'] = (_close > sma50).astype('int8')
+
+        # 6. Price >= 30% above 52-week low
+        pct_above_low = (_close - low_52w) / low_52w.replace(0, np.nan)
+        feats['miner_pct_above_52w_low'] = to_float32_safe(pct_above_low)
+        feats['miner_30pct_above_low'] = (pct_above_low >= 0.30).astype('int8')
+
+        # 7. Price within 25% of 52-week high (closer to high = better)
+        pct_from_high = (high_52w - _close) / high_52w.replace(0, np.nan)
+        feats['miner_pct_from_52w_high'] = to_float32_safe(pct_from_high)
+        feats['miner_within_25pct_high'] = (pct_from_high <= 0.25).astype('int8')
+
+        # COMPOSITE: All 7 Minervini criteria pass = 1 (strong trend template)
+        feats['miner_trend_template'] = (
+            feats['miner_price_above_150_200'] &
+            feats['miner_sma150_above_200'] &
+            feats['miner_sma200_trending_up'] &
+            feats['miner_sma50_above_150_200'] &
+            feats['miner_price_above_50'] &
+            feats['miner_30pct_above_low'] &
+            feats['miner_within_25pct_high']
+        ).astype('int8')
+
+        # Count of how many criteria pass (0-7, useful as continuous signal)
+        feats['miner_criteria_count'] = (
+            feats['miner_price_above_150_200'] +
+            feats['miner_sma150_above_200'] +
+            feats['miner_sma200_trending_up'] +
+            feats['miner_sma50_above_150_200'] +
+            feats['miner_price_above_50'] +
+            feats['miner_30pct_above_low'] +
+            feats['miner_within_25pct_high']
+        ).astype('int8')
+
+        # Additional useful derived features
+        # Distance from 52w high (0 = at high, negative = below)
+        feats['dist_52w_high_pct'] = to_float32_safe((_close - high_52w) / high_52w.replace(0, np.nan))
+        # Distance from 52w low (0 = at low, positive = above)
+        feats['dist_52w_low_pct'] = to_float32_safe(pct_above_low)
+        # SMA slope indicators
+        feats['sma50_slope_20d'] = to_float32_safe((sma50 - sma50.shift(20)) / sma50.shift(20).replace(0, np.nan))
+        feats['sma150_slope_20d'] = to_float32_safe((sma150 - sma150.shift(20)) / sma150.shift(20).replace(0, np.nan))
+        feats['sma200_slope_20d'] = to_float32_safe((sma200 - sma200.shift(20)) / sma200.shift(20).replace(0, np.nan))
+
         if shift_features > 0:
             feats = feats.shift(shift_features)
 
         # >>> FIX: garantir que colunas discretas não tenham NaN antes do astype(int8)
-        int_cols = [c for c in feats.columns if str(c).startswith("cross_")]
+        int_cols = [c for c in feats.columns if str(c).startswith("cross_") or str(c).startswith("miner_")]
         feats[int_cols] = feats[int_cols].fillna(0).astype('int8')
 
         # floats podem ficar com NaN (você já zera depois no fill_100pct), mas pode manter assim:
@@ -574,9 +691,86 @@ def run_etl():
         patt_cols = [c for c in P.columns if c.endswith('pattern')]
         P[patt_cols] = P[patt_cols].fillna(0).astype('int8')  # <<< FIX
 
-        other_cols = [c for c in P.columns if c not in patt_cols]
+        # ── Rolling pattern aggregations: daily(5d), weekly(5d), monthly(20d) ──
+        # For each pattern column, create:
+        #   _bull_5d  = count of bullish signals (==1) in last 5 days
+        #   _bear_5d  = count of bearish signals (==-1) in last 5 days
+        #   _net_5d   = bull - bear in last 5 days (positive = bullish bias)
+        #   _bull_20d = count of bullish in last 20 days (~monthly)
+        #   _bear_20d = count of bearish in last 20 days
+        #   _net_20d  = bull - bear in last 20 days
+        #   _any_bull_5d = 1 if any bullish in last 5d, 0 otherwise
+        #   _any_bear_5d = 1 if any bearish in last 5d, 0 otherwise
+        for pcol in patt_cols:
+            s = P[pcol]
+            bull = (s == 1).astype('int8')
+            bear = (s == -1).astype('int8')
+
+            # Daily / Weekly window (5 trading days)
+            P[pcol + '_bull_5d'] = bull.rolling(5, min_periods=1).sum().astype('int8')
+            P[pcol + '_bear_5d'] = bear.rolling(5, min_periods=1).sum().astype('int8')
+            P[pcol + '_net_5d']  = (P[pcol + '_bull_5d'] - P[pcol + '_bear_5d']).astype('int8')
+            P[pcol + '_any_bull_5d'] = (P[pcol + '_bull_5d'] > 0).astype('int8')
+            P[pcol + '_any_bear_5d'] = (P[pcol + '_bear_5d'] > 0).astype('int8')
+
+            # Monthly window (20 trading days)
+            P[pcol + '_bull_20d'] = bull.rolling(20, min_periods=1).sum().astype('int8')
+            P[pcol + '_bear_20d'] = bear.rolling(20, min_periods=1).sum().astype('int8')
+            P[pcol + '_net_20d']  = (P[pcol + '_bull_20d'] - P[pcol + '_bear_20d']).astype('int8')
+
+        other_cols = [c for c in P.columns if c not in patt_cols and not any(c.startswith(p) for p in patt_cols)]
         P[other_cols] = to_float32_safe(P[other_cols])
         return P
+
+
+    def patterns_weekly_monthly(ohlcv: pd.DataFrame) -> pd.DataFrame:
+        """Detect chart patterns on weekly and monthly resampled OHLC candles,
+        then forward-fill back to daily frequency for alignment."""
+        out = pd.DataFrame(index=ohlcv.index)
+        ohlcv_idx = ohlcv.copy()
+        if not isinstance(ohlcv_idx.index, pd.DatetimeIndex):
+            if 'Date' in ohlcv_idx.columns:
+                ohlcv_idx = ohlcv_idx.set_index('Date')
+            else:
+                return out  # can't resample without dates
+
+        for tf_label, tf_rule in [('W', 'W-FRI'), ('M', 'ME')]:
+            try:
+                resampled = ohlcv_idx.resample(tf_rule).agg({
+                    'Open': 'first', 'High': 'max', 'Low': 'min',
+                    'Close': 'last', 'Volume': 'sum'
+                }).dropna(subset=['Close'])
+            except Exception:
+                continue
+
+            if len(resampled) < 5:
+                continue
+
+            # Run pattern detection on resampled data
+            patt_funcs = [
+                detect_head_shoulder(resampled, prefix=f"hs_{tf_label}_"),
+                detect_triangle_pattern(resampled, prefix=f"tri_{tf_label}_"),
+                detect_wedge(resampled, prefix=f"wed_{tf_label}_"),
+                detect_channel(resampled, prefix=f"chan_{tf_label}_"),
+                detect_double_top_bottom(resampled, prefix=f"dbl_{tf_label}_"),
+            ]
+            tf_patt = pd.concat(patt_funcs, axis=1)
+
+            # Keep only pattern columns (not roll_max/min intermediates)
+            keep_cols = [c for c in tf_patt.columns if c.endswith('pattern')]
+            tf_patt = tf_patt[keep_cols].fillna(0).astype('int8')
+
+            # Shift by 1 to avoid look-ahead
+            tf_patt = tf_patt.shift(1)
+
+            # Reindex to daily (forward-fill: weekly/monthly signal persists until next candle)
+            tf_daily = tf_patt.reindex(ohlcv_idx.index, method='ffill').fillna(0).astype('int8')
+
+            # Reset index to match original
+            tf_daily.index = ohlcv.index
+            out = pd.concat([out, tf_daily], axis=1)
+
+        return out
 
 
     # ============================
@@ -822,7 +1016,7 @@ def run_etl():
 
         if verbose:
             after_cnt = X_red.shape[1]
-            print(f"[Feature reduction] columns: {before_cnt} → {after_cnt} ({100.0*after_cnt/before_cnt:.1f}% kept)")
+            print(f"[Feature reduction] columns: {before_cnt} -> {after_cnt} ({100.0*after_cnt/before_cnt:.1f}% kept)")
         return X_red
     import re
 
@@ -904,17 +1098,33 @@ def run_etl():
                 ni  = _stmt_get(inc, ["Net Income", "NetIncome"], col)
                 ebt = _stmt_get(inc, ["EBITDA"], col)
                 gp  = _stmt_get(inc, ["Gross Profit", "GrossProfit"], col)
+                op_inc = _stmt_get(inc, ["Operating Income", "OperatingIncome"], col)
+
+                # EPS: Diluted EPS preferred, fallback to Basic EPS
+                diluted_eps = _stmt_get(inc, ["Diluted EPS", "DilutedEPS"], col)
+                basic_eps   = _stmt_get(inc, ["Basic EPS", "BasicEPS"], col)
+                eps_val = diluted_eps if np.isfinite(diluted_eps) else basic_eps
+
+                # Shares outstanding (for derived EPS if not available)
+                shares = _stmt_get(inc, ["Diluted Average Shares", "DilutedAverageShares",
+                                         "Basic Average Shares", "BasicAverageShares"], col)
 
                 assets = _stmt_get(bal, ["Total Assets", "TotalAssets"], col)
                 liab   = _stmt_get(bal, ["Total Liabilities Net Minority Interest", "TotalLiabilitiesNetMinorityInterest",
                                          "Total Liabilities", "TotalLiabilities"], col)
                 debt   = _stmt_get(bal, ["Total Debt", "TotalDebt", "Long Term Debt", "LongTermDebt"], col)
                 cash   = _stmt_get(bal, ["Cash And Cash Equivalents", "CashAndCashEquivalents"], col)
+                curr_assets = _stmt_get(bal, ["Current Assets", "CurrentAssets"], col)
+                curr_liab   = _stmt_get(bal, ["Current Liabilities", "CurrentLiabilities"], col)
 
                 ocf = _stmt_get(cfs, ["Operating Cash Flow", "OperatingCashFlow"], col)
                 fcf = _stmt_get(cfs, ["Free Cash Flow", "FreeCashFlow"], col)
 
                 equity = (assets - liab) if np.isfinite(assets) and np.isfinite(liab) else np.nan
+
+                # Derive EPS from net_income / shares if not directly available
+                if not np.isfinite(eps_val) and np.isfinite(ni) and np.isfinite(shares) and shares > 0:
+                    eps_val = ni / shares
 
                 rows.append({
                     "date": pd.to_datetime(col),
@@ -922,11 +1132,15 @@ def run_etl():
                     "fundQ_net_income": float(ni) if np.isfinite(ni) else np.nan,
                     "fundQ_ebitda": float(ebt) if np.isfinite(ebt) else np.nan,
                     "fundQ_gross_profit": float(gp) if np.isfinite(gp) else np.nan,
+                    "fundQ_op_income": float(op_inc) if np.isfinite(op_inc) else np.nan,
+                    "fundQ_eps": float(eps_val) if np.isfinite(eps_val) else np.nan,
                     "fundQ_assets": float(assets) if np.isfinite(assets) else np.nan,
                     "fundQ_liabilities": float(liab) if np.isfinite(liab) else np.nan,
                     "fundQ_equity": float(equity) if np.isfinite(equity) else np.nan,
                     "fundQ_total_debt": float(debt) if np.isfinite(debt) else np.nan,
                     "fundQ_cash": float(cash) if np.isfinite(cash) else np.nan,
+                    "fundQ_curr_assets": float(curr_assets) if np.isfinite(curr_assets) else np.nan,
+                    "fundQ_curr_liab": float(curr_liab) if np.isfinite(curr_liab) else np.nan,
                     "fundQ_ocf": float(ocf) if np.isfinite(ocf) else np.nan,
                     "fundQ_fcf": float(fcf) if np.isfinite(fcf) else np.nan,
                 })
@@ -937,13 +1151,59 @@ def run_etl():
             eps = 1e-12
             qdf["fundQ_net_margin"]    = qdf["fundQ_net_income"] / (qdf["fundQ_revenue"].abs() + eps)
             qdf["fundQ_ebitda_margin"] = qdf["fundQ_ebitda"] / (qdf["fundQ_revenue"].abs() + eps)
+            qdf["fundQ_gross_margin"]  = qdf["fundQ_gross_profit"] / (qdf["fundQ_revenue"].abs() + eps)
+            qdf["fundQ_op_margin"]     = qdf["fundQ_op_income"] / (qdf["fundQ_revenue"].abs() + eps)
             qdf["fundQ_debt_to_equity"]= qdf["fundQ_total_debt"] / (qdf["fundQ_equity"].abs() + eps)
             qdf["fundQ_cash_to_debt"]  = qdf["fundQ_cash"] / (qdf["fundQ_total_debt"].abs() + eps)
             qdf["fundQ_fcf_margin"]    = qdf["fundQ_fcf"] / (qdf["fundQ_revenue"].abs() + eps)
 
+            # ROE, ROA (annualized: multiply by 4 since quarterly)
+            qdf["fundQ_roe"] = 4.0 * qdf["fundQ_net_income"] / (qdf["fundQ_equity"].abs() + eps)
+            qdf["fundQ_roa"] = 4.0 * qdf["fundQ_net_income"] / (qdf["fundQ_assets"].abs() + eps)
+
+            # Current ratio (liquidity)
+            qdf["fundQ_current_ratio"] = qdf["fundQ_curr_assets"] / (qdf["fundQ_curr_liab"].abs() + eps)
+
             # growth q/q
             qdf["fundQ_rev_qoq"] = qdf["fundQ_revenue"].pct_change()
             qdf["fundQ_ni_qoq"]  = qdf["fundQ_net_income"].pct_change()
+            qdf["fundQ_eps_qoq"] = qdf["fundQ_eps"].pct_change()
+
+            # growth YoY (pct_change(4) = same quarter last year)
+            if len(qdf) >= 4:
+                qdf["fundQ_rev_yoy"]  = qdf["fundQ_revenue"].pct_change(4)
+                qdf["fundQ_ni_yoy"]   = qdf["fundQ_net_income"].pct_change(4)
+                qdf["fundQ_eps_yoy"]  = qdf["fundQ_eps"].pct_change(4)
+                qdf["fundQ_ebitda_yoy"] = qdf["fundQ_ebitda"].pct_change(4)
+            else:
+                for c in ["fundQ_rev_yoy", "fundQ_ni_yoy", "fundQ_eps_yoy", "fundQ_ebitda_yoy"]:
+                    qdf[c] = np.nan
+
+            # TTM aggregates (trailing 12 months = sum of last 4 quarters)
+            for base_col, ttm_col in [
+                ("fundQ_revenue", "fundQ_rev_ttm"),
+                ("fundQ_net_income", "fundQ_ni_ttm"),
+                ("fundQ_ebitda", "fundQ_ebitda_ttm"),
+                ("fundQ_fcf", "fundQ_fcf_ttm"),
+                ("fundQ_ocf", "fundQ_ocf_ttm"),
+            ]:
+                if base_col in qdf.columns:
+                    qdf[ttm_col] = qdf[base_col].rolling(4, min_periods=2).sum()
+
+            # TTM margins
+            if "fundQ_rev_ttm" in qdf.columns:
+                rev_ttm_abs = qdf["fundQ_rev_ttm"].abs() + eps
+                if "fundQ_ni_ttm" in qdf.columns:
+                    qdf["fundQ_net_margin_ttm"] = qdf["fundQ_ni_ttm"] / rev_ttm_abs
+                if "fundQ_ebitda_ttm" in qdf.columns:
+                    qdf["fundQ_ebitda_margin_ttm"] = qdf["fundQ_ebitda_ttm"] / rev_ttm_abs
+                if "fundQ_fcf_ttm" in qdf.columns:
+                    qdf["fundQ_fcf_margin_ttm"] = qdf["fundQ_fcf_ttm"] / rev_ttm_abs
+
+            # Clip extreme growth ratios to prevent inf/extreme outliers
+            growth_cols = [c for c in qdf.columns if "_qoq" in c or "_yoy" in c]
+            for gc in growth_cols:
+                qdf[gc] = qdf[gc].clip(-5.0, 10.0)  # -500% to +1000%
 
             _FUND_Q_CACHE[tk] = qdf
             return qdf
@@ -982,8 +1242,8 @@ def run_etl():
         return out
 
 
-    MIN_TARGET_RATE = 0.01  # pelo menos 1% de positivos
-    MAX_TARGET_RATE = 0.98  # no máximo 98% de positivos
+    MIN_TARGET_RATE = 0.005  # pelo menos 0.5% de positivos (relaxed for FIIs/crypto)
+    MAX_TARGET_RATE = 0.995  # no máximo 99.5% de positivos (relaxed for FIIs/crypto)
 
     skip_reasons = Counter()
     valid_tickers = []
@@ -1016,12 +1276,15 @@ def run_etl():
             rate_up = float(y_up20.mean()) if len(y_up20) else 0.0
             rate_dd = float(y_dd5.mean()) if len(y_dd5) else 0.0
 
-            if not (MIN_TARGET_RATE <= rate_up <= MAX_TARGET_RATE):
-                skip_reasons[f"degenerate_up20_{tk}"] += 1
-                continue
-            if not (MIN_TARGET_RATE <= rate_dd <= MAX_TARGET_RATE):
-                skip_reasons[f"degenerate_dd5_{tk}"] += 1
-                continue
+            # FIIs (ending in 11.SA) are low-volatility: skip degeneracy for them
+            is_fii = tk.endswith("11.SA")
+            if not is_fii:
+                if not (MIN_TARGET_RATE <= rate_up <= MAX_TARGET_RATE):
+                    skip_reasons[f"degenerate_up20_{tk}"] += 1
+                    continue
+                if not (MIN_TARGET_RATE <= rate_dd <= MAX_TARGET_RATE):
+                    skip_reasons[f"degenerate_dd5_{tk}"] += 1
+                    continue
 
             valid_tickers.append(tk)
 
@@ -1051,6 +1314,77 @@ def run_etl():
     skip_reasons = Counter()
 
 
+
+    # ============================
+    # Pre-compute market reference data for cross-ticker features
+    # ============================
+    _ibov_sym = None
+    for _try_sym in ['^BVSP', '^BVSP.SA']:
+        try:
+            _ibov_ohlcv = data.xs(_try_sym, level=1, axis=1)
+            if 'Close' in _ibov_ohlcv.columns and _ibov_ohlcv['Close'].notna().sum() > 100:
+                _ibov_sym = _try_sym
+                break
+        except (KeyError, ValueError):
+            continue
+    if _ibov_sym:
+        _ibov_ret = data.xs(_ibov_sym, level=1, axis=1)['Close'].pct_change()
+        print(f"[cross-features] IBOV reference: {_ibov_sym} ({_ibov_ret.notna().sum()} returns)")
+    else:
+        _ibov_ret = None
+        print("[cross-features] WARNING: IBOV not found, skipping beta/relative-strength")
+
+    _vix_data = None
+    for _try_vix in ['^VIX', '^VIX.SA']:
+        try:
+            _vix_ohlcv = data.xs(_try_vix, level=1, axis=1)
+            if 'Close' in _vix_ohlcv.columns and _vix_ohlcv['Close'].notna().sum() > 100:
+                _vix_data = _vix_ohlcv['Close']
+                break
+        except (KeyError, ValueError):
+            continue
+    if _vix_data is not None:
+        _vix_pctl_252 = _vix_data.rolling(252, min_periods=60).rank(pct=True)
+        print(f"[cross-features] VIX reference: {_vix_data.notna().sum()} values")
+    else:
+        _vix_pctl_252 = None
+        print("[cross-features] WARNING: VIX not found, skipping VIX percentile")
+
+    def compute_cross_ticker_features(tk, ohlcv, ibov_ret, vix_pctl, shift_features=1):
+        """Compute cross-ticker features: rolling beta, relative strength, VIX percentile."""
+        close_col = 'Adj Close' if 'Adj Close' in ohlcv.columns else 'Close'
+        tk_ret = ohlcv[close_col].pct_change()
+        cross_feats = pd.DataFrame(index=ohlcv.index)
+
+        # Rolling beta with IBOV (60-day)
+        if ibov_ret is not None:
+            aligned = pd.DataFrame({'tk': tk_ret, 'ibov': ibov_ret}).dropna()
+            if len(aligned) > 60:
+                cov_roll = aligned['tk'].rolling(60, min_periods=30).cov(aligned['ibov'])
+                var_roll = aligned['ibov'].rolling(60, min_periods=30).var()
+                beta_raw = cov_roll / var_roll.replace(0, np.nan)
+                cross_feats['beta_ibov_60d'] = beta_raw.reindex(ohlcv.index)
+
+            # Relative strength vs IBOV: ticker return 20d / ibov return 20d
+            tk_ret20 = ohlcv[close_col].pct_change(20)
+            ibov_ret20 = ibov_ret.rolling(20).sum()  # approx 20d return
+            ibov_ret20_aligned = ibov_ret20.reindex(ohlcv.index)
+            cross_feats['rel_strength_ibov_20d'] = tk_ret20 - ibov_ret20_aligned
+
+            # Correlation rolling 60d with IBOV
+            if len(aligned) > 60:
+                corr_roll = aligned['tk'].rolling(60, min_periods=30).corr(aligned['ibov'])
+                cross_feats['corr_ibov_60d'] = corr_roll.reindex(ohlcv.index)
+
+        # VIX percentile (252d)
+        if vix_pctl is not None:
+            cross_feats['vix_percentile_252d'] = vix_pctl.reindex(ohlcv.index)
+
+        if shift_features > 0:
+            cross_feats = cross_feats.shift(shift_features)
+
+        cross_feats = to_float32_safe(cross_feats)
+        return cross_feats
 
     # ============================
     # Construção por ticker
@@ -1088,13 +1422,15 @@ def run_etl():
             # Build features
             feats = indicators_for_ticker(ohlcv, shift_features=SHIFT_FEATURES)
             pats  = patterns_for_ticker(ohlcv, shift_features=SHIFT_FEATURES)
+            pats_wm = patterns_weekly_monthly(ohlcv)  # weekly + monthly pattern detection
             if feats is None or feats.shape[1] == 0:
                 skip_reasons['empty_feats'] += 1
                 continue
 
             fund = fundamentals_daily_for_ticker(tk, ohlcv.index, shift_features=SHIFT_FEATURES)
+            cross = compute_cross_ticker_features(tk, ohlcv, _ibov_ret, _vix_pctl_252, shift_features=SHIFT_FEATURES)
 
-            X_tk = pd.concat([feats, pats, fund], axis=1)
+            X_tk = pd.concat([feats, pats, pats_wm, fund, cross], axis=1)
             X_tk = fill_100pct(X_tk, allow_bfill=ALLOW_BFILL_EXOGENOUS)
             if X_tk.shape[1] == 0:
                 skip_reasons['empty_after_fill'] += 1
@@ -1180,19 +1516,23 @@ def run_etl():
     # ============================
     # Feature reduction (per ticker, MI vs targets)
     # ============================
-    # y_up and y_dd views (ensure they exist)
-    y_up = y.loc[:, y.columns.get_level_values(0) == 'target_up20']
-    y_dd = y.loc[:, y.columns.get_level_values(0) == 'target_dd5']
+    if SKIP_MI_REDUCTION:
+        print("[ETL] SKIP_MI_REDUCTION=True -> using full feature set as 'reduced' (GA does Spearman selection)")
+        X_reduced = X.copy()
+    else:
+        # y_up and y_dd views (ensure they exist)
+        y_up = y.loc[:, y.columns.get_level_values(0) == 'target_up20']
+        y_dd = y.loc[:, y.columns.get_level_values(0) == 'target_dd5']
 
-    X_reduced = reduce_features_automatic(
-        X, y_up, y_dd,
-        top_fraction=0.85,   # pega ~85% por MI antes de deduplicar
-        min_keep=96,         # garanta pelo menos ~100 por ticker (se existirem)
-        var_thr=None,        # não remova por variância agora
-        corr_thr=0.9995,     # só remove quase idênticos
-        always_keep_prefixes=("pct_change","SMA_","tri_","sr_"),
-        verbose=True
-    )
+        X_reduced = reduce_features_automatic(
+            X, y_up, y_dd,
+            top_fraction=0.85,   # pega ~85% por MI antes de deduplicar
+            min_keep=96,         # garanta pelo menos ~100 por ticker (se existirem)
+            var_thr=None,        # nao remova por variancia agora
+            corr_thr=0.9995,     # so remove quase identicos
+            always_keep_prefixes=("pct_change","SMA_","tri_","sr_","Close","Adj Close","close"),  # Close obrigatorio para reg
+            verbose=True
+        )
 
 
 

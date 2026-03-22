@@ -4,10 +4,10 @@
 Stock Pipeline Runner
 =====================
 Executes all 4 pipeline steps sequentially:
-  1. ETL (Copy_of_STOCK_ETL_v2)       → downloads data, generates features/targets, saves parquet
-  2. BIN (bin_Stock_modelos_individuais) → trains/loads binary classification models (up20/dd5)
-  3. REG (reg_Stock_modelos_individuais) → baseline regression forecasts (best_entry/best_sale)
-  4. FINAL (Final_stock_output)          → consolidates all signals into final output
+  1. ETL (Copy_of_STOCK_ETL_v2)       -> downloads data, generates features/targets, saves parquet
+  2. BIN (bin_Stock_modelos_individuais) -> trains/loads binary classification models (up20/dd5)
+  3. REG (reg_Stock_modelos_individuais) -> baseline regression forecasts (best_entry/best_sale)
+  4. FINAL (Final_stock_output)          -> consolidates all signals into final output
 
 All outputs are saved under ./output/ directory in the codespace.
 
@@ -36,24 +36,24 @@ for d in [OUTPUT_BASE, OUTPUT_DATA, OUTPUT_MODELS]:
 
 
 def step1_etl():
-    """Step 1: ETL — download, feature engineering, target creation, save parquet."""
+    """Step 1: ETL -- download, feature engineering, target creation, save parquet."""
     print("\n" + "=" * 80)
-    print("STEP 1/4 — ETL (Copy_of_STOCK_ETL_v2)")
+    print("STEP 1/4 -- ETL (Copy_of_STOCK_ETL_v2)")
     print("=" * 80)
     from stock_etl import run_etl
     run_etl()
-    print("\n✅ ETL concluído.")
+    print("\n[OK] ETL concluido.")
     print(f"   Outputs em: {OUTPUT_DATA}/expanded_stock*.parquet")
 
 
 def step2_bin_models():
     """Step 2: Binary classification models (LGBM, HGB, RF, ET)."""
     print("\n" + "=" * 80)
-    print("STEP 2/4 — BINARY MODELS (bin_Stock_modelos_individuais)")
+    print("STEP 2/4 -- BINARY MODELS (bin_Stock_modelos_individuais)")
     print("=" * 80)
     from stock_bin_models import run_bin_models
     run_bin_models()
-    print("\n✅ Binary models concluído.")
+    print("\n[OK] Binary models concluido.")
     print(f"   Models em: {OUTPUT_MODELS}/")
     print(f"   Signals em: {OUTPUT_BASE}/ensemble_signals_history*.parquet")
 
@@ -61,22 +61,22 @@ def step2_bin_models():
 def step3_reg_models():
     """Step 3: Regression baseline forecasts (best entry / best sale)."""
     print("\n" + "=" * 80)
-    print("STEP 3/4 — REGRESSION MODELS (reg_Stock_modelos_individuais)")
+    print("STEP 3/4 -- REGRESSION MODELS (reg_Stock_modelos_individuais)")
     print("=" * 80)
     from stock_reg_models import run_reg_models
     run_reg_models()
-    print("\n✅ Regression models concluído.")
+    print("\n[OK] Regression models concluido.")
     print(f"   Outputs em: {OUTPUT_BASE}/forecast_history_wide.parquet")
 
 
 def step4_final_output():
-    """Step 4: Final consolidation — merge all signals, compute EV, fund score."""
+    """Step 4: Final consolidation -- merge all signals, compute EV, fund score."""
     print("\n" + "=" * 80)
-    print("STEP 4/4 — FINAL OUTPUT (Final_stock_output)")
+    print("STEP 4/4 -- FINAL OUTPUT (Final_stock_output)")
     print("=" * 80)
     from stock_final_output import run_final_output
     run_final_output()
-    print("\n✅ Final output concluído.")
+    print("\n[OK] Final output concluido.")
     print(f"   Output em: {OUTPUT_BASE}/history_consolidated.parquet")
 
 
@@ -112,7 +112,7 @@ def main():
 
     for step_num in steps_to_run:
         if step_num not in STEPS:
-            print(f"⚠️  Step {step_num} unknown, skipping.")
+            print(f"[WARN] Step {step_num} unknown, skipping.")
             continue
 
         name, func = STEPS[step_num]
@@ -120,18 +120,18 @@ def main():
         try:
             func()
         except Exception as e:
-            print(f"\n❌ STEP {step_num} ({name}) FAILED: {type(e).__name__}: {e}")
+            print(f"\n[FAIL] STEP {step_num} ({name}) FAILED: {type(e).__name__}: {e}")
             import traceback
             traceback.print_exc()
             sys.exit(1)
 
         elapsed = time.time() - t0
-        print(f"⏱️  Step {step_num} ({name}) took {elapsed:.1f}s")
+        print(f"[TIME] Step {step_num} ({name}) took {elapsed:.1f}s")
 
     total_time = time.time() - t0_global
     print("\n" + "=" * 80)
-    print(f"✅ PIPELINE COMPLETE — Total time: {total_time:.1f}s")
-    print(f"📁 Todos os arquivos salvos em: {OUTPUT_BASE}/")
+    print(f"[OK] PIPELINE COMPLETE -- Total time: {total_time:.1f}s")
+    print(f"Todos os arquivos salvos em: {OUTPUT_BASE}/")
     print("=" * 80)
 
     # List output files

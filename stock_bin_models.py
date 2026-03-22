@@ -10,8 +10,23 @@ os.makedirs('./output/data/models', exist_ok=True)
 os.makedirs('./output', exist_ok=True)
 
 
-def run_bin_models():
-    """Run the pipeline step."""
+def run_bin_models(mode: str = "full"):
+    """Run the pipeline step.
+
+    Parameters
+    ----------
+    mode : str
+        "full"      – load or retrain binary models and rescore all history (default).
+        "data-only" – skip entirely if the ensemble output file already exists;
+                      use cached predictions from the last full run.
+    """
+    import os as _os
+    if mode == "data-only":
+        _out = "./output/ensemble_signals_history.parquet"
+        if _os.path.exists(_out):
+            print(f"[bin_models] data-only: usando cache -> {_out}  (skipping ML scoring)")
+            return
+        print(f"[bin_models] data-only: nenhum cache em {_out} — executando normalmente.")
     # -*- coding: utf-8 -*-
     """bin_Stock_modelos_individuais.ipynb
 
@@ -56,6 +71,18 @@ def run_bin_models():
         RandomForestClassifier, ExtraTreesClassifier, HistGradientBoostingClassifier
     )
     import lightgbm as lgb
+    try:
+        import xgboost as xgb
+        HAS_XGB = True
+    except ImportError:
+        HAS_XGB = False
+        print("[warn] xgboost not installed — skipping xgb model")
+    try:
+        from catboost import CatBoostClassifier
+        HAS_CATBOOST = True
+    except ImportError:
+        HAS_CATBOOST = False
+        print("[warn] catboost not installed — skipping catboost model")
     from numeric_utils import to_float32_safe, normalize_before_save
 
     warnings.filterwarnings("ignore")
@@ -79,8 +106,13 @@ def run_bin_models():
     # -------------------------
     # USER CONFIG
     # -------------------------
-    MODE              = "load"   # "auto" (load if exists else train) | "train" | "load"
-    RUN_MODELS        = ["lgbm", "hgb", "rf", "et"]
+    MODE              = "train"  # "auto" (load if exists else train) | "train" | "load"
+    _base_models = ["lgbm", "hgb", "rf", "et"]
+    if HAS_XGB:
+        _base_models.append("xgb")
+    if HAS_CATBOOST:
+        _base_models.append("catboost")
+    RUN_MODELS        = _base_models
     SAVE_MODELS       = True
     MODEL_DIR         = "./output/data/models"
     MODEL_TAG         = "multi_model_timeaware_v11_cv_recency_asset_thr"   # bump tag
@@ -144,18 +176,16 @@ def run_bin_models():
         "lgbm": 12,
         "hgb":  10,
         "rf":   8,
-        "et":   8
+        "et":   8,
+        "xgb":  10,
+        "catboost": 8,
     }
 
     # Configuração de Early Stopping para LightGBM
     EARLY_STOPPING_LGBM = 100
 
-    # Se você não tiver definido estas variáveis globais anteriormente, defina-as aqui para garantir:
-    if "RUN_MODELS" not in globals():
-        RUN_MODELS = ["lgbm", "hgb", "rf", "et"]
-
-    if "TARGETS" not in globals():
-        TARGETS = ["target_up20", "target_dd5"]
+    # RUN_MODELS and TARGETS already set above (lines ~110-122).
+    # Do NOT override — they include XGB/CatBoost when available.
 
     # ------------------------------------------------------------
     # TRADING POLICY (joint up20+dd5) — matches your real actions:
@@ -311,54 +341,38 @@ def run_bin_models():
 
 
     def fit_final_lgbm(params, X_fit, y_fit, w_fit, num_boost_round=600):
-        # LightGBM handles scale_pos_weight internally or via weight parameter.
-        # If we use _combine_time_and_class_weights, we don't need scale_pos_weight in params usually.
-        # But let's respect params if provided, though typically we remove it if using sample weights.
+        import sys, time as _time
+        print(f"[DEBUG fit_final_lgbm] X={X_fit.shape} y={y_fit.shape} rounds={num_boost_round}", flush=True); sys.stdout.flush()
 
         # Recalculate weights
         w = _combine_time_and_class_weights(y_fit, w_fit) if USE_CLASS_BALANCE_WEIGHTS else w_fit
+        print(f"[DEBUG fit_final_lgbm] weights computed, w.shape={w.shape}", flush=True); sys.stdout.flush()
 
         p = params.copy()
-        # Remove scale_pos_weight if we are using balanced sample weights to avoid double correction
         if USE_CLASS_BALANCE_WEIGHTS:
             p.pop("scale_pos_weight", None)
             p.pop("is_unbalance", None)
 
         used_gpu = False
-
-        # Try GPU if available
-        try_gpu = GPU_AVAILABLE and (p.get("device_type") == "gpu")
-
-        d_fit = lgb.Dataset(X_fit, label=y_fit, weight=w, free_raw_data=False)
-
-        if try_gpu:
-            try:
-                with suppress_output():
-                    booster = lgb.train(
-                        p,
-                        train_set=d_fit,
-                        num_boost_round=int(num_boost_round),
-                        valid_sets=None,
-                        callbacks=[lgb.log_evaluation(period=0)]
-                    )
-                used_gpu = True
-                return booster, used_gpu
-            except Exception:
-                pass # Fallback to CPU
-
-        # CPU Fallback
         p.pop("device_type", None)
         p.pop("gpu_device_id", None)
+        p["verbosity"] = -1
+        p["n_jobs"] = 1
 
-        with suppress_output():
-            booster = lgb.train(
-                p,
-                train_set=d_fit,
-                num_boost_round=int(num_boost_round),
-                valid_sets=None,
-                callbacks=[lgb.log_evaluation(period=0)]
-            )
+        print(f"[DEBUG fit_final_lgbm] creating Dataset...", flush=True); sys.stdout.flush()
+        d_fit = lgb.Dataset(X_fit, label=y_fit, weight=w, free_raw_data=False)
+        print(f"[DEBUG fit_final_lgbm] Dataset created, starting lgb.train...", flush=True); sys.stdout.flush()
+        _t0 = _time.time()
 
+        booster = lgb.train(
+            p,
+            train_set=d_fit,
+            num_boost_round=int(num_boost_round),
+            valid_sets=None,
+            callbacks=[lgb.log_evaluation(period=0)]
+        )
+
+        print(f"[DEBUG fit_final_lgbm] lgb.train done in {_time.time()-_t0:.1f}s", flush=True); sys.stdout.flush()
         return booster, used_gpu
 
 
@@ -404,9 +418,9 @@ def run_bin_models():
     # -------------------------
     @contextlib.contextmanager
     def suppress_output():
-        with open(os.devnull, "w") as devnull:
-            with contextlib.redirect_stdout(devnull), contextlib.redirect_stderr(devnull):
-                yield
+        # On Windows, redirect_stdout/stderr can deadlock with C++ libraries (LightGBM, sklearn)
+        # Just yield without suppression - use verbosity=-1 in model params instead
+        yield
 
     # -------------------------
     # Atomic persistence
@@ -415,7 +429,14 @@ def run_bin_models():
         return os.path.join(MODEL_DIR, f"{MODEL_TAG}_meta.json")
 
     def _model_path(model_key, target, kind="tv"):
-        ext = ".txt" if model_key == "lgbm" else ".joblib"
+        if model_key == "lgbm":
+            ext = ".txt"
+        elif model_key == "catboost":
+            ext = ".cbm"
+        elif model_key == "xgb":
+            ext = ".json"
+        else:
+            ext = ".joblib"
         return os.path.join(MODEL_DIR, f"{MODEL_TAG}_{kind}_{model_key}_{target}{ext}")
 
     def save_model_and_meta(kind, model_key, target, model_obj, meta):
@@ -424,10 +445,16 @@ def run_bin_models():
         path = _model_path(model_key, target, kind=kind)
         if model_key == "lgbm":
             _atomic_save_lgbm(model_obj, path)
+        elif model_key == "xgb":
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            model_obj.save_model(path)
+        elif model_key == "catboost":
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            model_obj.save_model(path)
         else:
             _atomic_save_joblib(model_obj, path)
         _atomic_save_json(meta, _meta_path())
-        print(f"[saved] {kind} {model_key}/{target} → {path}")
+        print(f"[saved] {kind} {model_key}/{target} -> {path}")
 
     def load_artifacts(run_models, targets, kind="tv"):
         meta = None
@@ -444,6 +471,12 @@ def run_bin_models():
                     if model_key == "lgbm":
                         with suppress_output():
                             obj = lgb.Booster(model_file=path)
+                    elif model_key == "xgb" and HAS_XGB:
+                        obj = xgb.XGBClassifier()
+                        obj.load_model(path)
+                    elif model_key == "catboost" and HAS_CATBOOST:
+                        obj = CatBoostClassifier()
+                        obj.load_model(path)
                     else:
                         obj = joblib.load(path)
                 loaded[(model_key, target)] = obj
@@ -1006,10 +1039,10 @@ def run_bin_models():
         f"Max labeled date: {pd.Timestamp(dates_lab[-1]).date()}"
     )
     print(
-        f"Dates — TRAIN: {pd.Timestamp(train_dates[0]).date()} → {pd.Timestamp(train_dates[-1]).date()} "
-        f"| VALID: {pd.Timestamp(valid_dates[0]).date()} → {pd.Timestamp(valid_dates[-1]).date()} "
-        f"| TEST: {pd.Timestamp(test_dates[0]).date()} → {pd.Timestamp(test_dates[-1]).date()} "
-        f"| APPLY(last {APPLY_DAYS}): {pd.Timestamp(apply_dates[0]).date()} → {pd.Timestamp(apply_dates[-1]).date()} "
+        f"Dates — TRAIN: {pd.Timestamp(train_dates[0]).date()} -> {pd.Timestamp(train_dates[-1]).date()} "
+        f"| VALID: {pd.Timestamp(valid_dates[0]).date()} -> {pd.Timestamp(valid_dates[-1]).date()} "
+        f"| TEST: {pd.Timestamp(test_dates[0]).date()} -> {pd.Timestamp(test_dates[-1]).date()} "
+        f"| APPLY(last {APPLY_DAYS}): {pd.Timestamp(apply_dates[0]).date()} -> {pd.Timestamp(apply_dates[-1]).date()} "
         f"| PURGE={PURGE_DAYS} (guard={max(TARGET_LOOKAHEAD_DAYS, FEATURE_LOOKAHEAD_DAYS)})"
     )
 
@@ -1107,7 +1140,7 @@ def run_bin_models():
         if missing_now:
             print(f"[WARN] {tk}: {len(missing_now)} features ausentes (ex: {missing_now[:10]})")
 
-        # ✅ troca o .loc por reindex (evita KeyError e padroniza schema)
+        # [OK] troca o .loc por reindex (evita KeyError e padroniza schema)
         X_feat = (X_tk.reindex(columns=all_feature_names)
                       .apply(pd.to_numeric, errors="coerce")
                       .replace([np.inf, -np.inf], np.nan)
@@ -1226,10 +1259,10 @@ def run_bin_models():
         f"Max labeled date: {pd.Timestamp(dates_lab[-1]).date()}"
     )
     print(
-        f"Dates — TRAIN: {pd.Timestamp(train_dates[0]).date()} → {pd.Timestamp(train_dates[-1]).date()} "
-        f"| VALID: {pd.Timestamp(valid_dates[0]).date()} → {pd.Timestamp(valid_dates[-1]).date()} "
-        f"| TEST: {pd.Timestamp(test_dates[0]).date()} → {pd.Timestamp(test_dates[-1]).date()} "
-        f"| APPLY(last {APPLY_DAYS}): {pd.Timestamp(apply_dates[0]).date()} → {pd.Timestamp(apply_dates[-1]).date()} "
+        f"Dates — TRAIN: {pd.Timestamp(train_dates[0]).date()} -> {pd.Timestamp(train_dates[-1]).date()} "
+        f"| VALID: {pd.Timestamp(valid_dates[0]).date()} -> {pd.Timestamp(valid_dates[-1]).date()} "
+        f"| TEST: {pd.Timestamp(test_dates[0]).date()} -> {pd.Timestamp(test_dates[-1]).date()} "
+        f"| APPLY(last {APPLY_DAYS}): {pd.Timestamp(apply_dates[0]).date()} -> {pd.Timestamp(apply_dates[-1]).date()} "
         f"| PURGE={PURGE_DAYS} (guard={max(TARGET_LOOKAHEAD_DAYS, FEATURE_LOOKAHEAD_DAYS)})"
     )
 
@@ -1345,7 +1378,7 @@ def run_bin_models():
             "n_estimators": 1800,
             "verbosity": -1,
             "random_state": 42,
-            "n_jobs": -1,
+            "n_jobs": 1,
         }
         if try_gpu:
             p.update({"device_type": "gpu", "gpu_device_id": 0, "max_bin": 255})
@@ -1382,7 +1415,7 @@ def run_bin_models():
             "min_samples_leaf": int(np.random.choice([1, 2, 4])),
             "bootstrap": True,
             "class_weight": "balanced_subsample",
-            "n_jobs": -1,
+            "n_jobs": 1,
             "random_state": 42,
             "verbose": 0,
             "warm_start": False,
@@ -1398,11 +1431,57 @@ def run_bin_models():
             "min_samples_leaf": int(np.random.choice([1, 2, 4])),
             "bootstrap": False,
             "class_weight": "balanced",
-            "n_jobs": -1,
+            "n_jobs": 1,
             "random_state": 42,
             "verbose": 0,
             "warm_start": False,
         }
+
+    def sample_xgb_params(base_spw):
+        return {
+            "objective": "binary:logistic",
+            "eval_metric": "logloss",
+            "learning_rate": float(10**np.random.uniform(-2.0, -0.7)),
+            "max_depth": int(np.random.choice([4, 5, 6, 7, 8])),
+            "min_child_weight": int(np.random.choice([1, 3, 5, 10])),
+            "subsample": float(np.random.choice(np.linspace(0.6, 1.0, 5))),
+            "colsample_bytree": float(np.random.choice(np.linspace(0.5, 1.0, 6))),
+            "reg_lambda": float(10**np.random.uniform(-3, 1)),
+            "reg_alpha": float(10**np.random.uniform(-4, 0)),
+            "scale_pos_weight": float(np.random.choice([0.5*base_spw, 1.0*base_spw, 1.5*base_spw])),
+            "n_estimators": int(np.random.choice([200, 400, 600])),
+            "tree_method": "hist",
+            "random_state": 42,
+            "n_jobs": 1,
+            "verbosity": 0,
+        }
+
+    def sample_catboost_params(base_spw):
+        return {
+            "iterations": int(np.random.choice([200, 400, 600])),
+            "learning_rate": float(10**np.random.uniform(-2.0, -0.7)),
+            "depth": int(np.random.choice([4, 6, 8, 10])),
+            "l2_leaf_reg": float(10**np.random.uniform(-2, 2)),
+            "border_count": int(np.random.choice([32, 64, 128])),
+            "scale_pos_weight": float(np.random.choice([0.5*base_spw, 1.0*base_spw, 1.5*base_spw])),
+            "random_seed": 42,
+            "verbose": 0,
+            "thread_count": -1,
+            "auto_class_weights": None,
+        }
+
+    def fit_final_xgb_params(params, X_fit, y_fit, w_fit):
+        w = _combine_time_and_class_weights(y_fit, w_fit) if USE_CLASS_BALANCE_WEIGHTS else w_fit
+        p = dict(params)
+        clf = xgb.XGBClassifier(**p)
+        return fit_with_weights(clf, X_fit, y_fit.astype(int), w)
+
+    def fit_final_catboost_params(params, X_fit, y_fit, w_fit):
+        w = _combine_time_and_class_weights(y_fit, w_fit) if USE_CLASS_BALANCE_WEIGHTS else w_fit
+        p = dict(params)
+        p.pop("auto_class_weights", None)
+        clf = CatBoostClassifier(**p)
+        return fit_with_weights(clf, X_fit, y_fit.astype(int), w)
 
     # -------------------------
     # LightGBM train with GPU fallback + sample weights
@@ -1657,6 +1736,64 @@ def run_bin_models():
             pbar.set_postfix(APm=f"{m:.3f}", APs=f"{s:.3f}", s=f"{(time.time()-t0):.1f}")
         return best
 
+    def tune_xgb_cv(target, n_trials):
+        y_tr_full = y_train_full[target].astype(int)
+        pos = int(y_tr_full.sum()); neg = int(len(y_tr_full) - pos)
+        if pos == 0 or neg == 0:
+            return None
+        base_spw = float(neg / max(1, pos))
+
+        best = None
+        pbar = tqdm(range(n_trials), desc="Tuning xgb (CV)", leave=True)
+        for _ in pbar:
+            params = sample_xgb_params(base_spw)
+            fold_scores = []
+            for fs in CV_FOLDS_SPEC:
+                X_tr, y_tr, w_tr, X_va, y_va, w_va = build_fold_arrays(fs, target)
+                X_tr, y_tr, w_tr = _cap_rows_for_tree_models(X_tr, y_tr, 120_000, w_tr)
+                clf = xgb.XGBClassifier(**params)
+                clf = fit_with_weights(clf, X_tr, y_tr.astype(int), w_tr)
+                p = clf.predict_proba(X_va)[:, 1]
+                ap = _safe_float(lambda: average_precision_score(y_va.astype(int), p))
+                fold_scores.append(ap)
+
+            m = float(np.mean(fold_scores))
+            s = float(np.std(fold_scores))
+            if (best is None) or (m > best.score_mean):
+                best = TrialResult(params=params, best_iter=None, score_mean=m, score_std=s)
+            pbar.set_postfix(APm=f"{m:.3f}", APs=f"{s:.3f}")
+        return best
+
+    def tune_catboost_cv(target, n_trials):
+        y_tr_full = y_train_full[target].astype(int)
+        pos = int(y_tr_full.sum()); neg = int(len(y_tr_full) - pos)
+        if pos == 0 or neg == 0:
+            return None
+        base_spw = float(neg / max(1, pos))
+
+        best = None
+        pbar = tqdm(range(n_trials), desc="Tuning catboost (CV)", leave=True)
+        for _ in pbar:
+            params = sample_catboost_params(base_spw)
+            fold_scores = []
+            for fs in CV_FOLDS_SPEC:
+                X_tr, y_tr, w_tr, X_va, y_va, w_va = build_fold_arrays(fs, target)
+                X_tr, y_tr, w_tr = _cap_rows_for_tree_models(X_tr, y_tr, 120_000, w_tr)
+                p_cb = dict(params)
+                p_cb.pop("auto_class_weights", None)
+                clf = CatBoostClassifier(**p_cb)
+                clf = fit_with_weights(clf, X_tr, y_tr.astype(int), w_tr)
+                p = clf.predict_proba(X_va)[:, 1]
+                ap = _safe_float(lambda: average_precision_score(y_va.astype(int), p))
+                fold_scores.append(ap)
+
+            m = float(np.mean(fold_scores))
+            s = float(np.std(fold_scores))
+            if (best is None) or (m > best.score_mean):
+                best = TrialResult(params=params, best_iter=None, score_mean=m, score_std=s)
+            pbar.set_postfix(APm=f"{m:.3f}", APs=f"{s:.3f}")
+        return best
+
     # ============================================================
     # FINAL FITS (FULL TRAIN then FULL TRAIN+VALID)
     # ============================================================
@@ -1859,6 +1996,7 @@ def run_bin_models():
 
             # ---- 1) Train both targets first (no joint threshold here) ----
             for target in TARGETS:
+                import sys; print(f"[DEBUG] Starting {model_key}/{target}", flush=True); sys.stdout.flush()
                 n_trials = int(NTRIALS.get(model_key, 0))
 
                 # --- Tuning ---
@@ -1873,9 +2011,14 @@ def run_bin_models():
                         best = tune_rf_cv(target, n_trials)
                     elif model_key == "et":
                         best = tune_et_cv(target, n_trials)
+                    elif model_key == "xgb":
+                        best = tune_xgb_cv(target, n_trials)
+                    elif model_key == "catboost":
+                        best = tune_catboost_cv(target, n_trials)
                     else:
                         raise ValueError(f"Unknown model {model_key}")
 
+                print(f"[DEBUG] Tuning done for {model_key}/{target}, best={best}", flush=True); sys.stdout.flush()
                 if best is None:
                     print(f"[skip] {model_key}/{target}: no tuning result")
                     train_models[(model_key, target)] = None
@@ -1885,6 +2028,7 @@ def run_bin_models():
                 best_by_t[target] = best
 
                 # --- Fit TRAIN-only model (for VALID predictions) ---
+                print(f"[DEBUG] Fitting TRAIN model {model_key}/{target}...", flush=True); sys.stdout.flush()
                 y_tr = y_train_full[target].astype("int8")
 
                 if model_key == "lgbm":
@@ -1896,6 +2040,10 @@ def run_bin_models():
                     model_train = fit_final_rf_params(best.params, X_train_full, y_tr, w_train_full)
                 elif model_key == "et":
                     model_train = fit_final_et_params(best.params, X_train_full, y_tr, w_train_full)
+                elif model_key == "xgb":
+                    model_train = fit_final_xgb_params(best.params, X_train_full, y_tr, w_train_full)
+                elif model_key == "catboost":
+                    model_train = fit_final_catboost_params(best.params, X_train_full, y_tr, w_train_full)
 
                 train_models[(model_key, target)] = model_train
 
@@ -1915,6 +2063,10 @@ def run_bin_models():
                     model_final = fit_final_rf_params(best.params, X_tv, y_tv_target, w_tv)
                 elif model_key == "et":
                     model_final = fit_final_et_params(best.params, X_tv, y_tv_target, w_tv)
+                elif model_key == "xgb":
+                    model_final = fit_final_xgb_params(best.params, X_tv, y_tv_target, w_tv)
+                elif model_key == "catboost":
+                    model_final = fit_final_catboost_params(best.params, X_tv, y_tv_target, w_tv)
 
                 final_models[(model_key, target)] = model_final
 
@@ -2171,7 +2323,25 @@ def run_bin_models():
             hist_out_reset = hist_out.reset_index().rename(columns={"index": "Date"})
             hist_out_reset = normalize_before_save(hist_out_reset)
             hist_out_reset.to_parquet(HIST_PATH, index=False)
-            print(f"[OK] Saved history with trust → {HIST_PATH} | rows={len(hist_out_reset)}")
+            print(f"[OK] Saved history with trust -> {HIST_PATH} | rows={len(hist_out_reset)}")
+
+            # ── Feature-mismatch detector ─────────────────────────────────────
+            # If saved models were trained on a different ETL feature schema
+            # (e.g. after a yfinance upgrade), align_columns fills missing features
+            # with 0 and the models output near-zero probabilities for every row.
+            # Detect this so the user knows to retrain (MODE = "train").
+            _prob_cols = [c for c in hist_out_reset.columns if c.startswith("proba_target_up20__")]
+            if _prob_cols:
+                _mean_p = float(hist_out_reset[_prob_cols[0]].mean())
+                if _mean_p < 1e-4:
+                    print(
+                        "\n[WARN] *** FEATURE MISMATCH DETECTED ***\n"
+                        f"       {_prob_cols[0]} media={_mean_p:.6f}  (esperado > 0)\n"
+                        "       Os modelos binários salvos foram treinados com um schema de\n"
+                        "       features diferente do ETL atual. Todas as probabilidades são ~0.\n"
+                        "       -> Rode o pipeline em modo completo para retreinar: run_pipeline.py\n"
+                        "         (ou altere MODE='train' em stock_bin_models.py)\n"
+                    )
 
 
 
@@ -2379,7 +2549,7 @@ def run_bin_models():
         hist_out = hist[["Date", "ticker", "split", "p_up20", "p_dd5", "pred_up20", "pred_dd5"]].copy()
         hist_out = normalize_before_save(hist_out)
         hist_out.to_parquet(out_hist, index=False)
-        print(f"[OK] Saved compatibility history → {out_hist} | rows={len(hist_out)}")
+        print(f"[OK] Saved compatibility history -> {out_hist} | rows={len(hist_out)}")
 
         print("[info] Skipping notebook-only extra ensemble section.")
         return
@@ -2603,7 +2773,7 @@ def run_bin_models():
               i = np.nanargmax(np.where(mask, fbeta, -np.inf))
               return float(thr[i])
 
-          # same logic as your original: strict → relax fpr → relax precision → best fbeta
+          # same logic as your original: strict -> relax fpr -> relax precision -> best fbeta
           t = pick((prec >= min_precision) & (rec >= min_recall) & (fpr <= max_fpr))
           if t is not None:
               return t
@@ -3314,8 +3484,8 @@ def run_bin_models():
     # -----------------------------
     assert "LONG" in globals(), "Expected LONG from your training cell."
     assert "meta" in globals(), "Expected meta from your training cell."
-    assert "final_models" in globals(), "Expected final_models from your training/load cell."
-    assert "RUN_MODELS" in globals() and "TARGETS" in globals(), "Expected RUN_MODELS and TARGETS."
+    assert "final_models" in dir() or "final_models" in locals(), "Expected final_models from your training/load cell."
+    assert "RUN_MODELS" in dir() or "RUN_MODELS" in locals(), "Expected RUN_MODELS and TARGETS."
 
     saved_cols = list(meta["feature_cols"])
 
@@ -3387,7 +3557,7 @@ def run_bin_models():
           f"(requested {FINAL_DAYS}, eff {final_days_eff})")
     print(f"[ens] TEST_EVAL unique dates={len(pd.Index(test_rows_dates).unique())} (min wanted {MIN_TEST_EVAL_DAYS})")
     if len(test_rows_dates) == 0:
-        print("[ens] ⚠️ TEST_EVAL ended up empty. Metrics/backtest for TEST will be skipped.")
+        print("[ens] [WARN] TEST_EVAL ended up empty. Metrics/backtest for TEST will be skipped.")
 
 
     # Build X matrices
@@ -3418,7 +3588,7 @@ def run_bin_models():
     print(f"[ens] TEST unique dates={len(test_unique)} | FINAL unique dates={len(pd.Index(final_rows_dates).unique())} (requested {FINAL_DAYS}, eff {final_days_eff})")
     print(f"[ens] Purged CV splits inside VALID: {len(CV_SPLITS)} | purge={CV_PURGE_USED} (requested {CV_PURGE_DAYS}) | test_len={CV_TEST_LEN_DAYS} | step={CV_STEP_DAYS}")
     if CV_PURGE_USED != CV_PURGE_DAYS:
-        print("[ens] ⚠️ CV purge was auto-relaxed to improve split count (for more stable OOF/calibration/weight-search).")
+        print("[ens] [WARN] CV purge was auto-relaxed to improve split count (for more stable OOF/calibration/weight-search).")
 
     # -----------------------------
     # Ticker recovery (for outputs + trading)
@@ -3490,7 +3660,7 @@ def run_bin_models():
     TRAIN_MODELS_NAME, TRAIN_ONLY_MODELS = _find_train_only_model_dict()
 
     if TRAIN_ONLY_MODELS is None:
-        print("[ens] ⚠️ TRAIN-only base models NOT found.")
+        print("[ens] [WARN] TRAIN-only base models NOT found.")
         print("[ens]    VALID scoring/selection may be optimistic if final_models saw VALID.")
         print("[ens]    Strongly recommended: expose train_models[(mk, target)] = model_fit_on_train_only.")
 
@@ -3499,12 +3669,12 @@ def run_bin_models():
         # Prefer TEST_EVAL for selection/thresholds if it exists; otherwise fallback to VALID.
         # Selection + thresholding ALWAYS on VALID (discipline).
         SELECT_SPLIT = "valid"
-        print("[ens] ⚠️ Selection/thresholding kept on VALID (train-only missing -> VALID may be optimistic).")
+        print("[ens] [WARN] Selection/thresholding kept on VALID (train-only missing -> VALID may be optimistic).")
 
 
         # IMPORTANT: if train-only is missing, VALID-based calibration is contaminated.
         # Disable calibration to avoid overconfident/saturated probabilities.
-        print("[ens] ⚠️ Disabling calibration because TRAIN-only models are missing (avoid contaminated calibration).")
+        print("[ens] [WARN] Disabling calibration because TRAIN-only models are missing (avoid contaminated calibration).")
         CALIBRATE_BASES = False
         CALIBRATION_MODE = "none"
 
@@ -3833,6 +4003,62 @@ def run_bin_models():
         ENSEMBLES["apply"][target]["ens_stackLR"] = p_ap_lr
         ENSEMBLE_INFO[target]["ens_stackLR"] = {"type": "stackLR", "keys": k_lr, "oof_coverage": float(cov_lr), "scaler": scLR, "clf": clfLR}
 
+        # 7) ens_stackLGBM — LightGBM meta-learner on base model probabilities
+        print(f"[{target}] 7) ens_stackLGBM")
+        try:
+            from sklearn.model_selection import TimeSeriesSplit
+            Xmeta_va, k_meta = build_meta_matrix(base_va, keys_order=keys)
+            Xmeta_te_lgb, _ = build_meta_matrix(base_te, keys_order=keys)
+            Xmeta_fi_lgb, _ = build_meta_matrix(base_fi, keys_order=keys)
+            Xmeta_ap_lgb, _ = build_meta_matrix(base_ap, keys_order=keys)
+
+            if Xmeta_va.shape[0] > 500 and Xmeta_va.shape[1] >= 2:
+                # Walk-forward OOF predictions with LightGBM meta-learner
+                oof_lgb = np.full(len(y_va), np.nan, dtype=np.float64)
+                meta_lgb_params = {
+                    "objective": "binary", "boosting_type": "gbdt",
+                    "learning_rate": 0.05, "num_leaves": 15, "max_depth": 4,
+                    "min_child_samples": 50, "subsample": 0.8,
+                    "colsample_bytree": 1.0, "reg_lambda": 1.0,
+                    "n_estimators": 100, "verbosity": -1, "random_state": 42
+                }
+                for train_idx, val_idx in CV_SPLITS:
+                    if len(val_idx) < 30:
+                        continue
+                    X_tr_m, y_tr_m = Xmeta_va[train_idx], y_va.values[train_idx].astype(int)
+                    X_va_m = Xmeta_va[val_idx]
+                    d_tr = lgb.Dataset(X_tr_m, label=y_tr_m)
+                    with suppress_output():
+                        bst = lgb.train(meta_lgb_params, d_tr, num_boost_round=100,
+                                        callbacks=[lgb.log_evaluation(period=0)])
+                    oof_lgb[val_idx] = bst.predict(X_va_m)
+
+                # Fit final LightGBM meta-learner on all valid data
+                d_full = lgb.Dataset(Xmeta_va, label=y_va.values.astype(int))
+                with suppress_output():
+                    meta_bst = lgb.train(meta_lgb_params, d_full, num_boost_round=100,
+                                         callbacks=[lgb.log_evaluation(period=0)])
+
+                p_te_lgb_m = meta_bst.predict(Xmeta_te_lgb) if Xmeta_te_lgb.shape[0] > 0 else np.array([])
+                p_fi_lgb_m = meta_bst.predict(Xmeta_fi_lgb) if Xmeta_fi_lgb.shape[0] > 0 else np.array([])
+                p_ap_lgb_m = meta_bst.predict(Xmeta_ap_lgb) if Xmeta_ap_lgb.shape[0] > 0 else np.array([])
+
+                # Replace NaN OOF with equal-weight avg
+                nan_mask = np.isnan(oof_lgb)
+                if nan_mask.any():
+                    oof_lgb[nan_mask] = p_va_eq[nan_mask] if len(p_va_eq) == len(oof_lgb) else 0.5
+
+                ENSEMBLES["valid"][target]["ens_stackLGBM"] = np.clip(oof_lgb, 1e-6, 1-1e-6)
+                ENSEMBLES["test"][target]["ens_stackLGBM"]  = np.clip(p_te_lgb_m, 1e-6, 1-1e-6)
+                ENSEMBLES["final"][target]["ens_stackLGBM"] = np.clip(p_fi_lgb_m, 1e-6, 1-1e-6)
+                ENSEMBLES["apply"][target]["ens_stackLGBM"] = np.clip(p_ap_lgb_m, 1e-6, 1-1e-6)
+                ENSEMBLE_INFO[target]["ens_stackLGBM"] = {"type": "stackLGBM", "keys": keys}
+                print(f"    ens_stackLGBM built with {Xmeta_va.shape[1]} base models")
+            else:
+                print(f"    ens_stackLGBM skipped (too few rows or models)")
+        except Exception as e:
+            print(f"    ens_stackLGBM failed: {e}")
+
         # -----------------------------
         # Thresholds learned on VALID + metrics on VALID/TEST_EVAL/FINAL
         # -----------------------------
@@ -4130,12 +4356,12 @@ def run_bin_models():
     apply_only = out_apply.sort_values(["Date","ticker"]).reset_index(drop=True)
     apply_only = normalize_before_save(apply_only)
     apply_only.to_csv(APPLY_SIGNALS_PATH, index=False)
-    print(f"[OK] Saved APPLY signals → {APPLY_SIGNALS_PATH} | rows={len(apply_only)}")
+    print(f"[OK] Saved APPLY signals -> {APPLY_SIGNALS_PATH} | rows={len(apply_only)}")
 
     debug = pd.concat([out_valid, out_apply], axis=0).sort_values(["Date","ticker"]).reset_index(drop=True)
     debug = normalize_before_save(debug)
     debug.to_csv(APPLY_DEBUG_PATH, index=False)
-    print(f"[OK] Saved DEBUG (VALID+APPLY) → {APPLY_DEBUG_PATH} | rows={len(debug)}")
+    print(f"[OK] Saved DEBUG (VALID+APPLY) -> {APPLY_DEBUG_PATH} | rows={len(debug)}")
 
     import numpy as np
     import pandas as pd
@@ -4217,7 +4443,7 @@ def run_bin_models():
         hist_out=save_hist_out_minimal(hist_out, HIST_PATH)
         hist_out = normalize_before_save(hist_out)
         hist_out.to_parquet(HIST_PATH, index=False)
-        print(f"[OK] Saved ensemble history → {HIST_PATH} | rows={len(hist_out)}")
+        print(f"[OK] Saved ensemble history -> {HIST_PATH} | rows={len(hist_out)}")
 
 
     # =========================================
@@ -4268,7 +4494,7 @@ def run_bin_models():
     print("FILE:", PATH)
     print("Size (MB):", round(os.path.getsize(PATH)/1e6, 2))
     print("Shape:", df.shape)
-    print("Index:", df.index.min(), "→", df.index.max())
+    print("Index:", df.index.min(), "->", df.index.max())
 
     print("Columns is MultiIndex?", isinstance(df.columns, pd.MultiIndex), "nlevels=", getattr(df.columns, "nlevels", None))
     print("Column level names:", getattr(df.columns, "names", None))
