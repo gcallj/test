@@ -236,7 +236,7 @@ GA_RUN_MC_EVERY_WINDOW = False
 import platform as _platform
 GA_EVAL_WORKERS = 1 if _platform.system() == "Windows" else max(1, min(8, (os.cpu_count() or 2)))
 GA_TWO_STAGE = True
-RUN_MODE = "train"  # "train" always retrains (seeding from checkpoint), "load" skips GA entirely
+RUN_MODE = "load"  # "train" always retrains (seeding from checkpoint), "load" skips GA entirely
 SLOW_STEP_PRINT_SEC = 2.0  # print only timings above this per-step threshold
 GA_STAGE1_TOP_N = 6
 GA_STAGE2_PADDING_RATIO = 0.60
@@ -2346,48 +2346,49 @@ def run():
             )
 
             # -- Position management columns (for users already holding) --
-            # These use ATR-based distances so user can apply to their own entry price
-            # stop_distance and take_distance are absolute R$ values to subtract/add from entry
+            # stop_distance/take_distance: absolute R$ to subtract/add from YOUR entry price
             stop_distance = round(stop_atr_val, 4)
             take_distance = round(global_params.reward_risk_ratio * stop_atr_val, 4)
-            # Trailing info: at what profit level does trailing activate
-            trail_activate = round(stop_atr_val, 4) if _tmode >= 1 else float("nan")
             # Tightened stop distance (after N bars holding)
             tight_stop_dist = round(global_params.stop_tighten_factor * stop_atr_val, 4)
-            # Partial take: profit level for 1st and 2nd partial exits
-            partial1_dist = round(global_params.partial_take_level * stop_atr_val, 4) if global_params.partial_take_pct > 0 else float("nan")
-            partial1_pct = round(global_params.partial_take_pct * 100, 1) if global_params.partial_take_pct > 0 else float("nan")
-            partial2_dist = round(global_params.partial_take_level_2 * stop_atr_val, 4) if global_params.partial_take_pct_2 > 0 else float("nan")
-            partial2_pct = round(global_params.partial_take_pct_2 * 100, 1) if global_params.partial_take_pct_2 > 0 else float("nan")
+            # Sell percentage at take profit
+            # If take triggers before partials: sell 100%
+            # If partials trigger first: sell partial_take_pct at each level
+            rr = global_params.reward_risk_ratio
+            p1_level = global_params.partial_take_level
+            p2_level = global_params.partial_take_level_2
+            has_p1 = global_params.partial_take_pct > 0 and p1_level <= rr
+            has_p2 = global_params.partial_take_pct_2 > 0 and p2_level <= rr
+            if has_p1 or has_p2:
+                # Partials trigger at or before take profit
+                sell_pct_at_take = 100.0
+                if has_p1:
+                    sell_pct_at_take -= round(global_params.partial_take_pct * 100, 1)
+                if has_p2:
+                    sell_pct_at_take -= round(global_params.partial_take_pct_2 * 100, 1)
+                sell_pct_at_take = max(sell_pct_at_take, 0.0)
+            else:
+                sell_pct_at_take = 100.0
 
             results_apply.append({
                 "Date": pd.to_datetime(dates[i]).strftime("%Y-%m-%d"),
                 "ticker": tkr,
                 "close": round(close_val, 4),
-                "signal_eod": sig,
-                "score_100": round(score_100, 1),
+                "signal": sig,
                 "confidence": round(confidence, 1),
-                "above_sma300": "SIM" if above_ma else "NAO",
-                # -- New entry columns --
-                "best_buy_value": best_buy,
-                "stop_loss": stop_loss,
-                "stop_pct": stop_pct,
-                "take_profit": take_profit,
-                "take_pct": take_pct,
+                # -- New entry --
+                "entrada": best_buy,
+                "stop": stop_loss,
+                "alvo": take_profit,
+                "venda_pct": sell_pct_at_take,
                 # -- Position management (apply to YOUR entry price) --
-                "ATR_hoje": round(atr_val, 4),
+                "ATR": round(atr_val, 4),
                 "stop_dist": stop_distance,
-                "take_dist": take_distance,
-                "trail_mode": trailing_label,
-                "trail_ativa": trail_activate,
+                "alvo_dist": take_distance,
+                "trailing": trailing_label,
                 "tight_stop": tight_stop_dist,
-                "tight_apos_dias": int(global_params.stop_tighten_after_bars),
-                "parcial1_dist": partial1_dist,
-                "parcial1_pct": partial1_pct,
-                "parcial2_dist": partial2_dist,
-                "parcial2_pct": partial2_pct,
-                "time_stop_dias": int(global_params.time_stop_bars),
-                "exit_rules": exit_rules,
+                "tight_dias": int(global_params.stop_tighten_after_bars),
+                "time_stop": int(global_params.time_stop_bars),
             })
 
         results_summary.append({
@@ -2407,9 +2408,8 @@ def run():
     if not df_app.empty:
         # Keep only the most recent date per ticker
         df_app = df_app.sort_values("Date", ascending=False).drop_duplicates(subset=["ticker"], keep="first")
-        df_app = df_app.drop(columns=["above_sma300"], errors="ignore")
         # Buy signals first, then by confidence descending
-        df_app["_is_buy"] = (df_app["signal_eod"] == "buy").astype(int)
+        df_app["_is_buy"] = (df_app["signal"] == "buy").astype(int)
         df_app = df_app.sort_values(["_is_buy", "confidence"], ascending=[False, False]).drop(columns=["_is_buy"]).reset_index(drop=True)
 
     if not df_sum.empty:
@@ -2506,57 +2506,67 @@ def run():
                     df_app.to_excel(writer, sheet_name="Apply", index=False)
                     ws_app = writer.sheets["Apply"]
 
-                    # Header format
+                    # Header comments explaining each column
+                    col_comments = {
+                        "Date": "Data do sinal (fechamento do dia)",
+                        "ticker": "Codigo do ativo na bolsa",
+                        "close": "Preco de fechamento do dia",
+                        "signal": "Sinal do GA: buy=comprar, hold=manter/aguardar",
+                        "confidence": "Confianca do sinal (0-100). Combina: qualidade do backtest (30%), forca do sinal (25%), qtd trades historicos (15%), concordancia entre features (30%)",
+                        "entrada": "Preco ideal de entrada (close - desconto ATR). Use como limite de compra",
+                        "stop": "Stop loss para NOVA entrada (= entrada - stop_dist)",
+                        "alvo": "Take profit para NOVA entrada (= entrada + alvo_dist)",
+                        "venda_pct": "% da posicao a vender quando atingir o alvo",
+                        "ATR": "Average True Range atual. Mede volatilidade diaria em R$",
+                        "stop_dist": "Distancia do stop em R$. Posicao existente: stop = SEU_PRECO_ENTRADA - este valor. Atualiza diariamente com ATR",
+                        "alvo_dist": "Distancia do alvo em R$. Posicao existente: alvo = SEU_PRECO_ENTRADA + este valor. Atualiza diariamente com ATR",
+                        "trailing": "Modo de trailing stop: fixed=fixo, breakeven=move stop p/ entrada apos lucro>stop_dist, trail-50%=acompanha 50% do lucro maximo",
+                        "tight_stop": "Stop apertado em R$. Apos 'tight_dias' dias, stop = SEU_PRECO_ENTRADA - este valor (mais apertado que stop_dist)",
+                        "tight_dias": "Apos quantos dias o stop aperta para tight_stop",
+                        "time_stop": "Sai da posicao apos este numero de dias se nao atingiu 50% do alvo",
+                    }
+
+                    # Write headers with comments
                     for col_idx, col_name in enumerate(df_app.columns):
                         ws_app.write(0, col_idx, col_name, hdr_fmt)
+                        if col_name in col_comments:
+                            ws_app.write_comment(0, col_idx, col_comments[col_name], {"width": 300, "height": 80})
 
                     # Column widths
                     apply_widths = {
                         "Date": 12, "ticker": 12, "close": 10,
-                        "signal_eod": 11, "score_100": 10, "confidence": 11,
-                        "best_buy_value": 15,
-                        "stop_loss": 11, "stop_pct": 10,
-                        "take_profit": 12, "take_pct": 10,
-                        "ATR_hoje": 10, "stop_dist": 13, "take_dist": 13,
-                        "trail_mode": 12, "trail_ativa": 13,
-                        "tight_stop": 13, "tight_apos_dias": 14,
-                        "parcial1_dist": 15, "parcial1_pct": 12,
-                        "parcial2_dist": 15, "parcial2_pct": 12,
-                        "time_stop_dias": 14,
-                        "exit_rules": 70,
+                        "signal": 9, "confidence": 12,
+                        "entrada": 10, "stop": 10, "alvo": 10, "venda_pct": 9,
+                        "ATR": 9, "stop_dist": 11, "alvo_dist": 11,
+                        "trailing": 12, "tight_stop": 11, "tight_dias": 10, "time_stop": 10,
                     }
                     for col_idx, col_name in enumerate(df_app.columns):
-                        ws_app.set_column(col_idx, col_idx, apply_widths.get(col_name, 13))
+                        ws_app.set_column(col_idx, col_idx, apply_widths.get(col_name, 11))
 
                     # Row colors: buy = light green, hold = white
-                    buy_fmt  = wb.add_format({"bg_color": "#C6EFCE", "font_color": "#276221"})  # green
+                    buy_fmt  = wb.add_format({"bg_color": "#C6EFCE", "font_color": "#276221"})
                     hold_fmt = wb.add_format({"bg_color": "#FFFFFF"})
-                    price_buy  = wb.add_format({"bg_color": "#C6EFCE", "font_color": "#276221", "num_format": "0.0000"})
-                    price_hold = wb.add_format({"num_format": "0.0000"})
+                    price_buy  = wb.add_format({"bg_color": "#C6EFCE", "font_color": "#276221", "num_format": "0.00"})
+                    price_hold = wb.add_format({"num_format": "0.00"})
                     num1_buy   = wb.add_format({"bg_color": "#C6EFCE", "font_color": "#276221", "num_format": "0.0"})
                     num1_hold  = wb.add_format({"num_format": "0.0"})
-                    pct_buy    = wb.add_format({"bg_color": "#C6EFCE", "font_color": "#276221", "num_format": "0.00"})
-                    pct_hold   = wb.add_format({"num_format": "0.00"})
+                    int_buy    = wb.add_format({"bg_color": "#C6EFCE", "font_color": "#276221", "num_format": "0"})
+                    int_hold   = wb.add_format({"num_format": "0"})
 
-                    price_cols = {"close", "best_buy_value", "stop_loss", "take_profit",
-                                   "ATR_hoje", "stop_dist", "take_dist",
-                                   "trail_ativa", "tight_stop",
-                                   "parcial1_dist", "parcial2_dist"}
-                    score_cols = {"score_100", "confidence"}
-                    pct_cols   = {"stop_pct", "take_pct"}
-
-                    sig_col_idx = list(df_app.columns).index("signal_eod")
+                    price_cols = {"close", "entrada", "stop", "alvo", "ATR", "stop_dist", "alvo_dist", "tight_stop"}
+                    score_cols = {"confidence"}
+                    int_cols = {"tight_dias", "time_stop"}
 
                     for row_idx, row in enumerate(df_app.itertuples(index=False), start=1):
-                        is_buy = (row.signal_eod == "buy")
+                        is_buy = (row.signal == "buy")
                         for col_idx, col_name in enumerate(df_app.columns):
                             val = getattr(row, col_name)
                             if col_name in price_cols:
                                 fmt = price_buy if is_buy else price_hold
                             elif col_name in score_cols:
                                 fmt = num1_buy if is_buy else num1_hold
-                            elif col_name in pct_cols:
-                                fmt = pct_buy if is_buy else pct_hold
+                            elif col_name in int_cols:
+                                fmt = int_buy if is_buy else int_hold
                             else:
                                 fmt = buy_fmt if is_buy else hold_fmt
                             ws_app.write(row_idx, col_idx, val, fmt)
