@@ -10,5 +10,10 @@ joblib
 scipy
 matplotlib
 openpyxl
+xlsxwriter
 numpy
 pandas
+xgboost
+catboost
+deap
+numba
