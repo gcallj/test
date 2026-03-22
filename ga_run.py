@@ -1258,6 +1258,16 @@ def run_global_ga_20params(
               f"sharpe_tr={getattr(best_ind, 'sharpe_train', 0.0):.2f} sharpe_val={getattr(best_ind, 'sharpe_val', 0.0):.2f} | "
               f"div={diversity:.1f}% | mut_pb={current_mut_pb:.2f} | eval={len(invalid_off)} | time={gen_dt:.1f}s")
 
+        # -- Per-generation checkpoint (allows early stop without losing progress) --
+        try:
+            _ckpt_path = os.path.join(OUTPUT_DIR, "global_ga_checkpoint.json")
+            _best_genome = list(hof[0]) if len(hof) else None
+            if _best_genome is not None:
+                with open(_ckpt_path, "w", encoding="utf-8") as _cf:
+                    json.dump({"fitness": float(best_fit_seen), "genome": _best_genome, "generation": int(gen)}, _cf, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+
         if gens_without_improvement >= 15:
             print(f"[GA] Early stopping at generation {gen} (no improvement in 15 gens)")
             break
@@ -1743,37 +1753,99 @@ def load_full_history_all_cols(path: str) -> pd.DataFrame:
 
 
 def load_etl_features_long(etl_path: str, ticker_filter=None) -> pd.DataFrame:
-    """Convert ETL MultiIndex wide-format parquet to long-format compatible with GA merge."""
-    df_wide = pd.read_parquet(etl_path)
+    """Convert ETL MultiIndex wide-format parquet to long-format compatible with GA merge.
 
-    if not isinstance(df_wide.columns, pd.MultiIndex):
-        raise ValueError("ETL parquet must have MultiIndex columns (feature, ticker)")
+    Memory-optimized: reads only valuable feature columns via pyarrow to avoid OOM.
+    """
+    import pyarrow.parquet as pq
+    import ast
 
-    # Skip features already present in consolidated or added by add_technical_features
-    skip_prefixes = (
-        "target_", "Open", "High", "Low", "Close", "Adj Close", "Volume",
-        # SMA_ no longer skipped: SMA_150/200 useful for Minervini features; dedup handles redundancy
+    pf = pq.ParquetFile(etl_path)
+    all_cols = pf.schema_arrow.names
+
+    # Parse MultiIndex column names to get (feature, ticker) pairs
+    col_map = {}  # feature -> set of tickers
+    col_strs = {}  # (feature, ticker) -> column string
+    for c in all_cols:
+        try:
+            t = ast.literal_eval(c)
+            if isinstance(t, tuple) and len(t) == 2:
+                feat, tkr = t
+                col_map.setdefault(feat, set()).add(tkr)
+                col_strs[(feat, tkr)] = c
+        except (ValueError, SyntaxError):
+            pass
+
+    all_feats = set(col_map.keys())
+
+    # Skip features already in consolidated or targets
+    skip_prefixes = ("target_", "Open", "High", "Low", "Close", "Adj Close", "Volume")
+    # Skip features GA computes internally (momentum, trend, volatility, volume indicators)
+    # to save memory; keep only ETL-unique features
+    skip_prefixes_internal = ("cross_",)  # 55 SMA crossover features, too many columns
+
+    keep_prefixes = (
+        "miner_",       # Minervini (12) — proven high value
     )
-    feat_names = sorted(set(
-        f for f in df_wide.columns.get_level_values(0).unique()
-        if not any(f.startswith(p) for p in skip_prefixes)
-    ))
+    keep_exact = {
+        "dist_52w_high_pct", "dist_52w_low_pct",
+        "sma50_slope_20d", "sma150_slope_20d", "sma200_slope_20d",
+        "rel_strength_ibov_20d", "gk_volatility_20d",
+        "vol_relative_20d",
+        # Key pattern net scores (aggregated, low memory)
+        "chan_pattern_net_5d", "dbl_pattern_net_5d", "hs_pattern_net_5d",
+        "mtb_pattern_net_5d", "tri_pattern_net_5d", "wed_pattern_net_5d",
+        "chan_pattern_net_20d", "dbl_pattern_net_20d", "hs_pattern_net_20d",
+        "mtb_pattern_net_20d", "tri_pattern_net_20d", "wed_pattern_net_20d",
+    }
 
-    tickers = sorted(df_wide.columns.get_level_values(1).unique())
+    feat_names = []
+    for f in sorted(all_feats):
+        if any(f.startswith(p) for p in skip_prefixes):
+            continue
+        if any(f.startswith(p) for p in keep_prefixes) or f in keep_exact:
+            feat_names.append(f)
+
+    # Filter tickers
+    all_tickers = sorted(set(t for tset in col_map.values() for t in tset))
     if ticker_filter:
-        tickers = [t for t in tickers if ticker_filter(t)]
+        all_tickers = [t for t in all_tickers if ticker_filter(t)]
+
+    # Build list of column strings to read
+    read_cols = []
+    for feat in feat_names:
+        for tkr in all_tickers:
+            key = (feat, tkr)
+            if key in col_strs:
+                read_cols.append(col_strs[key])
+
+    if not read_cols:
+        return pd.DataFrame()
+
+    print(f"[ETL] Loading {len(feat_names)} features x {len(all_tickers)} tickers = {len(read_cols)} columns")
+
+    # Read only selected columns (memory-efficient)
+    df_wide = pd.read_parquet(etl_path, columns=read_cols)
+    # Reconstruct MultiIndex (pandas may return strings or tuples depending on version)
+    if not isinstance(df_wide.columns, pd.MultiIndex):
+        mi_tuples = []
+        for c in df_wide.columns:
+            if isinstance(c, tuple):
+                mi_tuples.append(c)
+            else:
+                mi_tuples.append(ast.literal_eval(c))
+        df_wide.columns = pd.MultiIndex.from_tuples(mi_tuples)
 
     frames = []
-    for tkr in tickers:
+    for tkr in all_tickers:
         available = [(f, tkr) for f in feat_names if (f, tkr) in df_wide.columns]
         if not available:
             continue
         sub = df_wide[available].copy()
         sub.columns = [f"etl_{feat}" for feat, _ in available]
         sub[TICKER_COL] = tkr
-        sub[DATE_COL] = pd.to_datetime(sub.index)  # keep as datetime64 to match consolidated
-        sub = sub.reset_index(drop=True)  # drop DatetimeIndex to avoid ambiguity on merge
-        # float32 to save memory
+        sub[DATE_COL] = pd.to_datetime(sub.index)
+        sub = sub.reset_index(drop=True)
         for c in sub.columns:
             if c not in (TICKER_COL, DATE_COL) and pd.api.types.is_float_dtype(sub[c]):
                 sub[c] = sub[c].astype(np.float32)
@@ -2273,6 +2345,21 @@ def run():
                 f"HardStop: {int(global_params.max_loss_per_trade_pct*100)}% gap"
             )
 
+            # -- Position management columns (for users already holding) --
+            # These use ATR-based distances so user can apply to their own entry price
+            # stop_distance and take_distance are absolute R$ values to subtract/add from entry
+            stop_distance = round(stop_atr_val, 4)
+            take_distance = round(global_params.reward_risk_ratio * stop_atr_val, 4)
+            # Trailing info: at what profit level does trailing activate
+            trail_activate = round(stop_atr_val, 4) if _tmode >= 1 else float("nan")
+            # Tightened stop distance (after N bars holding)
+            tight_stop_dist = round(global_params.stop_tighten_factor * stop_atr_val, 4)
+            # Partial take: profit level for 1st and 2nd partial exits
+            partial1_dist = round(global_params.partial_take_level * stop_atr_val, 4) if global_params.partial_take_pct > 0 else float("nan")
+            partial1_pct = round(global_params.partial_take_pct * 100, 1) if global_params.partial_take_pct > 0 else float("nan")
+            partial2_dist = round(global_params.partial_take_level_2 * stop_atr_val, 4) if global_params.partial_take_pct_2 > 0 else float("nan")
+            partial2_pct = round(global_params.partial_take_pct_2 * 100, 1) if global_params.partial_take_pct_2 > 0 else float("nan")
+
             results_apply.append({
                 "Date": pd.to_datetime(dates[i]).strftime("%Y-%m-%d"),
                 "ticker": tkr,
@@ -2281,11 +2368,25 @@ def run():
                 "score_100": round(score_100, 1),
                 "confidence": round(confidence, 1),
                 "above_sma300": "SIM" if above_ma else "NAO",
+                # -- New entry columns --
                 "best_buy_value": best_buy,
                 "stop_loss": stop_loss,
                 "stop_pct": stop_pct,
                 "take_profit": take_profit,
                 "take_pct": take_pct,
+                # -- Position management (apply to YOUR entry price) --
+                "ATR_hoje": round(atr_val, 4),
+                "stop_dist": stop_distance,
+                "take_dist": take_distance,
+                "trail_mode": trailing_label,
+                "trail_ativa": trail_activate,
+                "tight_stop": tight_stop_dist,
+                "tight_apos_dias": int(global_params.stop_tighten_after_bars),
+                "parcial1_dist": partial1_dist,
+                "parcial1_pct": partial1_pct,
+                "parcial2_dist": partial2_dist,
+                "parcial2_pct": partial2_pct,
+                "time_stop_dias": int(global_params.time_stop_bars),
                 "exit_rules": exit_rules,
             })
 
@@ -2416,6 +2517,12 @@ def run():
                         "best_buy_value": 15,
                         "stop_loss": 11, "stop_pct": 10,
                         "take_profit": 12, "take_pct": 10,
+                        "ATR_hoje": 10, "stop_dist": 13, "take_dist": 13,
+                        "trail_mode": 12, "trail_ativa": 13,
+                        "tight_stop": 13, "tight_apos_dias": 14,
+                        "parcial1_dist": 15, "parcial1_pct": 12,
+                        "parcial2_dist": 15, "parcial2_pct": 12,
+                        "time_stop_dias": 14,
                         "exit_rules": 70,
                     }
                     for col_idx, col_name in enumerate(df_app.columns):
@@ -2431,7 +2538,10 @@ def run():
                     pct_buy    = wb.add_format({"bg_color": "#C6EFCE", "font_color": "#276221", "num_format": "0.00"})
                     pct_hold   = wb.add_format({"num_format": "0.00"})
 
-                    price_cols = {"close", "best_buy_value", "stop_loss", "take_profit"}
+                    price_cols = {"close", "best_buy_value", "stop_loss", "take_profit",
+                                   "ATR_hoje", "stop_dist", "take_dist",
+                                   "trail_ativa", "tight_stop",
+                                   "parcial1_dist", "parcial2_dist"}
                     score_cols = {"score_100", "confidence"}
                     pct_cols   = {"stop_pct", "take_pct"}
 
