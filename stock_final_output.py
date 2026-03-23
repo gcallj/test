@@ -473,7 +473,18 @@ def run_final_output():
         p_dd5_eff  = clip01((1.0 - BIN_WEIGHT) * p_dd5  + BIN_WEIGHT * pred_dd_bin)
 
 
-        df["buy_trust"]  = clip01(p_up20_eff * (1.0 - p_dd5_eff) * buy_quality)
+        # buy_trust base
+        buy_trust_base = clip01(p_up20_eff * (1.0 - p_dd5_eff) * buy_quality)
+
+        # Momentum das probabilidades (v4): tendência de melhora do sinal
+        # P(up20) subindo nos últimos 5 registros → bonus de confiança
+        if "ticker" in df.columns:
+            p_up20_lag5 = df.groupby("ticker")["p_up20"].shift(5)
+        else:
+            p_up20_lag5 = p_up20.shift(5)
+        p_up20_momentum = np.clip((p_up20_eff - to_num(p_up20_lag5).fillna(p_up20_eff)) * 2.0, -0.3, 0.3)
+
+        df["buy_trust"]  = clip01(buy_trust_base * (1.0 + p_up20_momentum))
         df["sell_trust"] = clip01(p_dd5_eff * sell_quality)
 
         price = to_num(df["price"])
@@ -489,6 +500,11 @@ def run_final_output():
         den = np.maximum(down, MIN_DOWNSIDE_FOR_RR)
         rr = np.where(up <= 0, 0.0, up / np.maximum(den, EPS))
         df["risk_return"] = np.clip(rr, 0.0, RR_CAP)
+
+        # Ajuste assimetria RR no buy_trust (v4): penalizar quando downside > upside
+        rr_clip_trust = np.clip(rr, 0.0, RR_CAP)
+        rr_factor = np.clip(np.log1p(rr_clip_trust) / np.log1p(RR_CAP + EPS) * 1.5, 0.3, 1.5)
+        df["buy_trust"] = clip01(to_num(df["buy_trust"]) * rr_factor)
 
         # ============================================================
         # EV BUY/SELL SIMÉTRICO (índice único em [-1, +1])

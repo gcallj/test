@@ -340,6 +340,11 @@ GLOBAL_PARAM_SPECS = [
     ("partial_take_level_2", 1.0, 3.0, 0.25, False),  # 2nd partial at higher RR multiple
     ("min_signal_strength", 0.0, 0.40, 0.05, False),  # minimum abs(score_ev)/score95 to enter
     ("trailing_stop_mode", 0.0, 2.0, 1.0, True),  # 0=off, 1=breakeven after 1x, 2=trail at 50% after 2x
+    # -- NEW genes for v4 (signal precision + regime) --
+    ("volume_confirm_mode", 0.0, 2.0, 1.0, True),  # 0=off, 1=vol>MA20, 2=vol>MA50
+    ("momentum_confirm_days", 0.0, 5.0, 1.0, True),  # 0=off, 1-5=require positive return over N days
+    ("entry_score_threshold", 0.0, 0.50, 0.05, False),  # min score_ev strength to enter
+    ("regime_threshold", 0.20, 0.70, 0.05, False),  # min regime_score to allow long entries
 ]
 
 
@@ -372,6 +377,11 @@ class GlobalParams:
     partial_take_level_2: float  # 2nd partial take at this RR multiple
     min_signal_strength: float  # min |score_ev|/score95 to enter trade
     trailing_stop_mode: int  # 0=off, 1=breakeven after 1x stop, 2=trail at 50% after 2x
+    # -- NEW v4 genes (signal precision + regime) --
+    volume_confirm_mode: int  # 0=off, 1=vol>MA20, 2=vol>MA50
+    momentum_confirm_days: int  # 0=off, 1-5=require positive return over N days
+    entry_score_threshold: float  # min score_ev/score95 to enter
+    regime_threshold: float  # min regime_score to allow long entries
 
 
 def sanitize_global_genome(genome: List[float]) -> List[float]:
@@ -533,6 +543,63 @@ def precompute_global_payloads(
 
     return payloads_by_window
 
+def compute_regime_score(c: np.ndarray, ma200: np.ndarray, vol_rank: np.ndarray) -> np.ndarray:
+    """Score de 0 (bear) a 1 (bull) para cada barra.
+    Combina: tendência longa (close>MA200), tendência média (MA50),
+    slope da MA200, e volatilidade baixa."""
+    n = len(c)
+    regime = np.full(n, 0.5, dtype=np.float64)
+
+    # Tendência longa: close > MA200
+    trend_long = np.where(np.isfinite(ma200) & (c > ma200), 0.30, 0.0)
+
+    # Tendência média: close > MA50 (rolling)
+    ma50 = rolling_mean_np(c, 50, 10)
+    trend_med = np.where(np.isfinite(ma50) & (c > ma50), 0.20, 0.0)
+
+    # Slope da MA200 (positiva = uptrend)
+    ma200_shift = np.roll(ma200, 20)
+    ma200_shift[:20] = np.nan
+    ma200_slope = np.where(
+        np.isfinite(ma200) & np.isfinite(ma200_shift) & (ma200 > 1e-6),
+        (ma200 - ma200_shift) / np.maximum(ma200, 1e-6),
+        0.0
+    )
+    slope_score = np.clip((ma200_slope + 0.05) * 5.0, 0.0, 0.25)
+
+    # Volatilidade baixa = favorável
+    vol_score = np.where(np.isfinite(vol_rank), np.clip((1.0 - vol_rank) * 0.15, 0.0, 0.15), 0.075)
+
+    # RSI zone (não oversold nem overbought) — approximate via price momentum
+    # Use 14-day ROC as RSI proxy to avoid recomputing
+    roc14 = np.empty(n, dtype=np.float64)
+    roc14[:14] = 0.0
+    roc14[14:] = (c[14:] / np.maximum(c[:-14], 1e-8)) - 1.0
+    # Map: moderate momentum [−5%, +10%] → bonus, extremes → 0
+    rsi_proxy = np.where((roc14 > -0.05) & (roc14 < 0.10), 0.10, 0.0)
+
+    regime = np.clip(trend_long + trend_med + slope_score + vol_score + rsi_proxy, 0.0, 1.0)
+    return regime
+
+
+def compute_weighted_votes(x: np.ndarray, z_threshold: float, feat_n: int):
+    """Votação ponderada por magnitude: combina contagem binária com peso contínuo."""
+    binary_long = (x > z_threshold).sum(axis=1) / feat_n
+    binary_short = (x < -z_threshold).sum(axis=1) / feat_n
+
+    # Peso contínuo: magnitude do excesso sobre threshold
+    z_excess_long = np.maximum(x - z_threshold, 0.0)
+    z_excess_short = np.maximum(-x - z_threshold, 0.0)
+    weighted_long = np.nanmean(z_excess_long, axis=1)
+    weighted_short = np.nanmean(z_excess_short, axis=1)
+
+    # Mix 50% binário + 50% ponderado (normalizado)
+    votes_long = 0.5 * binary_long + 0.5 * np.clip(weighted_long / 1.5, 0.0, 1.0)
+    votes_short = 0.5 * binary_short + 0.5 * np.clip(weighted_short / 1.5, 0.0, 1.0)
+
+    return votes_long, votes_short
+
+
 def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalParams, precomputed: Optional[Dict[str, np.ndarray]] = None) -> Dict[str, float]:
     o = np.asarray(o, dtype=np.float64)
     h = np.asarray(h, dtype=np.float64)
@@ -551,8 +618,8 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
     else:
         vol_rank = rolling_percentile_rank(atr / np.maximum(c, ATR_EPS), 252)
 
-    votes_long = (x > gp.z_threshold).sum(axis=1) / feat_n
-    votes_short = (x < -gp.z_threshold).sum(axis=1) / feat_n
+    # Weighted voting (magnitude-aware)
+    votes_long, votes_short = compute_weighted_votes(x, gp.z_threshold, feat_n)
     score_raw = votes_long - votes_short
     score_ev = ewm_mean_np(score_raw, int(gp.signal_ema_span))
     score_pctl = rolling_quantile_trigger(score_ev, float(gp.score_percentile_trigger), max(63, SCORE_LOOKBACK))
@@ -560,6 +627,25 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
     score95 = np.nanpercentile(np.abs(score_ev), 95) if np.isfinite(np.nanmax(np.abs(score_ev))) else 1.0
     score95 = max(score95, ATR_EPS)
 
+    # Regime score (multi-factor bull/bear detection)
+    ma200 = rolling_mean_np(c, 200, 50)
+    regime_score = compute_regime_score(c, ma200, vol_rank)
+
+    # Volume confirmation: precompute volume moving averages
+    vol_data = precomputed.get("volume", None) if precomputed is not None else None
+    vol_ma20 = None
+    vol_ma50 = None
+    if vol_data is not None and gp.volume_confirm_mode > 0:
+        vol_arr = np.asarray(vol_data, dtype=np.float64)
+        vol_ma20 = rolling_mean_np(vol_arr, 20, 5)
+        if gp.volume_confirm_mode == 2:
+            vol_ma50 = rolling_mean_np(vol_arr, 50, 10)
+
+    # Momentum confirmation: precompute N-day returns
+    mom_days = int(gp.momentum_confirm_days)
+    mom_ret = np.full(n, np.nan, dtype=np.float64)
+    if mom_days > 0:
+        mom_ret[mom_days:] = (c[mom_days:] / np.maximum(c[:-mom_days], 1e-8)) - 1.0
 
     equity = 1.0
     peak = 1.0
@@ -699,6 +785,24 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
             if gp.min_signal_strength > 0:
                 if abs(score_ev[i - 1]) / score95 < gp.min_signal_strength:
                     continue
+            # Entry score threshold filter (v4)
+            if gp.entry_score_threshold > 0:
+                if abs(score_ev[i - 1]) / score95 < gp.entry_score_threshold:
+                    continue
+            # Volume confirmation filter (v4)
+            if gp.volume_confirm_mode == 1 and vol_ma20 is not None and i - 1 < len(vol_ma20):
+                if np.isfinite(vol_ma20[i - 1]) and vol_data[i - 1] < vol_ma20[i - 1]:
+                    continue
+            elif gp.volume_confirm_mode == 2 and vol_ma50 is not None and i - 1 < len(vol_ma50):
+                if np.isfinite(vol_ma50[i - 1]) and vol_data[i - 1] < vol_ma50[i - 1]:
+                    continue
+            # Momentum confirmation filter (v4)
+            if mom_days > 0 and np.isfinite(mom_ret[i - 1]) and mom_ret[i - 1] < 0:
+                continue
+            # Regime filter (v4): continuous regime score replaces binary MA filter
+            if gp.regime_threshold > 0 and np.isfinite(regime_score[i - 1]):
+                if regime_score[i - 1] < gp.regime_threshold:
+                    continue  # market regime unfavorable for longs
 
             vl = votes_long[i - 1]
             vs = votes_short[i - 1]
@@ -731,7 +835,12 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
             side = 1 if long_ok else (-1 if (short_ok and not LONG_ONLY) else 0)
             if side != 0 and np.isfinite(o[i]) and np.isfinite(atr[i]):
                 strength = float(np.clip(abs(score_ev[i - 1]) / score95, 0.0, 1.0))
-                discount = gp.entry_discount_atr_frac * (1.0 - gp.score_strength_scaling * strength)
+                # Support-adaptive discount: scale by distance to recent support
+                base_discount = gp.entry_discount_atr_frac * (1.0 - gp.score_strength_scaling * strength)
+                recent_low = np.nanmin(l[max(0, i - 10):i]) if i > 0 else l[i]
+                support_dist = (o[i] - recent_low) / max(atr[i], ATR_EPS) if np.isfinite(recent_low) else 1.0
+                support_factor = float(np.clip(support_dist / 3.0, 0.3, 1.5))
+                discount = base_discount * support_factor
                 limit_px = o[i] - side * discount * atr[i]
                 fill = (l[i] <= limit_px <= h[i])
                 if fill and limit_px > 0:
@@ -1879,14 +1988,18 @@ def generate_signal_global(payload: Dict[str, Any], gp: GlobalParams, day_index:
         return "hold"
 
     feat_n = max(1, x.shape[1])
-    votes_long = (x > gp.z_threshold).sum(axis=1) / feat_n
-    votes_short = (x < -gp.z_threshold).sum(axis=1) / feat_n
+    # Weighted voting (magnitude-aware, same as backtest)
+    votes_long, votes_short = compute_weighted_votes(x, gp.z_threshold, feat_n)
     score_raw = votes_long - votes_short
     score_ev = pd.Series(score_raw).ewm(span=int(gp.signal_ema_span), adjust=False).mean().to_numpy()
 
     ma = pd.Series(c).rolling(int(gp.ma_filter_period), min_periods=max(20, int(gp.ma_filter_period // 2))).mean().to_numpy()
     vol_rel = atr / np.maximum(c, ATR_EPS)
     vol_rank = rolling_percentile_rank(vol_rel, 252)
+
+    # Regime score (v4)
+    ma200 = pd.Series(c).rolling(200, min_periods=50).mean().to_numpy()
+    regime = compute_regime_score(c, ma200, vol_rank)
 
     consec_long = 0
     consec_short = 0
@@ -1918,6 +2031,11 @@ def generate_signal_global(payload: Dict[str, Any], gp: GlobalParams, day_index:
     if gp.volatility_filter_percentile > 0 and np.isfinite(vol_rank[day_index - 1]) and vol_rank[day_index - 1] < gp.volatility_filter_percentile:
         long_ok = False
         short_ok = False
+
+    # Regime threshold filter (v4): continuous regime scoring
+    if gp.regime_threshold > 0 and np.isfinite(regime[day_index - 1]):
+        if regime[day_index - 1] < gp.regime_threshold:
+            long_ok = False
 
     if gp.ma_filter_mode == 1 and np.isfinite(ma[day_index - 1]):
         if c[day_index - 1] < ma[day_index - 1]:
@@ -2181,8 +2299,12 @@ def run():
             reasons["few_valid"] = reasons.get("few_valid", 0) + 1
             continue
 
+        # Extract volume data if available
+        vol = g["volume"].to_numpy(np.float64) if "volume" in g.columns else np.full(len(c), np.nan)
+
         ticker_payloads[str(tkr)] = {
             "open": o, "high": h, "low": l, "close": c, "atr": atr,
+            "volume": vol,
             "score_matrix": directed_cols, "dates": dates, "ma": ma,
             "feat_cols": feat_cols, "valid_mask": valid_mask,
             "long_votes": long_votes, "short_votes": short_votes,
@@ -2285,8 +2407,8 @@ def run():
         # Generate apply signals (vectorized pre-compute, loop only for signals)
         x = np.asarray(payload["score_matrix"], dtype=np.float64)
         feat_n = max(1, x.shape[1])
-        votes_long = (x > global_params.z_threshold).sum(axis=1) / feat_n
-        votes_short = (x < -global_params.z_threshold).sum(axis=1) / feat_n
+        # Weighted voting (magnitude-aware, consistent with backtest)
+        votes_long, votes_short = compute_weighted_votes(x, global_params.z_threshold, feat_n)
         score_raw = votes_long - votes_short
         score_ev = ewm_mean_np(score_raw, int(global_params.signal_ema_span))
         
@@ -2303,6 +2425,13 @@ def run():
         trades_per_year = bt_n_trades / n_years
         
         ma_arr = payload.get("ma", np.full(n, np.nan))
+
+        # Regime score for apply output (v4)
+        ma200_apply = rolling_mean_np(c, 200, 50)
+        vol_rank_apply = rolling_percentile_rank(payload["atr"] / np.maximum(c, ATR_EPS), 252)
+        regime_arr = compute_regime_score(c, ma200_apply, vol_rank_apply)
+        # MA50 for regime display
+        ma50_apply = rolling_mean_np(c, 50, 10)
 
         for i in range(max(0, n - APPLY_DAYS), n):
             sig = generate_signal_global(payload, global_params, i)
@@ -2343,20 +2472,27 @@ def run():
                 stop_loss = round(close_val - stop_atr, 4)
                 take_profit = round(close_val + take_atr, 4)
             
-            # Confidence (0-100): combina qualidade do backtest, forca do sinal e consistencia
+            # Confidence (0-100): modelo de 6 fatores (v4)
             # q_backtest: sharpe e win_rate do backtest
             q_bt = float(np.clip(_sigmoid((bt_sharpe - 0.1) / 0.3) * 0.5 + bt_win_rate * 0.5, 0.0, 1.0))
             # q_signal: forca direcional do sinal atual
             q_sig = strength
             # q_trades: confianca aumenta com mais trades historicos
             q_tr = float(np.clip(trades_per_year / 20.0, 0.0, 1.0))
-            # q_agreement: concordancia entre features (votes)
+            # q_agreement: concordancia entre features (votes) — weighted
             vl = votes_long[i] if i < len(votes_long) else 0.0
             vs = votes_short[i] if i < len(votes_short) else 0.0
             q_agree = float(np.clip(max(vl, vs) * 2.0, 0.0, 1.0))
-            
+            # q_regime (NOVO v4): qualidade do regime de mercado
+            regime_val = float(regime_arr[i]) if i < len(regime_arr) and np.isfinite(regime_arr[i]) else 0.5
+            q_regime = float(np.clip(regime_val, 0.0, 1.0))
+            # q_ml (NOVO v4): concordância do ensemble ML (buy_trust proxy)
+            # Approximate via vote consensus strength: higher consensus = higher ML agreement
+            vote_consensus = float(np.clip(abs(vl - vs) * 3.0, 0.0, 1.0))
+            q_ml = float(np.clip(0.5 * q_agree + 0.5 * vote_consensus, 0.0, 1.0))
+
             confidence = float(np.clip(
-                (0.30 * q_bt + 0.25 * q_sig + 0.15 * q_tr + 0.30 * q_agree) * 100.0,
+                (0.20 * q_bt + 0.20 * q_sig + 0.10 * q_tr + 0.20 * q_agree + 0.15 * q_regime + 0.15 * q_ml) * 100.0,
                 0.0, 100.0
             ))
             
@@ -2426,6 +2562,13 @@ def run():
                 "tight_stop": tight_stop_dist,
                 "tight_dias": int(global_params.stop_tighten_after_bars),
                 "time_stop": int(global_params.time_stop_bars),
+                # -- Regime analysis (v4) --
+                "regime_score": round(regime_val, 2),
+                "regime": (
+                    "favoravel" if regime_val >= 0.6
+                    else "neutro" if regime_val >= 0.3
+                    else "desfavoravel"
+                ),
             })
 
         results_summary.append({
