@@ -2363,6 +2363,11 @@ def run():
         except Exception as e:
             print(f"[WARN] global checkpoint load failed: {e}")
 
+    if global_params is None and run_mode == "load":
+        print("[FATAL] load mode but no valid checkpoint found! Cannot generate signals.")
+        print(f"  Checkpoint path: {out_global_ckpt} (exists={os.path.exists(out_global_ckpt)})")
+        raise SystemExit(1)
+
     if global_params is None:
         dmin = pd.to_datetime(df[DATE_COL].min())
         dmax = pd.to_datetime(df[DATE_COL].max())
@@ -2784,7 +2789,11 @@ def run():
     print(f"Saved: {out_xlsx} | {out_apply_csv}")
 
     # -- Send to Telegram --------------------------------------------------
-    _send_telegram(out_xlsx)
+    if os.path.exists(out_xlsx):
+        print(f"[TELEGRAM] Sending {out_xlsx} ({os.path.getsize(out_xlsx)} bytes)...")
+        _send_telegram(out_xlsx)
+    else:
+        print(f"[TELEGRAM] SKIP — file not found: {out_xlsx}")
 
 
 if __name__ == "__main__":
