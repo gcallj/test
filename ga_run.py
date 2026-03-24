@@ -873,6 +873,22 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
     trades_per_year = len(tr) / n_years
     ann_factor = np.sqrt(min(trades_per_year, 252))
     ann_sharpe = float(np.mean(tr) / (np.std(tr) + 1e-12) * ann_factor)
+    # -- Trade return distribution buckets (v5) --
+    # Faixas: >15%, 10-15%, 5-10%, 2-5%, 0-2%, -2-0%, -5 to -2%, -10 to -5%, <-10%
+    pct_gt15  = float((tr > 0.15).mean())
+    pct_10_15 = float(((tr > 0.10) & (tr <= 0.15)).mean())
+    pct_5_10  = float(((tr > 0.05) & (tr <= 0.10)).mean())
+    pct_2_5   = float(((tr > 0.02) & (tr <= 0.05)).mean())
+    pct_0_2   = float(((tr > 0.00) & (tr <= 0.02)).mean())
+    pct_n2_0  = float(((tr > -0.02) & (tr <= 0.00)).mean())
+    pct_n5_n2 = float(((tr > -0.05) & (tr <= -0.02)).mean())
+    pct_n10_n5= float(((tr > -0.10) & (tr <= -0.05)).mean())
+    pct_lt_n10= float((tr <= -0.10).mean())
+    # Quality score from distribution: big wins vs big losses ratio
+    big_wins = pct_gt15 + pct_10_15 + pct_5_10  # trades > +5%
+    big_losses = pct_lt_n10 + pct_n10_n5 + pct_n5_n2  # trades < -2%
+    dist_quality = float(np.clip((big_wins - big_losses + 0.5), 0.0, 1.0))  # 0.5 = neutral
+
     return {
         "total_return": float(equity - 1.0),
         "mdd": float(mdd),
@@ -882,6 +898,12 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
         "avg_trade": float(np.mean(tr)),
         "trade_std": float(np.std(tr)),
         "exposure": exposure,
+        # Distribution buckets
+        "pct_gt15": pct_gt15, "pct_10_15": pct_10_15, "pct_5_10": pct_5_10,
+        "pct_2_5": pct_2_5, "pct_0_2": pct_0_2, "pct_n2_0": pct_n2_0,
+        "pct_n5_n2": pct_n5_n2, "pct_n10_n5": pct_n10_n5, "pct_lt_n10": pct_lt_n10,
+        "dist_quality": dist_quality,
+        "big_wins_pct": big_wins, "big_losses_pct": big_losses,
     }
 
 
@@ -904,6 +926,9 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
     ntr       = np.array([s.get("n_trades", 0.0)      for s in per_ticker_stats], dtype=np.float64)
     exposure  = np.array([s.get("exposure", 0.0)      for s in per_ticker_stats], dtype=np.float64)
     win_rates = np.array([s.get("win_rate", 0.0)      for s in per_ticker_stats], dtype=np.float64)
+    dist_qual  = np.array([s.get("dist_quality", 0.5)  for s in per_ticker_stats], dtype=np.float64)
+    big_wins   = np.array([s.get("big_wins_pct", 0.0)  for s in per_ticker_stats], dtype=np.float64)
+    big_losses = np.array([s.get("big_losses_pct", 0.0) for s in per_ticker_stats], dtype=np.float64)
 
     med_sharpe        = float(np.median(sharpe))
     mean_sharpe       = float(np.mean(sharpe))
@@ -1020,7 +1045,20 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
         calmar = mean_ret / abs(median_mdd)
         calmar_bonus = 0.8 * float(np.clip(calmar, 0.0, 5.0))
 
-    # -- Main fitness (v4) -------------------------------------------------
+    # -- Distribution quality bonus (v5) ------------------------------------
+    # Reward strategies where big wins >> big losses across tickers
+    mean_dist_qual = float(np.mean(dist_qual))
+    mean_big_wins = float(np.mean(big_wins))
+    mean_big_losses = float(np.mean(big_losses))
+    dist_bonus = 0.0
+    if mean_dist_qual > 0.55:
+        dist_bonus += (mean_dist_qual - 0.55) * 4.0   # reward good distribution
+    if mean_dist_qual > 0.70:
+        dist_bonus += (mean_dist_qual - 0.70) * 6.0   # extra reward
+    if mean_big_losses > 0.15:
+        dist_bonus -= (mean_big_losses - 0.15) * 5.0  # penalize many big losses
+
+    # -- Main fitness (v5) -------------------------------------------------
     fitness = (
         1.8 * np.clip(mean_excess, -1.0, 5.0) +   # beat B&H: highest weight
         1.3 * np.clip(med_excess,  -1.0, 5.0) +
@@ -1034,7 +1072,8 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
         1.1 * med_win_rate +                        # median win rate (was 0.8)
         win_rate_bonus +
         consistency_bonus +
-        calmar_bonus +                               # NEW: Calmar ratio (return/MDD trade-off)
+        calmar_bonus +
+        dist_bonus +                                   # v5: distribution quality (big wins vs big losses)
         trade_bonus -
         mdd_penalty -
         underperf_penalty
@@ -2304,7 +2343,7 @@ def run():
 
         ticker_payloads[str(tkr)] = {
             "open": o, "high": h, "low": l, "close": c, "atr": atr,
-            "volume": vol,
+            "volume": vol, "ret_fwd": ret_fwd_temp,
             "score_matrix": directed_cols, "dates": dates, "ma": ma,
             "feat_cols": feat_cols, "valid_mask": valid_mask,
             "long_votes": long_votes, "short_votes": short_votes,
@@ -2450,7 +2489,21 @@ def run():
         else:
             wr_tier = "ruim"
             wr_tier_num = 0
-        
+
+        # -- Distribution metrics (v5) --
+        bt_dist_quality = st.get("dist_quality", 0.5)
+        bt_big_wins = st.get("big_wins_pct", 0.0)
+        bt_big_losses = st.get("big_losses_pct", 0.0)
+        bt_pct_gt15 = st.get("pct_gt15", 0.0)
+        bt_pct_10_15 = st.get("pct_10_15", 0.0)
+        bt_pct_5_10 = st.get("pct_5_10", 0.0)
+        bt_pct_2_5 = st.get("pct_2_5", 0.0)
+        bt_pct_0_2 = st.get("pct_0_2", 0.0)
+        bt_pct_n2_0 = st.get("pct_n2_0", 0.0)
+        bt_pct_n5_n2 = st.get("pct_n5_n2", 0.0)
+        bt_pct_n10_n5 = st.get("pct_n10_n5", 0.0)
+        bt_pct_lt_n10 = st.get("pct_lt_n10", 0.0)
+
         ma_arr = payload.get("ma", np.full(n, np.nan))
 
         # Regime score for apply output (v4)
@@ -2460,6 +2513,23 @@ def run():
         # MA50 for regime display
         ma50_apply = rolling_mean_np(c, 50, 10)
 
+        # -- Pre-compute potential (upside) per day using vectorized forward returns --
+        _potential_cache: Dict[int, float] = {}
+        for fwd_h in [5, 10, 21]:
+            # Vectorized forward return for this horizon
+            if n > fwd_h:
+                fwd_ret_h = np.empty(n, dtype=np.float64)
+                fwd_ret_h[:-fwd_h] = (c[fwd_h:] / np.maximum(c[:-fwd_h], ATR_EPS)) - 1.0
+                fwd_ret_h[-fwd_h:] = np.nan
+                # Rolling stats over last 252 days of positive forward returns
+                for i_pot in range(max(0, n - APPLY_DAYS), n):
+                    window = fwd_ret_h[max(0, i_pot - 252):i_pot]
+                    pos = window[np.isfinite(window) & (window > 0)]
+                    if len(pos) >= 10:
+                        pot = 0.6 * float(np.median(pos)) + 0.4 * float(np.percentile(pos, 75))
+                        if i_pot not in _potential_cache or pot > _potential_cache[i_pot]:
+                            _potential_cache[i_pot] = pot
+
         for i in range(max(0, n - APPLY_DAYS), n):
             sig = generate_signal_global(payload, global_params, i)
 
@@ -2468,36 +2538,49 @@ def run():
 
             atr_val = max(payload["atr"][i], ATR_EPS)
             close_val = c[i]
-            
+
             strength = float(np.clip(abs(score_ev[i]) / score95, 0.0, 1.0))
             discount = global_params.entry_discount_atr_frac * (1.0 - global_params.score_strength_scaling * strength)
-            
-            # Sempre calcular best_buy e best_sell como referencia
+
+            # Entrada: preco com desconto ATR
             best_buy = round(close_val - discount * atr_val, 4)
-            best_sell = round(close_val + discount * atr_val, 4)
-            
-            # Entry ref: usar best_buy se sinal compra, best_sell se venda, close se hold
-            if sig == "buy":
-                entry_ref = best_buy
-            elif sig == "sell":
-                entry_ref = best_sell
-            else:
-                entry_ref = close_val
-            
-            # Stop loss e take profit baseados no ATR e params do GA
-            stop_atr = global_params.stop_atr_mult * atr_val
-            take_atr = global_params.reward_risk_ratio * stop_atr
-            
-            if sig == "buy":
-                stop_loss = round(entry_ref - stop_atr, 4)
-                take_profit = round(entry_ref + take_atr, 4)
-            elif sig == "sell":
-                stop_loss = round(entry_ref + stop_atr, 4)
-                take_profit = round(entry_ref - take_atr, 4)
-            else:
-                # Para hold em LONG_ONLY: stop sempre abaixo do close, take sempre acima
-                stop_loss = round(close_val - stop_atr, 4)
-                take_profit = round(close_val + take_atr, 4)
+            entry_ref = best_buy if sig == "buy" else close_val
+
+            # -- Stop: ATR-based (protecao intraday) --
+            stop_atr_val = global_params.stop_atr_mult * atr_val
+            stop_loss = round(entry_ref - stop_atr_val, 4)
+            stop_risk = entry_ref - stop_loss  # risco em R$
+
+            # -- Alvo: baseado no potencial estatistico da acao (nao ATR) --
+            # Usa retornos forward pre-computados em múltiplos horizontes
+            potential = _potential_cache.get(i)
+            if potential is None:
+                # Fallback: usar ATR-based
+                potential = global_params.reward_risk_ratio * stop_atr_val / max(close_val, ATR_EPS)
+
+            take_profit = round(entry_ref * (1.0 + potential), 4)
+            take_reward = take_profit - entry_ref  # ganho em R$
+
+            # -- R:R enforcement: alvo deve ser >= stop (1:1 minimo) --
+            # Minimum meaningful stop risk: 0.1% of price
+            min_stop_risk = close_val * 0.001
+            if stop_risk < min_stop_risk:
+                stop_risk = min_stop_risk
+                stop_loss = round(entry_ref - stop_risk, 4)
+            rr_ratio = take_reward / max(stop_risk, ATR_EPS)
+            if rr_ratio < 1.0 and sig == "buy":
+                # Potencial insuficiente para o risco — nao comprar
+                sig = "hold"
+
+            # -- Previsao de queda maxima (drawdown esperado) --
+            # Usa MDD historico do ticker + volatilidade atual
+            hist_mdd = abs(st.get("mdd", 0.0))  # MDD do backtest inteiro
+            vol_atual = atr_val / max(close_val, ATR_EPS)
+            # Ajuste pela volatilidade atual vs media
+            vol_med = float(np.nanmedian(payload["atr"] / np.maximum(c, ATR_EPS)))
+            vol_factor = vol_atual / max(vol_med, ATR_EPS)
+            queda_max_esperada = min(hist_mdd * float(np.clip(vol_factor, 0.5, 2.0)), 0.50)
+            queda_max_preco = round(close_val * (1.0 - queda_max_esperada), 4)
             
             # Confidence (0-100): modelo de 7 fatores (v5)
             # q_backtest: sharpe e win_rate do backtest (heavier win_rate weight)
@@ -2521,109 +2604,67 @@ def run():
             vote_consensus = float(np.clip(abs(vl - vs) * 3.0, 0.0, 1.0))
             q_ml = float(np.clip(0.5 * q_agree + 0.5 * vote_consensus, 0.0, 1.0))
 
-            # q_viability (v5): operational viability — penalizes tiny targets and low liquidity
-            alvo_pct = abs(take_atr) / max(close_val, ATR_EPS)  # target as % of price
+            # q_viability (v5): R:R ratio quality + liquidity
+            alvo_pct = take_reward / max(close_val, ATR_EPS)  # target as % of price
             vol_arr = payload.get("volume", np.full(n, np.nan))
             avg_vol_20 = float(np.nanmean(vol_arr[max(0, i-19):i+1])) if i < len(vol_arr) else 0.0
             vol_fin = avg_vol_20 * close_val  # volume financeiro medio 20d
-            # Target amplitude: 0% at 0.5%, 100% at 3%+
-            q_target_amp = float(np.clip((alvo_pct - 0.005) / 0.025, 0.0, 1.0))
+            # R:R quality: 0% at 1:1, 100% at 3:1+
+            q_rr = float(np.clip((rr_ratio - 1.0) / 2.0, 0.0, 1.0))
             # Liquidity: 0% at R$100k, 100% at R$5M+
             q_liq = float(np.clip((vol_fin - 100_000) / 4_900_000, 0.0, 1.0))
-            q_viability = 0.5 * q_target_amp + 0.5 * q_liq
+            q_viability = 0.5 * q_rr + 0.5 * q_liq
+            # q_dist (v5): trade return distribution quality — big wins vs big losses
+            q_dist = float(np.clip(bt_dist_quality, 0.0, 1.0))
 
+            # Confidence (0-100): 8 fatores (v5)
+            # 20% win_rate_tier + 15% distribuicao + 15% viabilidade + 10% backtest
+            # + 10% sinal + 10% concordancia + 10% regime + 10% ML
             confidence = float(np.clip(
-                (0.10 * q_bt + 0.10 * q_sig + 0.25 * q_wr + 0.10 * q_agree + 0.10 * q_regime + 0.10 * q_ml + 0.25 * q_viability) * 100.0,
+                (0.10 * q_bt + 0.10 * q_sig + 0.20 * q_wr + 0.15 * q_dist +
+                 0.10 * q_agree + 0.10 * q_regime + 0.10 * q_ml + 0.15 * q_viability) * 100.0,
                 0.0, 100.0
             ))
 
-            # -- Win rate gate (v5): demote buy to hold if win rate too low --
+            # -- Quality gates (v5): demote buy -> hold --
             if sig == "buy" and wr_tier_num <= 1 and bt_n_trades >= min_trades_for_tier:
-                sig = "hold"  # ticker has bad historical win rate, don't recommend buy
-            # -- Viability gate (v5): demote buy if target too small to be operable --
-            if sig == "buy" and alvo_pct < 0.008:  # less than 0.8% target
-                sig = "hold"  # operationally unviable (won't cover costs/slippage)
+                sig = "hold"  # win rate too low
+            # R:R < 1:1 already handled above (sig set to hold before confidence)
             
-            # -- Operational columns --------------------------------------
-            stop_atr_val   = global_params.stop_atr_mult * atr_val
-            tight_stop     = round(entry_ref - global_params.stop_tighten_factor * stop_atr_val, 4)
-            stop_pct       = round(abs(entry_ref - stop_loss) / max(entry_ref, ATR_EPS) * 100.0, 2)
-            take_pct       = round(abs(take_profit - entry_ref) / max(entry_ref, ATR_EPS) * 100.0, 2)
-            rr_text        = f"{global_params.reward_risk_ratio:.1f}:1"
-            # trailing mode label
-            _tmode = int(global_params.trailing_stop_mode)
-            trailing_label = {0: "fixed", 1: "breakeven", 2: "trail-50%"}.get(_tmode, "fixed")
-            # MA filter reference
-            ma_val = float(ma_arr[i]) if i < len(ma_arr) and np.isfinite(ma_arr[i]) else float("nan")
-            above_ma = (close_val >= ma_val) if np.isfinite(ma_val) else True
-            # exit rules summary (plain text for operator)
-            _stop_pct_str  = f"{stop_pct:.1f}%"
-            _take_pct_str  = f"{take_pct:.1f}%"
-            _tight_str     = f"{round(global_params.stop_tighten_factor * global_params.stop_atr_mult, 2)}xATR apos {global_params.stop_tighten_after_bars}d"
-            exit_rules     = (
-                f"Stop: -{_stop_pct_str} ({global_params.stop_atr_mult}xATR, {trailing_label}); "
-                f"Take: +{_take_pct_str} (R:R {rr_text}); "
-                f"Tight: {_tight_str}; "
-                f"TimeStop: {global_params.time_stop_bars}d; "
-                f"HardStop: {int(global_params.max_loss_per_trade_pct*100)}% gap"
-            )
+            # (operational columns removed — Apply now shows only decision columns)
 
-            # -- Position management columns (for users already holding) --
-            # stop_distance/take_distance: absolute R$ to subtract/add from YOUR entry price
-            stop_distance = round(stop_atr_val, 4)
-            take_distance = round(global_params.reward_risk_ratio * stop_atr_val, 4)
-            # Tightened stop distance (after N bars holding)
-            tight_stop_dist = round(global_params.stop_tighten_factor * stop_atr_val, 4)
-            # Sell percentage at take profit
-            # If take triggers before partials: sell 100%
-            # If partials trigger first: sell partial_take_pct at each level
-            rr = global_params.reward_risk_ratio
-            p1_level = global_params.partial_take_level
-            p2_level = global_params.partial_take_level_2
-            has_p1 = global_params.partial_take_pct > 0 and p1_level <= rr
-            has_p2 = global_params.partial_take_pct_2 > 0 and p2_level <= rr
-            if has_p1 or has_p2:
-                # Partials trigger at or before take profit
-                sell_pct_at_take = 100.0
-                if has_p1:
-                    sell_pct_at_take -= round(global_params.partial_take_pct * 100, 1)
-                if has_p2:
-                    sell_pct_at_take -= round(global_params.partial_take_pct_2 * 100, 1)
-                sell_pct_at_take = max(sell_pct_at_take, 0.0)
-            else:
-                sell_pct_at_take = 100.0
+            # Stop % and alvo % for display
+            stop_pct_val = round(stop_risk / max(entry_ref, ATR_EPS) * 100.0, 2)
+            alvo_pct_val = round(alvo_pct * 100, 2)
+            rr_display = round(rr_ratio, 1)
 
             results_apply.append({
+                # -- Decisao --
                 "Date": pd.to_datetime(dates[i]).strftime("%Y-%m-%d"),
                 "ticker": tkr,
-                "close": round(close_val, 4),
                 "signal": sig,
                 "confidence": round(confidence, 1),
-                # -- Nova entrada --
+                # -- Compra --
+                "close": round(close_val, 4),
                 "entrada": best_buy,
+                # -- Venda (stop e alvo) --
                 "stop": stop_loss,
                 "alvo": take_profit,
-                # -- Gestao de posicao (aplique ao SEU preco de entrada) --
-                "ATR": round(atr_val, 4),
-                "stop_dist": stop_distance,
-                "alvo_dist": take_distance,
-                "tight_stop": tight_stop_dist,
-                "tight_dias": int(global_params.stop_tighten_after_bars),
-                "time_stop": int(global_params.time_stop_bars),
-                # -- Regime analysis (v4) --
-                "regime_score": round(regime_val, 2),
+                "RR": rr_display,
+                # -- Risco --
+                "stop_pct": stop_pct_val,
+                "alvo_pct": alvo_pct_val,
+                "queda_max": round(queda_max_esperada * 100, 1),
+                "piso": queda_max_preco,
+                # -- Qualidade --
+                "win_rate": round(bt_win_rate * 100, 1),
+                "wr_tier": wr_tier,
+                "dist_quality": round(bt_dist_quality * 100, 1),
                 "regime": (
                     "favoravel" if regime_val >= 0.6
                     else "neutro" if regime_val >= 0.3
                     else "desfavoravel"
                 ),
-                # -- Win rate analysis (v5) --
-                "win_rate": round(bt_win_rate * 100, 1),
-                "n_trades": int(bt_n_trades),
-                "wr_tier": wr_tier,
-                # -- Viability metrics (v5) --
-                "alvo_pct": round(alvo_pct * 100, 2),
-                "vol_fin_k": round(vol_fin / 1000, 0),  # volume financeiro em R$ mil
             })
 
         results_summary.append({
@@ -2635,6 +2676,10 @@ def run():
             "test_win_rate": st["win_rate"],
             "test_avg_trade": st["avg_trade"],
             "buy_hold_return": buyhold_capped(c),
+            "wr_tier": wr_tier,
+            "dist_quality": round(bt_dist_quality * 100, 1),
+            "big_wins": round(bt_big_wins * 100, 1),
+            "big_losses": round(bt_big_losses * 100, 1),
         })
 
     df_sum = pd.DataFrame(results_summary)
@@ -2746,20 +2791,23 @@ def run():
 
                     # Header comments explaining each column
                     col_comments = {
-                        "Date": "Data do pregao (fechamento)",
-                        "ticker": "Codigo do ativo (ex: PETR4.SA, BTC-USD)",
-                        "close": "Preco de fechamento no dia",
-                        "signal": "buy = abrir posicao comprada\nhold = aguardar, nao comprar agora",
-                        "confidence": "0 a 100: quao confiavel e o sinal\n15% backtest 15% forca 25% win_rate_tier\n15% concordancia 15% regime 15% ML",
-                        "entrada": "Preco sugerido de compra (close ajustado por ATR).\nUse como ordem limite.",
-                        "stop": "Stop loss se comprar HOJE no preco 'entrada'.\n= entrada - stop_dist",
-                        "alvo": "Take profit se comprar HOJE no preco 'entrada'.\n= entrada + alvo_dist\nVender 100% ao atingir.",
-                        "ATR": "Average True Range: volatilidade diaria em R$.\nBase para calcular stop e alvo.\nAtualiza todo dia.",
-                        "stop_dist": "Distancia do stop em R$ (= 1x ATR).\nJA COMPRADO? Seu stop = SEU_PRECO - stop_dist\nAtualiza diariamente.",
-                        "alvo_dist": "Distancia do alvo em R$ (= 1x ATR).\nJA COMPRADO? Seu alvo = SEU_PRECO + alvo_dist\nAtualiza diariamente.",
-                        "tight_stop": "Stop apertado (= 0.4x ATR) ativado apos 'tight_dias'.\nJA COMPRADO ha N dias? Seu stop = SEU_PRECO - tight_stop",
-                        "tight_dias": "Apos quantos dias de posicao o stop aperta.\nEx: 3 = apos 3 dias, stop encurta de stop_dist para tight_stop.",
-                        "time_stop": "Dias maximo na posicao. Se nao atingiu 50% do alvo ate aqui, saia.\nTrailing: apos lucro > stop_dist, stop sobe para preco de entrada (breakeven).",
+                        "Date": "Data do pregao",
+                        "ticker": "Codigo do ativo",
+                        "signal": "buy = comprar | hold = aguardar",
+                        "confidence": "0-100: confianca no sinal\n20% win_rate + 15% distribuicao + 15% viabilidade\n10% backtest + 10% sinal + 10% acordo + 10% regime + 10% ML",
+                        "close": "Preco de fechamento",
+                        "entrada": "Preco sugerido de compra (ordem limite)",
+                        "stop": "Stop loss (baseado em ATR)",
+                        "alvo": "Alvo de venda (baseado no potencial estatistico da acao,\nnao no ATR. Usa mediana+P75 dos retornos forward positivos)",
+                        "RR": "Risco:Retorno. Minimo 1.0 para comprar.\nEx: 2.5 = alvo 2.5x maior que stop",
+                        "stop_pct": "Stop em % do preco de entrada",
+                        "alvo_pct": "Alvo em % do preco de entrada",
+                        "queda_max": "Previsao de queda maxima (%) baseada no MDD historico\najustado pela volatilidade atual",
+                        "piso": "Preco piso estimado (close * (1 - queda_max))",
+                        "win_rate": "Win rate do backtest (% trades positivos)",
+                        "wr_tier": "Classificacao: excelente(70%+) bom(60%+) aceitavel(52%+) fraco(<52%) ruim(<45%)",
+                        "dist_quality": "Qualidade da distribuicao (big wins vs big losses, 0-100)",
+                        "regime": "Regime de mercado: favoravel/neutro/desfavoravel",
                     }
 
                     # Write headers with comments
@@ -2770,12 +2818,10 @@ def run():
 
                     # Column widths
                     apply_widths = {
-                        "Date": 12, "ticker": 12, "close": 10,
-                        "signal": 8, "confidence": 12,
-                        "entrada": 10, "stop": 10, "alvo": 10,
-                        "ATR": 9, "stop_dist": 10, "alvo_dist": 10,
-                        "tight_stop": 10, "tight_dias": 10, "time_stop": 10,
-                        "win_rate": 10, "n_trades": 10, "wr_tier": 12,
+                        "Date": 12, "ticker": 12, "signal": 8, "confidence": 11,
+                        "close": 10, "entrada": 10, "stop": 10, "alvo": 10, "RR": 6,
+                        "stop_pct": 9, "alvo_pct": 9, "queda_max": 10, "piso": 10,
+                        "win_rate": 10, "wr_tier": 12, "dist_quality": 12, "regime": 13,
                     }
                     for col_idx, col_name in enumerate(df_app.columns):
                         ws_app.set_column(col_idx, col_idx, apply_widths.get(col_name, 11))
@@ -2790,7 +2836,7 @@ def run():
                     int_buy    = wb.add_format({"bg_color": "#C6EFCE", "font_color": "#276221", "num_format": "0"})
                     int_hold   = wb.add_format({"num_format": "0"})
 
-                    price_cols = {"close", "entrada", "stop", "alvo", "ATR", "stop_dist", "alvo_dist", "tight_stop"}
+                    price_cols = {"close", "entrada", "stop", "alvo", "piso"}
                     # Note: venda_pct and trailing removed (always 100% and breakeven with current genome)
                     score_cols = {"confidence"}
                     int_cols = {"tight_dias", "time_stop"}
