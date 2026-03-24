@@ -8,13 +8,13 @@ on:
 jobs:
   pipeline:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 60
 
     env:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-      GA_RUN_MODE: "load"      # daily = load checkpoint, no retrain
-      GA_FAST_MODE: "true"     # ignored in load mode, but set for safety
+      GA_RUN_MODE: "load"
+      GA_FAST_MODE: "true"
 
     steps:
       - name: Checkout
@@ -47,11 +47,8 @@ jobs:
           key: models-${{ github.sha }}
           restore-keys: models-
 
-      - name: Run full pipeline (ETL + BIN + REG + FINAL)
-        run: python -u run_pipeline.py --steps 1,2,3,4
-
-      - name: Run GA load (generate signals + send Telegram)
-        run: python -u ga_run.py
+      - name: Run daily predict (ETL + forward-fill + FINAL + GA load)
+        run: python -u predict_daily.py
 
       - name: Upload artifacts
         if: always()
