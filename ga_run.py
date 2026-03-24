@@ -2428,6 +2428,28 @@ def run():
         bt_n_trades = st.get("n_trades", 0.0)
         n_years = max(n / 252.0, 0.1)
         trades_per_year = bt_n_trades / n_years
+
+        # -- Win rate tier (v5): per-ticker quality classification --
+        # Tiers based on win rate + minimum trades for statistical significance
+        min_trades_for_tier = 20  # need at least 20 trades for reliable win rate
+        if bt_n_trades < min_trades_for_tier:
+            wr_tier = "insuficiente"  # not enough data
+            wr_tier_num = 0
+        elif bt_win_rate >= 0.70:
+            wr_tier = "excelente"
+            wr_tier_num = 4
+        elif bt_win_rate >= 0.60:
+            wr_tier = "bom"
+            wr_tier_num = 3
+        elif bt_win_rate >= 0.52:
+            wr_tier = "aceitavel"
+            wr_tier_num = 2
+        elif bt_win_rate >= 0.45:
+            wr_tier = "fraco"
+            wr_tier_num = 1
+        else:
+            wr_tier = "ruim"
+            wr_tier_num = 0
         
         ma_arr = payload.get("ma", np.full(n, np.nan))
 
@@ -2477,29 +2499,50 @@ def run():
                 stop_loss = round(close_val - stop_atr, 4)
                 take_profit = round(close_val + take_atr, 4)
             
-            # Confidence (0-100): modelo de 6 fatores (v4)
-            # q_backtest: sharpe e win_rate do backtest
-            q_bt = float(np.clip(_sigmoid((bt_sharpe - 0.1) / 0.3) * 0.5 + bt_win_rate * 0.5, 0.0, 1.0))
+            # Confidence (0-100): modelo de 7 fatores (v5)
+            # q_backtest: sharpe e win_rate do backtest (heavier win_rate weight)
+            q_bt = float(np.clip(_sigmoid((bt_sharpe - 0.1) / 0.3) * 0.3 + bt_win_rate * 0.7, 0.0, 1.0))
             # q_signal: forca direcional do sinal atual
             q_sig = strength
-            # q_trades: confianca aumenta com mais trades historicos
-            q_tr = float(np.clip(trades_per_year / 20.0, 0.0, 1.0))
+            # q_winrate: win rate tier — penaliza fortemente tickers com win rate ruim
+            # Maps tier_num (0-4) to quality score (0.0-1.0)
+            q_wr = float(np.clip(wr_tier_num / 4.0, 0.0, 1.0))
+            # Extra penalty: win rate abaixo de 50% -> q_wr cai para 0
+            if bt_win_rate < 0.50 and bt_n_trades >= min_trades_for_tier:
+                q_wr = float(np.clip((bt_win_rate - 0.40) / 0.10, 0.0, q_wr))  # gradual from 40-50%
             # q_agreement: concordancia entre features (votes) — weighted
             vl = votes_long[i] if i < len(votes_long) else 0.0
             vs = votes_short[i] if i < len(votes_short) else 0.0
             q_agree = float(np.clip(max(vl, vs) * 2.0, 0.0, 1.0))
-            # q_regime (NOVO v4): qualidade do regime de mercado
+            # q_regime (v4): qualidade do regime de mercado
             regime_val = float(regime_arr[i]) if i < len(regime_arr) and np.isfinite(regime_arr[i]) else 0.5
             q_regime = float(np.clip(regime_val, 0.0, 1.0))
-            # q_ml (NOVO v4): concordância do ensemble ML (buy_trust proxy)
-            # Approximate via vote consensus strength: higher consensus = higher ML agreement
+            # q_ml (v4): concordância do ensemble ML (buy_trust proxy)
             vote_consensus = float(np.clip(abs(vl - vs) * 3.0, 0.0, 1.0))
             q_ml = float(np.clip(0.5 * q_agree + 0.5 * vote_consensus, 0.0, 1.0))
 
+            # q_viability (v5): operational viability — penalizes tiny targets and low liquidity
+            alvo_pct = abs(take_atr) / max(close_val, ATR_EPS)  # target as % of price
+            vol_arr = payload.get("volume", np.full(n, np.nan))
+            avg_vol_20 = float(np.nanmean(vol_arr[max(0, i-19):i+1])) if i < len(vol_arr) else 0.0
+            vol_fin = avg_vol_20 * close_val  # volume financeiro medio 20d
+            # Target amplitude: 0% at 0.5%, 100% at 3%+
+            q_target_amp = float(np.clip((alvo_pct - 0.005) / 0.025, 0.0, 1.0))
+            # Liquidity: 0% at R$100k, 100% at R$5M+
+            q_liq = float(np.clip((vol_fin - 100_000) / 4_900_000, 0.0, 1.0))
+            q_viability = 0.5 * q_target_amp + 0.5 * q_liq
+
             confidence = float(np.clip(
-                (0.20 * q_bt + 0.20 * q_sig + 0.10 * q_tr + 0.20 * q_agree + 0.15 * q_regime + 0.15 * q_ml) * 100.0,
+                (0.10 * q_bt + 0.10 * q_sig + 0.25 * q_wr + 0.10 * q_agree + 0.10 * q_regime + 0.10 * q_ml + 0.25 * q_viability) * 100.0,
                 0.0, 100.0
             ))
+
+            # -- Win rate gate (v5): demote buy to hold if win rate too low --
+            if sig == "buy" and wr_tier_num <= 1 and bt_n_trades >= min_trades_for_tier:
+                sig = "hold"  # ticker has bad historical win rate, don't recommend buy
+            # -- Viability gate (v5): demote buy if target too small to be operable --
+            if sig == "buy" and alvo_pct < 0.008:  # less than 0.8% target
+                sig = "hold"  # operationally unviable (won't cover costs/slippage)
             
             # -- Operational columns --------------------------------------
             stop_atr_val   = global_params.stop_atr_mult * atr_val
@@ -2574,6 +2617,13 @@ def run():
                     else "neutro" if regime_val >= 0.3
                     else "desfavoravel"
                 ),
+                # -- Win rate analysis (v5) --
+                "win_rate": round(bt_win_rate * 100, 1),
+                "n_trades": int(bt_n_trades),
+                "wr_tier": wr_tier,
+                # -- Viability metrics (v5) --
+                "alvo_pct": round(alvo_pct * 100, 2),
+                "vol_fin_k": round(vol_fin / 1000, 0),  # volume financeiro em R$ mil
             })
 
         results_summary.append({
@@ -2700,7 +2750,7 @@ def run():
                         "ticker": "Codigo do ativo (ex: PETR4.SA, BTC-USD)",
                         "close": "Preco de fechamento no dia",
                         "signal": "buy = abrir posicao comprada\nhold = aguardar, nao comprar agora",
-                        "confidence": "0 a 100: quao confiavel e o sinal\n30% backtest (sharpe+winrate)\n25% forca direcional\n15% qtd trades historicos\n30% concordancia entre features",
+                        "confidence": "0 a 100: quao confiavel e o sinal\n15% backtest 15% forca 25% win_rate_tier\n15% concordancia 15% regime 15% ML",
                         "entrada": "Preco sugerido de compra (close ajustado por ATR).\nUse como ordem limite.",
                         "stop": "Stop loss se comprar HOJE no preco 'entrada'.\n= entrada - stop_dist",
                         "alvo": "Take profit se comprar HOJE no preco 'entrada'.\n= entrada + alvo_dist\nVender 100% ao atingir.",
@@ -2725,6 +2775,7 @@ def run():
                         "entrada": 10, "stop": 10, "alvo": 10,
                         "ATR": 9, "stop_dist": 10, "alvo_dist": 10,
                         "tight_stop": 10, "tight_dias": 10, "time_stop": 10,
+                        "win_rate": 10, "n_trades": 10, "wr_tier": 12,
                     }
                     for col_idx, col_name in enumerate(df_app.columns):
                         ws_app.set_column(col_idx, col_idx, apply_widths.get(col_name, 11))
