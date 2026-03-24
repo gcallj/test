@@ -128,6 +128,9 @@ ATR_EPS = 1e-12
 ATR_MULT_RANGE = (1.5, 3.5)
 RR_MULT_RANGE  = (1.5, 4.0)  # wider RR to pursue larger trend-following payoffs
 
+# Volume / liquidity filter (v5)
+MIN_VOL_FIN_DAILY = 50_000  # R$50k/dia minimum median financial volume
+
 # Friction
 COST_BPS     = 12.0
 SLIPPAGE_BPS = 12.0
@@ -443,57 +446,71 @@ def ewm_mean_np(x: np.ndarray, span: int) -> np.ndarray:
     return out
 
 
+@njit(cache=True)
+def _rolling_percentile_rank_numba(x, valid, n, window):
+    """Numba-accelerated rolling percentile rank. O(n*w) but in native code."""
+    out = np.full(n, np.nan, dtype=np.float64)
+    for i in range(n):
+        if not valid[i]:
+            continue
+        start = max(0, i - window + 1)
+        count = 0
+        rank = 0
+        xi = x[i]
+        for j in range(start, i + 1):
+            if valid[j]:
+                count += 1
+                if x[j] <= xi:
+                    rank += 1
+        if count >= 20:
+            out[i] = rank / count
+    return out
+
+
 def rolling_percentile_rank(arr: np.ndarray, window: int = 252) -> np.ndarray:
     x = np.asarray(arr, dtype=np.float64)
-    out = np.full_like(x, np.nan, dtype=np.float64)
-    valid = np.isfinite(x)
     n = len(x)
     if n == 0:
-        return out
+        return np.full(0, np.nan)
+    valid = np.isfinite(x)
+    return _rolling_percentile_rank_numba(x, valid, n, window)
 
-    from bisect import bisect_right, insort
 
-    sorted_vals = []
+@njit(cache=True)
+def _rolling_quantile_trigger_numba(x, valid, n, window, q):
+    """Numba-accelerated rolling quantile trigger."""
+    out = np.full(n, np.nan, dtype=np.float64)
     for i in range(n):
-        xi = x[i]
-        if np.isfinite(xi):
-            insort(sorted_vals, float(xi))
-        j_rm = i - window
-        if j_rm >= 0 and valid[j_rm]:
-            xrm = float(x[j_rm])
-            k = bisect_right(sorted_vals, xrm) - 1
-            if k >= 0:
-                sorted_vals.pop(k)
-        if len(sorted_vals) >= 20 and np.isfinite(xi):
-            out[i] = bisect_right(sorted_vals, float(xi)) / float(len(sorted_vals))
+        if not valid[i]:
+            continue
+        start = max(0, i - window + 1)
+        # Collect valid values in window
+        count = 0
+        for j in range(start, i + 1):
+            if valid[j]:
+                count += 1
+        if count < 20:
+            continue
+        # Extract window values
+        vals = np.empty(count, dtype=np.float64)
+        k = 0
+        for j in range(start, i + 1):
+            if valid[j]:
+                vals[k] = x[j]
+                k += 1
+        vals.sort()
+        idx = min(max(int(np.ceil(q * count)) - 1, 0), count - 1)
+        out[i] = vals[idx]
     return out
 
 
 def rolling_quantile_trigger(arr: np.ndarray, q: float, window: int = SCORE_LOOKBACK) -> np.ndarray:
     x = np.asarray(arr, dtype=np.float64)
-    out = np.full_like(x, np.nan, dtype=np.float64)
-    valid = np.isfinite(x)
     n = len(x)
     if n == 0:
-        return out
-
-    from bisect import bisect_left, insort
-
-    sorted_vals = []
-    for i in range(n):
-        xi = x[i]
-        if np.isfinite(xi):
-            insort(sorted_vals, float(xi))
-        j_rm = i - window
-        if j_rm >= 0 and valid[j_rm]:
-            xrm = float(x[j_rm])
-            k = bisect_left(sorted_vals, xrm)
-            if k < len(sorted_vals):
-                sorted_vals.pop(k)
-        if len(sorted_vals) >= 20 and np.isfinite(xi):
-            idx = int(np.clip(math.ceil(q * len(sorted_vals)) - 1, 0, len(sorted_vals) - 1))
-            out[i] = sorted_vals[idx]
-    return out
+        return np.full(0, np.nan)
+    valid = np.isfinite(x)
+    return _rolling_quantile_trigger_numba(x, valid, n, window, q)
 
 
 def precompute_global_payloads(
@@ -1005,27 +1022,28 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
     if mean_ret < 0.0:
         underperf_penalty += abs(mean_ret) * 30.0
 
-    # -- Win-rate bonus (v3: more aggressive tiers) ------------------------
+    # -- Win-rate bonus (v5: single mechanism, no double-counting) ----------
+    # Removed direct 1.5*mean + 1.1*median from fitness formula.
+    # All win rate influence flows through this tiered bonus only.
     win_rate_bonus = 0.0
     # Sub-50% hard penalty
     if mean_win_rate < 0.50:
-        win_rate_bonus -= (0.50 - mean_win_rate) * 10.0  # was 8.0
-    # Tiered bonuses starting at 52%
-    if mean_win_rate > 0.52:
-        win_rate_bonus += (mean_win_rate - 0.52) * 6.0   # was 5.0
-    if mean_win_rate > 0.56:
-        win_rate_bonus += (mean_win_rate - 0.56) * 5.0   # new tier
+        win_rate_bonus -= (0.50 - mean_win_rate) * 12.0
+    # Base: linear from 50% upward
+    if mean_win_rate > 0.50:
+        win_rate_bonus += (mean_win_rate - 0.50) * 5.0
+    # Tiered bonuses (cumulative)
+    if mean_win_rate > 0.55:
+        win_rate_bonus += (mean_win_rate - 0.55) * 4.0
     if mean_win_rate > 0.60:
-        win_rate_bonus += (mean_win_rate - 0.60) * 8.0   # big bonus above 60% (was 6.0)
+        win_rate_bonus += (mean_win_rate - 0.60) * 6.0
     if mean_win_rate > 0.65:
-        win_rate_bonus += (mean_win_rate - 0.65) * 10.0  # premium tier for 65%+
-    # Median win rate
+        win_rate_bonus += (mean_win_rate - 0.65) * 8.0
+    # Median win rate (consistency across tickers)
     if med_win_rate > 0.55:
-        win_rate_bonus += (med_win_rate - 0.55) * 5.0    # was 4.0
+        win_rate_bonus += (med_win_rate - 0.55) * 3.0
     if med_win_rate > 0.62:
-        win_rate_bonus += (med_win_rate - 0.62) * 7.0    # was 5.0
-    if med_win_rate > 0.68:
-        win_rate_bonus += (med_win_rate - 0.68) * 8.0    # premium tier (was 6.0)
+        win_rate_bonus += (med_win_rate - 0.62) * 5.0
 
     # -- Consistency bonus: reward stable per-ticker performance -----------
     consistency_bonus = 0.0
@@ -1068,8 +1086,7 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
         0.5 * np.clip(mean_sharpe, -2.0, 3.0) +
         0.4 * np.clip(med_sharpe,  -2.0, 3.0) +
         0.3 * pct_positive +
-        1.5 * mean_win_rate +                       # win rate main weight (was 1.1)
-        1.1 * med_win_rate +                        # median win rate (was 0.8)
+        # Win rate: use ONLY tiered bonus (no double-counting with direct weight)
         win_rate_bonus +
         consistency_bonus +
         calmar_bonus +
@@ -2019,41 +2036,64 @@ def build_temporal_windows(min_date: pd.Timestamp, max_date: pd.Timestamp, train
     return windows
 
 
-def generate_signal_global(payload: Dict[str, Any], gp: GlobalParams, day_index: int) -> str:
+def vectorized_signals(payload: Dict[str, Any], gp: GlobalParams) -> np.ndarray:
+    """Pre-compute signals for ALL days using backtest-consistent logic.
+    Returns array of strings: "buy", "sell", or "hold" for each day.
+    Uses same rolling_quantile_trigger as backtest (not np.nanpercentile).
+    """
     x = np.asarray(payload["score_matrix"], dtype=np.float64)
     c = np.asarray(payload["close"], dtype=np.float64)
     atr = np.asarray(payload["atr"], dtype=np.float64)
-    if day_index <= 0 or day_index >= len(c) or x.ndim != 2:
-        return "hold"
+    n = len(c)
+    signals = np.array(["hold"] * n, dtype=object)
+    if n < 2 or x.ndim != 2:
+        return signals
 
     feat_n = max(1, x.shape[1])
-    # Weighted voting (magnitude-aware, same as backtest)
     votes_long, votes_short = compute_weighted_votes(x, gp.z_threshold, feat_n)
     score_raw = votes_long - votes_short
-    score_ev = pd.Series(score_raw).ewm(span=int(gp.signal_ema_span), adjust=False).mean().to_numpy()
+    score_ev = ewm_mean_np(score_raw, int(gp.signal_ema_span))
+    # Use SAME rolling_quantile_trigger as backtest (not np.nanpercentile)
+    score_pctl = rolling_quantile_trigger(score_ev, float(gp.score_percentile_trigger), max(63, SCORE_LOOKBACK))
 
-    ma = pd.Series(c).rolling(int(gp.ma_filter_period), min_periods=max(20, int(gp.ma_filter_period // 2))).mean().to_numpy()
+    ma = rolling_mean_np(c, int(gp.ma_filter_period), max(20, int(gp.ma_filter_period // 2)))
     vol_rel = atr / np.maximum(c, ATR_EPS)
     vol_rank = rolling_percentile_rank(vol_rel, 252)
-
-    # Regime score (v4)
-    ma200 = pd.Series(c).rolling(200, min_periods=50).mean().to_numpy()
+    ma200 = rolling_mean_np(c, 200, 50)
     regime = compute_regime_score(c, ma200, vol_rank)
 
+    # Momentum
+    mom_days = int(gp.momentum_confirm_days)
+    mom_ret = np.full(n, np.nan)
+    if mom_days > 0:
+        mom_ret[mom_days:] = (c[mom_days:] / np.maximum(c[:-mom_days], 1e-8)) - 1.0
+
+    # Volume confirmation
+    vol_data = payload.get("volume", None)
+    vol_ma20 = vol_ma50 = None
+    if vol_data is not None and gp.volume_confirm_mode > 0:
+        vol_arr = np.asarray(vol_data, dtype=np.float64)
+        vol_ma20 = rolling_mean_np(vol_arr, 20, 5)
+        if gp.volume_confirm_mode == 2:
+            vol_ma50 = rolling_mean_np(vol_arr, 50, 10)
+
+    score95 = np.nanpercentile(np.abs(score_ev), 95) if np.isfinite(np.nanmax(np.abs(score_ev))) else 1.0
+    score95 = max(score95, ATR_EPS)
+
+    # Vectorized consecutive signal tracking
     consec_long = 0
     consec_short = 0
-    for i in range(1, day_index + 1):
-        lookback = max(63, SCORE_LOOKBACK)
-        w = score_ev[max(0, i - lookback + 1):i + 1]
-        if len(w) < 20:
-            pctl = 0.0
-        else:
-            pctl = float(np.nanpercentile(w, gp.score_percentile_trigger * 100))
+    for i in range(1, n):
+        if not (np.isfinite(score_ev[i - 1]) and np.isfinite(score_pctl[i - 1])):
+            consec_long = 0
+            consec_short = 0
+            continue
 
+        # Raw signal condition (same as backtest lines 810-813)
         vl = votes_long[i - 1]
         vs = votes_short[i - 1]
-        long_raw = (vl >= gp.vote_threshold_long) and (score_ev[i - 1] >= pctl)
-        short_raw = (vs >= gp.vote_threshold_short) and (-score_ev[i - 1] >= pctl)
+        long_raw = (vl >= gp.vote_threshold_long) and (score_ev[i - 1] >= score_pctl[i - 1])
+        short_raw = (vs >= gp.vote_threshold_short) and (-score_ev[i - 1] >= score_pctl[i - 1])
 
         if long_raw:
             consec_long += 1
@@ -2064,33 +2104,55 @@ def generate_signal_global(payload: Dict[str, Any], gp: GlobalParams, day_index:
         else:
             consec_short = 0
 
-    long_ok = consec_long >= gp.entry_confirmation_days
-    short_ok = consec_short >= gp.entry_confirmation_days
+        long_ok = consec_long >= gp.entry_confirmation_days
+        short_ok = consec_short >= gp.entry_confirmation_days
 
-    if gp.volatility_filter_percentile > 0 and np.isfinite(vol_rank[day_index - 1]) and vol_rank[day_index - 1] < gp.volatility_filter_percentile:
-        long_ok = False
-        short_ok = False
-
-    # Regime threshold filter (v4): continuous regime scoring
-    if gp.regime_threshold > 0 and np.isfinite(regime[day_index - 1]):
-        if regime[day_index - 1] < gp.regime_threshold:
+        # Filters (same as backtest lines 779-808)
+        if gp.volatility_filter_percentile > 0 and np.isfinite(vol_rank[i - 1]) and vol_rank[i - 1] < gp.volatility_filter_percentile:
+            continue
+        if gp.vol_regime_mode == 2 and np.isfinite(vol_rank[i - 1]) and vol_rank[i - 1] > 0.85:
+            continue
+        if atr[i - 1] < 0.01:
+            continue
+        if gp.min_signal_strength > 0 and abs(score_ev[i - 1]) / score95 < gp.min_signal_strength:
+            continue
+        if gp.entry_score_threshold > 0 and abs(score_ev[i - 1]) / score95 < gp.entry_score_threshold:
+            continue
+        if gp.volume_confirm_mode == 1 and vol_ma20 is not None and i - 1 < len(vol_ma20):
+            if np.isfinite(vol_ma20[i - 1]) and vol_data[i - 1] < vol_ma20[i - 1]:
+                continue
+        elif gp.volume_confirm_mode == 2 and vol_ma50 is not None and i - 1 < len(vol_ma50):
+            if np.isfinite(vol_ma50[i - 1]) and vol_data[i - 1] < vol_ma50[i - 1]:
+                continue
+        if mom_days > 0 and np.isfinite(mom_ret[i - 1]) and mom_ret[i - 1] < 0:
+            continue
+        if gp.regime_threshold > 0 and np.isfinite(regime[i - 1]) and regime[i - 1] < gp.regime_threshold:
             long_ok = False
+        if gp.ma_filter_mode == 1 and np.isfinite(ma[i - 1]):
+            if c[i - 1] < ma[i - 1]:
+                long_ok = long_ok and (score_ev[i - 1] * 0.5 >= score_pctl[i - 1])
+            if c[i - 1] > ma[i - 1]:
+                short_ok = short_ok and (-score_ev[i - 1] * 0.5 >= score_pctl[i - 1])
+        elif gp.ma_filter_mode == 2 and np.isfinite(ma[i - 1]):
+            if c[i - 1] < ma[i - 1]:
+                long_ok = False
+            if c[i - 1] > ma[i - 1]:
+                short_ok = False
 
-    if gp.ma_filter_mode == 1 and np.isfinite(ma[day_index - 1]):
-        if c[day_index - 1] < ma[day_index - 1]:
-            long_ok = False
-        if c[day_index - 1] > ma[day_index - 1]:
-            short_ok = False
-    elif gp.ma_filter_mode == 2 and np.isfinite(ma[day_index - 1]):
-        if c[day_index - 1] < ma[day_index - 1]:
-            long_ok = False
-        if c[day_index - 1] > ma[day_index - 1]:
-            short_ok = False
+        if long_ok:
+            signals[i] = "buy"
+        elif short_ok and not LONG_ONLY:
+            signals[i] = "sell"
 
-    if long_ok:
-        return "buy"
-    if (not LONG_ONLY) and short_ok:
-        return "sell"
+    return signals
+
+
+def generate_signal_global(payload: Dict[str, Any], gp: GlobalParams, day_index: int) -> str:
+    """DEPRECATED: Use vectorized_signals() instead. Kept for backward compatibility."""
+    sigs = vectorized_signals(payload, gp)
+    if day_index < 0 or day_index >= len(sigs):
+        return "hold"
+    return str(sigs[day_index])
     return "hold"
 
 # -- Telegram notification -------------------------------------------------
@@ -2355,6 +2417,8 @@ def run():
 
     prep_dt = time.perf_counter() - prep_t0
     print(f"[PHASE1] done payloads={len(ticker_payloads)} in {prep_dt:.1f}s")
+    if reasons:
+        print(f"[PHASE1] filtered: {reasons}")
 
     if not ticker_payloads:
         print("Nenhum ticker preparado.")
@@ -2530,8 +2594,11 @@ def run():
                         if i_pot not in _potential_cache or pot > _potential_cache[i_pot]:
                             _potential_cache[i_pot] = pot
 
+        # Pre-compute ALL signals once (vectorized, backtest-consistent)
+        signals_arr = vectorized_signals(payload, global_params)
+
         for i in range(max(0, n - APPLY_DAYS), n):
-            sig = generate_signal_global(payload, global_params, i)
+            sig = str(signals_arr[i])
 
             recent_scores = score_ev[max(0, i - lookback + 1):i + 1]
             score_100 = score_0_100_from_ev(score_ev[i], recent_scores, quality)
