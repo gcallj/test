@@ -8,7 +8,7 @@ on:
 jobs:
   pipeline:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
 
     env:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -47,8 +47,8 @@ jobs:
           key: models-${{ github.sha }}
           restore-keys: models-
 
-      - name: Run ETL + FINAL (fresh data + consolidate signals)
-        run: python -u run_pipeline.py --steps 1,4
+      - name: Run full pipeline (ETL + BIN + REG + FINAL)
+        run: python -u run_pipeline.py --steps 1,2,3,4
 
       - name: Run GA load (generate signals + send Telegram)
         run: python -u ga_run.py
