@@ -59,10 +59,11 @@ def get_etl_dates_tickers():
         except (ValueError, SyntaxError):
             pass
 
-    # Read index (dates) from a single column
-    first_col = all_cols[0]
-    tbl = pq.read_table(ETL_PATH, columns=[first_col])
-    dates = pd.to_datetime(tbl.to_pandas().index)
+    # Read dates from parquet index (DatetimeIndex stored in pandas metadata)
+    # columns=[] reads zero data columns but preserves the index
+    df_idx = pd.read_parquet(ETL_PATH, columns=[])
+    dates = pd.to_datetime(df_idx.index)
+    print(f"[ETL] index type: {type(df_idx.index)}, first: {dates[0]}, last: {dates[-1]}")
 
     return sorted(dates), sorted(tickers)
 
