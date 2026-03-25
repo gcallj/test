@@ -1,120 +1,120 @@
-Date,ticker,signal,confidence,close,entrada,stop,alvo,RR,stop_pct,alvo_pct,queda_max,piso,win_rate,wr_tier,dist_quality,regime
-2026-03-25,HSML11.SA,buy,77.1,95.4,95.0757,94.355,97.8447,3.8,0.76,2.9,3.0,92.5271,71.6,excelente,45.9,favoravel
-2026-03-25,KNRI11.SA,buy,75.9,165.95,165.1937,163.513,172.2694,4.2,1.02,4.26,8.3,152.1589,72.2,excelente,46.5,favoravel
-2026-03-25,SMTO3.SA,buy,74.9,19.93,19.4813,18.4842,21.2779,1.8,5.12,9.01,22.0,15.5416,66.8,bom,26.1,favoravel
-2026-03-25,UGPA3.SA,buy,74.6,28.08,27.6535,26.7056,30.6437,3.2,3.43,10.65,24.4,21.2355,67.1,bom,28.7,favoravel
-2026-03-25,NEOE3.SA,buy,74.1,33.23,33.1914,33.1057,35.8292,30.8,0.26,7.94,3.8,31.9776,66.0,bom,27.0,favoravel
-2026-03-25,XPLG11.SA,buy,73.9,101.03,100.698,99.9601,102.7149,2.7,0.73,2.0,2.3,98.6659,72.7,excelente,48.2,favoravel
-2026-03-25,SLCE3.SA,buy,73.8,18.4,18.1554,17.6118,19.1875,1.9,2.99,5.61,19.6,14.7945,63.4,bom,30.3,favoravel
-2026-03-25,BTLG11.SA,buy,73.4,103.62,103.2745,102.5066,105.1464,2.4,0.74,1.81,3.4,100.0657,71.2,excelente,48.3,favoravel
-2026-03-25,CPFE3.SA,buy,72.9,47.16,46.637,45.4749,49.9701,2.9,2.49,7.07,12.1,41.4643,70.4,excelente,37.0,favoravel
-2026-03-25,PRIO3.SA,buy,70.6,66.78,65.303,62.0209,73.6729,2.6,5.03,12.53,19.0,54.1083,64.9,bom,27.9,favoravel
-2026-03-25,SBSP3.SA,buy,70.4,155.14,153.076,148.4894,166.7914,3.0,3.0,8.84,27.8,111.9491,63.6,bom,22.9,favoravel
-2026-03-25,TIMS3.SA,buy,70.2,27.45,27.1292,26.4163,29.5184,3.4,2.63,8.7,22.8,21.1923,63.6,bom,26.5,favoravel
-2026-03-25,WEGE3.SA,buy,70.2,48.09,47.459,46.0569,51.9285,3.2,2.95,9.29,12.3,42.1929,73.1,excelente,34.4,favoravel
-2026-03-25,KFOF11.SA,buy,69.7,84.24,83.755,82.6771,86.6813,2.7,1.29,3.47,3.9,80.9148,74.4,excelente,42.3,favoravel
-2026-03-25,VISC11.SA,buy,69.4,110.13,109.7526,108.914,112.5849,3.4,0.76,2.57,3.6,106.1515,68.0,bom,45.2,favoravel
-2026-03-25,PETR4.SA,buy,68.4,47.17,46.4375,44.8096,50.664,2.6,3.51,8.96,28.3,33.8026,61.1,bom,20.5,favoravel
-2026-03-25,SAPR11.SA,buy,68.3,42.66,41.9622,40.4115,46.3761,2.8,3.7,10.35,20.6,33.8913,65.0,bom,32.1,favoravel
-2026-03-25,CSMG3.SA,buy,67.2,56.47,55.6481,53.8217,63.6888,4.4,3.28,14.24,18.9,45.8134,70.3,excelente,30.8,favoravel
-2026-03-25,HGBS11.SA,buy,67.0,20.23,20.1451,19.9565,20.6405,2.6,0.94,2.45,5.3,19.1669,71.3,excelente,44.0,favoravel
-2026-03-25,XPML11.SA,buy,66.7,107.93,107.3537,106.073,109.7199,1.8,1.19,2.19,3.7,103.9726,66.7,bom,48.8,favoravel
-2026-03-25,HFOF11.SA,buy,66.3,6.8,6.7752,6.7202,7.0378,4.8,0.81,3.86,2.8,6.6107,70.8,excelente,45.8,favoravel
-2026-03-25,CMIG4.SA,buy,66.2,12.49,12.3428,12.0157,12.8669,1.6,2.65,4.2,16.4,10.444,68.1,bom,30.7,favoravel
-2026-03-25,AXIA6.SA,buy,65.7,63.57,62.5086,60.15,69.7681,3.1,3.77,11.42,18.6,51.7552,65.3,bom,32.6,favoravel
-2026-03-25,MXRF11.SA,buy,65.6,9.76,9.7243,9.645,9.9176,2.4,0.82,1.98,5.4,9.2374,69.6,bom,47.9,favoravel
-2026-03-25,LREN3.SA,buy,65.4,15.76,15.4855,14.8755,17.2035,2.8,3.94,10.9,22.6,12.2027,62.1,bom,26.3,favoravel
-2026-03-25,ISAE4.SA,buy,64.8,28.57,28.2502,27.5395,30.0438,2.5,2.52,6.28,16.5,23.8597,66.9,bom,30.6,favoravel
-2026-03-25,PVBI11.SA,buy,64.3,76.4,75.9063,74.8092,77.8755,1.8,1.45,2.58,5.6,72.1235,68.4,bom,46.5,neutro
-2026-03-25,BPAC11.SA,buy,64.1,57.28,56.2643,54.0072,61.6673,2.4,4.01,9.43,22.0,44.688,64.9,bom,30.7,favoravel
-2026-03-25,KNCR11.SA,buy,64.1,105.14,104.8591,104.2348,105.9168,1.7,0.6,1.01,2.8,102.2474,67.4,bom,48.9,favoravel
-2026-03-25,HGRE11.SA,buy,64.0,124.75,124.0576,122.519,128.5898,2.9,1.24,3.63,14.8,106.3121,58.9,aceitavel,41.1,favoravel
-2026-03-25,RENT3.SA,buy,63.8,47.55,46.5577,44.3527,52.5954,2.7,4.74,12.7,13.6,41.1018,67.0,bom,25.0,favoravel
-2026-03-25,VIVT3.SA,buy,63.7,41.59,41.1114,40.0478,44.5303,3.2,2.59,8.22,17.4,34.3621,60.1,bom,25.8,favoravel
-2026-03-25,AXIA3.SA,buy,63.0,58.11,57.1419,54.9905,64.5164,3.4,3.77,12.69,17.7,47.8502,67.6,bom,30.8,favoravel
-2026-03-25,XPBR31.SA,buy,62.7,104.22,101.9867,97.0238,114.8315,2.6,4.87,12.32,12.4,91.291,62.7,bom,26.5,favoravel
-2026-03-25,ITUB4.SA,buy,62.5,43.1,42.5838,41.4367,46.3203,3.3,2.69,8.67,20.1,34.4157,62.9,bom,30.5,favoravel
-2026-03-25,ABEV3.SA,buy,62.4,14.95,14.7899,14.4342,15.9007,3.1,2.41,7.43,13.1,12.9908,63.3,bom,33.0,favoravel
-2026-03-25,BRSR6.SA,buy,62.1,17.71,17.4609,16.9073,19.2397,3.2,3.17,10.04,13.7,15.2847,69.2,bom,25.8,favoravel
-2026-03-25,VBBR3.SA,buy,61.7,31.14,30.5521,29.2457,33.5474,2.3,4.28,9.62,13.1,27.0495,62.3,bom,25.5,favoravel
-2026-03-25,EQTL3.SA,buy,61.1,41.96,41.356,40.0139,43.9366,1.9,3.25,6.15,18.1,34.3568,66.2,bom,30.3,favoravel
-2026-03-25,USIM5.SA,buy,61.1,6.76,6.6353,6.3582,7.2112,2.1,4.18,8.52,21.1,5.3361,67.4,bom,22.1,favoravel
-2026-03-25,CXSE3.SA,buy,60.6,17.73,17.5494,17.148,18.5789,2.6,2.29,5.81,17.6,14.6111,62.1,bom,28.8,favoravel
-2026-03-25,GOAU4.SA,buy,60.3,8.27,8.1671,7.9385,8.7868,2.7,2.8,7.49,13.7,7.1331,61.1,bom,24.1,favoravel
-2026-03-25,IGTI11.SA,buy,59.8,27.66,27.2309,26.2773,29.644,2.5,3.5,8.72,15.1,23.4818,68.3,bom,31.0,favoravel
-2026-03-25,BBAS3.SA,buy,59.5,24.0,23.6628,22.9135,25.8553,2.9,3.17,9.14,36.0,15.3537,66.7,bom,30.5,favoravel
-2026-03-25,RAIL3.SA,buy,59.1,16.54,16.2446,15.5882,17.3247,1.6,4.04,6.53,30.4,11.5112,65.7,bom,21.4,favoravel
-2026-03-25,BRCR11.SA,buy,58.9,46.7,46.4065,45.7544,49.4869,4.7,1.41,6.6,3.2,45.1988,68.5,bom,47.3,favoravel
-2026-03-25,BRKM5.SA,buy,58.9,10.82,10.4063,9.487,11.7859,1.5,8.83,12.75,40.2,6.4692,63.8,bom,26.1,favoravel
-2026-03-25,BBDC4.SA,buy,58.8,19.22,18.9513,18.3542,20.644,2.8,3.15,8.81,23.7,14.6632,61.3,bom,24.2,favoravel
-2026-03-25,BBSE3.SA,buy,58.6,34.79,34.5023,33.863,36.0734,2.5,1.85,4.52,13.9,29.9695,64.4,bom,32.7,favoravel
-2026-03-25,KLBN11.SA,buy,58.5,19.42,19.2098,18.7427,20.1483,2.0,2.43,4.83,16.5,16.2118,65.2,bom,19.6,favoravel
-2026-03-25,FLRY3.SA,buy,58.2,15.6,15.3679,14.8522,16.7943,2.8,3.36,9.14,19.2,12.6006,68.6,bom,26.2,favoravel
-2026-03-25,ODPV3.SA,buy,57.9,13.56,13.3642,12.9292,14.3225,2.2,3.25,7.07,18.2,11.0923,64.9,bom,27.3,favoravel
-2026-03-25,TAEE11.SA,buy,57.8,42.68,42.167,41.027,44.3163,1.9,2.7,5.04,23.4,32.7061,64.4,bom,29.8,favoravel
-2026-03-25,RADL3.SA,buy,57.6,24.42,24.0542,23.2413,26.6178,3.2,3.38,10.5,23.4,18.7078,59.8,aceitavel,19.2,favoravel
-2026-03-25,LEVE3.SA,buy,57.3,35.65,35.2463,34.3492,37.2993,2.3,2.55,5.76,16.4,29.8203,63.1,bom,24.4,favoravel
-2026-03-25,MULT3.SA,buy,57.3,31.73,31.2369,30.1412,33.8151,2.4,3.51,8.13,18.0,26.0179,66.7,bom,29.9,favoravel
-2026-03-25,EZTC3.SA,buy,57.0,14.39,14.0978,13.4485,15.5885,2.3,4.61,10.36,24.8,10.8176,67.3,bom,25.8,favoravel
-2026-03-25,EGIE3.SA,buy,56.9,32.19,31.8232,31.0082,33.5407,2.1,2.56,5.34,21.1,25.3898,60.8,bom,30.4,favoravel
-2026-03-25,ALUP11.SA,buy,56.2,35.12,34.6883,33.729,36.4757,1.9,2.77,5.09,21.3,27.6259,63.9,bom,34.5,favoravel
-2026-03-25,VALE3.SA,buy,55.9,79.25,78.2282,75.9575,84.1927,2.6,2.9,7.53,22.2,61.6199,54.8,aceitavel,22.6,favoravel
-2026-03-25,RBRX11.SA,buy,55.4,8.59,8.5341,8.4098,8.7414,1.7,1.46,2.41,7.6,7.9373,62.5,bom,42.5,favoravel
-2026-03-25,ENGI11.SA,buy,55.2,51.17,50.3892,48.6542,53.9269,2.0,3.44,6.91,15.1,43.4275,64.4,bom,33.1,favoravel
-2026-03-25,ITSA4.SA,buy,54.6,13.69,13.5126,13.1183,14.6239,2.8,2.92,8.12,22.9,10.5602,56.6,aceitavel,26.3,favoravel
-2026-03-25,KNSC11.SA,buy,54.3,8.94,8.9034,8.822,9.0601,1.9,0.91,1.75,4.5,8.5342,59.7,aceitavel,50.0,favoravel
-2026-03-25,HGPO11.SA,buy,54.1,151.58,150.7909,149.0373,153.4213,1.5,1.16,1.74,8.1,139.26,66.2,bom,43.5,favoravel
-2026-03-25,ALZR11.SA,buy,51.5,10.59,10.5562,10.4812,10.7161,2.1,0.71,1.51,5.3,10.0255,57.3,aceitavel,49.0,favoravel
-2026-03-25,AGRO3.SA,buy,48.4,20.51,20.1786,19.4422,21.2832,1.5,3.65,5.39,34.8,13.3724,59.3,aceitavel,34.1,favoravel
-2026-03-25,RCRB11.SA,buy,47.9,140.83,140.0952,138.4623,143.5949,2.1,1.17,2.49,6.2,132.1645,55.1,aceitavel,31.6,favoravel
-2026-03-25,RANI3.SA,buy,42.8,9.54,9.4169,9.1433,10.0142,2.2,2.91,6.26,46.5,5.0998,57.1,insuficiente,21.4,favoravel
-2026-03-25,BCIA11.SA,buy,35.1,93.48,93.0081,91.9595,96.4451,3.3,1.13,3.68,14.0,80.3603,33.3,insuficiente,25.0,favoravel
-2026-03-25,MLAS3.SA,buy,32.2,1.37,1.3424,1.281,1.5189,2.9,4.57,12.88,15.0,1.165,27.3,insuficiente,0.0,favoravel
-2026-03-25,CPTS11.SA,hold,76.9,7.93,7.8934,7.8486,8.1592,2.8,1.03,2.89,13.3,6.8744,62.0,bom,46.9,favoravel
-2026-03-25,TRXF11.SA,hold,75.2,91.6,91.439,91.2421,93.8695,6.3,0.39,2.48,2.9,88.9652,70.5,excelente,45.1,neutro
-2026-03-25,BRCO11.SA,hold,73.7,116.71,116.1089,115.3743,119.2363,1.9,1.14,2.16,6.6,108.9774,67.0,bom,45.5,favoravel
-2026-03-25,IVVB11.SA,hold,73.5,387.48,385.4704,383.0143,401.0567,3.0,1.15,3.5,10.6,346.2995,65.1,bom,41.3,neutro
-2026-03-25,UNIP6.SA,hold,71.8,59.16,58.0646,56.7257,65.6977,2.7,4.11,11.05,20.3,47.1659,70.6,excelente,36.1,desfavoravel
-2026-03-25,MDIA3.SA,hold,71.0,22.47,22.1981,21.8657,24.1078,2.7,2.69,7.29,21.2,17.6987,70.1,excelente,33.1,neutro
-2026-03-25,LVBI11.SA,hold,69.9,108.7,108.2449,107.6886,111.97,3.2,0.93,3.01,5.5,102.7046,64.4,bom,41.5,favoravel
-2026-03-25,BTC-USD,hold,68.5,71470.3516,70336.9994,68951.7913,75248.192,1.5,3.52,5.29,15.6,60353.2215,70.0,excelente,37.9,neutro
-2026-03-25,POMO4.SA,hold,68.3,6.24,6.1436,6.0257,6.7943,2.6,3.43,8.88,17.3,5.1607,65.1,bom,27.9,desfavoravel
-2026-03-25,ETH-USD,hold,67.7,2176.9824,2127.578,2067.1949,2394.7441,2.0,5.04,10.0,14.4,1863.6519,71.4,excelente,41.5,neutro
-2026-03-25,SOL-USD,hold,67.4,92.4304,90.5407,88.2312,103.264,2.6,4.54,11.72,28.2,66.3459,69.6,bom,63.0,neutro
-2026-03-25,MGLU3.SA,hold,66.7,8.92,8.6616,8.3457,10.6108,2.9,6.44,18.96,27.3,6.4805,66.4,bom,30.0,favoravel
-2026-03-25,LAVV3.SA,hold,66.4,14.29,13.9891,13.6214,15.8811,2.4,4.68,11.13,14.5,12.2153,68.5,bom,26.1,desfavoravel
-2026-03-25,ECOR3.SA,hold,66.0,8.27,8.0765,7.84,9.5034,2.9,5.2,14.91,24.3,6.2632,60.8,bom,21.8,desfavoravel
-2026-03-25,ABCB4.SA,hold,65.8,25.8,25.467,25.06,27.4893,2.3,2.87,6.55,11.1,22.9378,67.2,bom,28.5,favoravel
-2026-03-25,DOGE-USD,hold,65.8,0.0968,0.0948,0.0924,0.1084,2.6,4.56,11.96,14.2,0.0831,65.9,bom,59.8,neutro
-2026-03-25,JHSF3.SA,hold,65.7,8.86,8.7121,8.5314,9.9994,3.5,3.71,12.86,17.2,7.3317,62.2,bom,29.7,favoravel
-2026-03-25,TGMA3.SA,hold,65.6,29.49,28.7716,27.8936,31.8846,1.5,5.41,8.12,16.9,24.5025,67.4,bom,30.3,desfavoravel
-2026-03-25,IRIM11.SA,hold,64.3,63.56,63.2948,62.9707,65.9789,4.1,0.93,3.81,2.0,62.2838,68.3,bom,50.0,neutro
-2026-03-25,CSAN3.SA,hold,64.2,5.47,5.3292,5.1571,6.0871,2.0,5.72,11.28,50.0,2.735,71.4,excelente,28.1,desfavoravel
-2026-03-25,GGRC11.SA,hold,62.9,10.17,10.1263,10.0729,10.3747,2.1,0.95,2.01,4.1,9.7532,60.3,bom,48.3,favoravel
-2026-03-25,DIRR3.SA,hold,62.1,14.3,14.0223,13.6829,16.086,2.9,4.32,12.49,29.1,10.1352,66.7,bom,31.0,neutro
-2026-03-25,HGLG11.SA,hold,61.7,155.8,155.1999,154.4664,159.4597,2.7,0.86,2.35,12.2,136.8256,61.3,bom,41.9,neutro
-2026-03-25,WIZC3.SA,hold,61.1,8.87,8.7276,8.5536,9.6897,2.6,3.57,9.24,24.7,6.6823,69.8,bom,36.8,neutro
-2026-03-25,RBRP11.SA,hold,60.9,51.9,51.6107,51.2571,53.7323,2.9,1.24,3.53,7.1,48.1929,60.3,bom,34.6,favoravel
-2026-03-25,ASAI3.SA,hold,59.3,8.16,7.9813,7.7629,9.5265,3.4,4.87,16.75,18.6,6.6454,69.5,bom,22.9,desfavoravel
-2026-03-25,CVCB3.SA,hold,58.8,2.15,2.1034,2.0464,2.3775,2.2,4.82,10.58,20.6,1.7075,67.5,bom,31.2,favoravel
-2026-03-25,MBRF3.SA,hold,58.4,19.97,19.5145,18.9579,22.8094,2.8,5.07,14.22,20.7,15.831,62.9,bom,31.7,neutro
-2026-03-25,CSNA3.SA,hold,58.3,6.54,6.3513,6.1207,7.1983,1.6,6.41,10.07,31.9,4.456,61.8,bom,29.7,desfavoravel
-2026-03-25,PSSA3.SA,hold,56.6,49.21,48.5867,47.825,53.3639,3.0,2.81,8.44,18.3,40.1879,65.7,bom,26.6,neutro
-2026-03-06,IRDM11.SA,hold,54.7,58.5,58.5,58.4415,59.7889,22.0,0.1,2.2,4.1,56.1116,65.6,bom,37.5,neutro
-2026-03-25,CURY3.SA,hold,54.6,36.16,35.4149,34.5043,40.3138,2.5,4.58,11.49,21.9,28.2522,57.8,aceitavel,17.2,favoravel
-2026-03-25,VINO11.SA,hold,52.7,5.04,4.9809,4.9086,5.2371,1.5,2.61,3.91,4.8,4.7992,71.4,excelente,44.6,desfavoravel
-2026-03-25,BEEF3.SA,hold,52.4,4.2,4.1042,3.9871,4.6921,2.3,5.07,11.72,26.4,3.091,57.7,aceitavel,14.4,desfavoravel
-2026-03-25,SANB11.SA,hold,52.0,30.24,29.818,29.3021,32.7488,2.7,3.1,8.3,14.6,25.839,61.3,bom,22.2,desfavoravel
-2026-03-25,GRND3.SA,hold,51.7,4.78,4.7186,4.6436,5.0287,1.8,2.85,5.2,21.9,3.7312,65.6,bom,31.8,neutro
-2026-03-25,HAPV3.SA,hold,51.7,9.72,9.4073,9.025,11.3428,2.3,7.15,16.7,23.0,7.4892,62.5,bom,23.8,desfavoravel
-2026-03-25,LTC-USD,hold,50.1,56.3847,55.5755,54.5865,60.2865,2.2,3.19,6.92,22.5,43.6853,70.0,insuficiente,80.0,neutro
-2026-03-25,TCSA3.SA,hold,50.0,1.33,1.2966,1.2557,1.6431,4.2,5.59,23.54,27.5,0.9638,57.1,aceitavel,24.0,neutro
-2026-03-25,RAIZ4.SA,hold,49.6,0.55,0.5243,0.4929,0.6357,1.5,10.38,15.57,18.4,0.4486,69.2,bom,19.2,desfavoravel
-2026-03-24,RBRF11.SA,hold,49.4,6.65,6.65,6.6434,6.8581,31.3,0.1,3.13,5.4,6.2933,66.3,bom,39.9,neutro
-2026-03-25,SUZB3.SA,hold,46.9,51.16,50.5654,49.8386,53.3496,1.7,2.58,4.28,28.4,36.6132,50.0,fraco,25.0,desfavoravel
-2026-03-25,KNHY11.SA,hold,46.7,99.83,99.4899,99.0743,100.9636,1.5,0.76,1.14,6.8,92.9955,57.7,aceitavel,47.6,favoravel
-2026-03-25,SYNE3.SA,hold,45.9,4.73,4.6683,4.5929,5.0894,2.6,2.9,7.6,29.9,3.3168,50.9,fraco,30.0,neutro
-2026-03-25,GGBR4.SA,hold,43.4,18.34,18.1073,17.8229,19.6522,2.5,2.82,7.15,15.4,15.5209,50.0,fraco,14.6,desfavoravel
-2026-03-25,VULC3.SA,hold,37.5,17.54,17.296,16.9979,19.2505,3.2,3.09,9.75,23.1,13.48,42.1,insuficiente,23.7,desfavoravel
-2026-03-25,CRO-USD,hold,36.8,0.0753,0.0744,0.0732,0.1011,12.1,2.83,34.21,12.6,0.0659,54.5,insuficiente,50.0,desfavoravel
-2026-03-25,CYRE3.SA,hold,35.2,28.41,27.8012,27.0571,31.6929,2.4,4.76,11.56,25.8,21.0669,35.7,insuficiente,0.0,neutro
+Date,ticker,signal,confidence,close,entrada,stop,alvo,RR,stop_pct,alvo_pct,queda_max,piso,win_rate,wr_tier,dist_quality,regime,exit_rules
+2026-03-25,SMTO3.SA,buy,76.7,19.93,19.4813,18.4842,21.2779,1.8,5.12,9.01,22.0,15.5416,66.8,bom,26.1,favoravel,"Stop: -5.1% (1.0xATR, breakeven); Take: +9.0% (R:R 1.8:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,SLCE3.SA,buy,72.8,18.4,18.1554,17.6118,19.1875,1.9,2.99,5.61,19.6,14.7945,63.4,bom,30.3,favoravel,"Stop: -3.0% (1.0xATR, breakeven); Take: +5.6% (R:R 1.9:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,UGPA3.SA,buy,72.6,28.08,27.6535,26.7056,30.6437,3.2,3.43,10.65,24.4,21.2355,67.1,bom,28.7,favoravel,"Stop: -3.4% (1.0xATR, breakeven); Take: +10.7% (R:R 3.2:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,PRIO3.SA,buy,71.2,66.78,65.303,62.0209,73.6729,2.6,5.03,12.53,19.0,54.1083,64.9,bom,27.9,favoravel,"Stop: -5.0% (1.0xATR, breakeven); Take: +12.5% (R:R 2.6:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,NEOE3.SA,buy,70.2,33.23,33.1914,32.5276,35.8292,4.0,2.0,7.94,3.8,31.9776,66.0,bom,27.0,favoravel,"Stop: -2.0% (1.0xATR, breakeven); Take: +7.9% (R:R 4.0:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,KNRI11.SA,buy,70.0,165.95,165.1937,161.8898,172.2694,2.1,2.0,4.26,8.3,152.1589,72.2,excelente,46.5,favoravel,"Stop: -2.0% (1.0xATR, breakeven); Take: +4.3% (R:R 2.1:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,CPFE3.SA,buy,69.8,47.16,46.637,45.4749,49.9701,2.9,2.49,7.07,12.1,41.4643,70.4,excelente,37.0,favoravel,"Stop: -2.5% (1.0xATR, breakeven); Take: +7.1% (R:R 2.9:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,HSML11.SA,buy,69.8,95.4,95.0757,93.1742,97.928,1.5,2.0,2.99,3.0,92.5271,71.6,excelente,45.9,favoravel,"Stop: -2.0% (1.0xATR, breakeven); Take: +3.0% (R:R 1.5:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,BTLG11.SA,buy,68.2,103.62,103.2745,101.209,106.3727,1.5,2.0,2.99,3.4,100.0657,71.2,excelente,48.3,favoravel,"Stop: -2.0% (1.0xATR, breakeven); Take: +3.0% (R:R 1.5:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,SBSP3.SA,buy,67.8,155.14,153.076,148.4894,166.7914,3.0,3.0,8.84,27.8,111.9491,63.6,bom,22.9,favoravel,"Stop: -3.0% (1.0xATR, breakeven); Take: +8.8% (R:R 3.0:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,XPLG11.SA,buy,67.6,101.03,100.698,98.684,103.7189,1.5,2.0,2.99,2.3,98.6659,72.7,excelente,48.2,favoravel,"Stop: -2.0% (1.0xATR, breakeven); Take: +3.0% (R:R 1.5:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,WEGE3.SA,buy,67.5,48.09,47.459,46.0569,51.9285,3.2,2.95,9.29,12.3,42.1929,73.1,excelente,34.4,favoravel,"Stop: -3.0% (1.0xATR, breakeven); Take: +9.3% (R:R 3.2:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,TIMS3.SA,buy,67.1,27.45,27.1292,26.4163,29.5184,3.4,2.63,8.7,22.8,21.1923,63.6,bom,26.5,favoravel,"Stop: -2.6% (1.0xATR, breakeven); Take: +8.7% (R:R 3.4:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,PETR4.SA,buy,67.0,47.17,46.4375,44.8096,50.664,2.6,3.51,8.96,28.3,33.8026,61.1,bom,20.5,favoravel,"Stop: -3.5% (1.0xATR, breakeven); Take: +9.0% (R:R 2.6:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,SAPR11.SA,buy,66.8,42.66,41.9622,40.4115,46.3761,2.8,3.7,10.35,20.6,33.8913,65.0,bom,32.1,favoravel,"Stop: -3.7% (1.0xATR, breakeven); Take: +10.3% (R:R 2.8:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,KFOF11.SA,buy,65.6,84.24,83.755,82.0799,86.6813,1.7,2.0,3.47,3.9,80.9148,74.4,excelente,42.3,favoravel,"Stop: -2.0% (1.0xATR, breakeven); Take: +3.5% (R:R 1.7:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,CMIG4.SA,buy,65.2,12.49,12.3428,12.0157,12.8669,1.6,2.65,4.2,16.4,10.444,68.1,bom,30.7,favoravel,"Stop: -2.6% (1.0xATR, breakeven); Take: +4.2% (R:R 1.6:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,CSMG3.SA,buy,65.0,56.47,55.6481,53.8217,63.6888,4.4,3.28,14.24,18.9,45.8134,70.3,excelente,30.8,favoravel,"Stop: -3.3% (1.0xATR, breakeven); Take: +14.2% (R:R 4.4:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,LREN3.SA,buy,64.3,15.76,15.4855,14.8755,17.2035,2.8,3.94,10.9,22.6,12.2027,62.1,bom,26.3,favoravel,"Stop: -3.9% (1.0xATR, breakeven); Take: +10.9% (R:R 2.8:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,AXIA6.SA,buy,64.1,63.57,62.5086,60.15,69.7681,3.1,3.77,11.42,18.6,51.7552,65.3,bom,32.6,favoravel,"Stop: -3.8% (1.0xATR, breakeven); Take: +11.4% (R:R 3.1:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,RENT3.SA,buy,63.8,47.55,46.5577,44.3527,52.5954,2.7,4.74,12.7,13.6,41.1018,67.0,bom,25.0,favoravel,"Stop: -4.7% (1.0xATR, breakeven); Take: +12.7% (R:R 2.7:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,BPAC11.SA,buy,63.7,57.28,56.2643,54.0072,61.6673,2.4,4.01,9.43,22.0,44.688,64.9,bom,30.7,favoravel,"Stop: -4.0% (1.0xATR, breakeven); Take: +9.4% (R:R 2.4:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,XPML11.SA,buy,63.7,107.93,107.3537,105.2066,110.5743,1.5,2.0,2.98,3.7,103.9726,66.7,bom,48.8,favoravel,"Stop: -2.0% (1.0xATR, breakeven); Take: +3.0% (R:R 1.5:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,XPBR31.SA,buy,63.2,104.22,101.9867,97.0238,114.8315,2.6,4.87,12.32,12.4,91.291,62.7,bom,26.5,favoravel,"Stop: -4.9% (1.0xATR, breakeven); Take: +12.3% (R:R 2.6:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,ISAE4.SA,buy,62.2,28.57,28.2502,27.5395,30.0438,2.5,2.52,6.28,16.5,23.8597,66.9,bom,30.6,favoravel,"Stop: -2.5% (1.0xATR, breakeven); Take: +6.3% (R:R 2.5:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,VISC11.SA,buy,62.0,110.13,109.7526,107.5575,113.0452,1.5,2.0,2.99,3.6,106.1515,68.0,bom,45.2,favoravel,"Stop: -2.0% (1.0xATR, breakeven); Take: +3.0% (R:R 1.5:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,VBBR3.SA,buy,61.8,31.14,30.5521,29.2457,33.5474,2.3,4.28,9.62,13.1,27.0495,62.3,bom,25.5,favoravel,"Stop: -4.3% (1.0xATR, breakeven); Take: +9.6% (R:R 2.3:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,KNCR11.SA,buy,61.7,105.14,104.8591,102.7619,108.0049,1.5,2.0,2.99,2.8,102.2474,67.4,bom,48.9,favoravel,"Stop: -2.0% (1.0xATR, breakeven); Take: +3.0% (R:R 1.5:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,PVBI11.SA,buy,61.5,76.4,75.9185,74.4001,78.1961,1.5,2.0,2.98,5.6,72.1235,68.4,bom,46.5,neutro,"Stop: -2.0% (1.0xATR, breakeven); Take: +3.0% (R:R 1.5:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,AXIA3.SA,buy,61.4,58.11,57.1419,54.9905,64.5164,3.4,3.77,12.69,17.7,47.8502,67.6,bom,30.8,favoravel,"Stop: -3.8% (1.0xATR, breakeven); Take: +12.7% (R:R 3.4:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,HFOF11.SA,buy,61.4,6.8,6.7752,6.6397,7.0378,1.9,2.0,3.86,2.8,6.6107,70.8,excelente,45.8,favoravel,"Stop: -2.0% (1.0xATR, breakeven); Take: +3.9% (R:R 1.9:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,USIM5.SA,buy,61.4,6.76,6.6353,6.3582,7.2112,2.1,4.18,8.52,21.1,5.3361,67.4,bom,22.1,favoravel,"Stop: -4.2% (1.0xATR, breakeven); Take: +8.5% (R:R 2.1:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,BRKM5.SA,buy,61.2,10.82,10.4063,9.487,11.7859,1.5,8.83,12.75,40.2,6.4692,63.8,bom,26.1,favoravel,"Stop: -8.8% (1.0xATR, breakeven); Take: +12.8% (R:R 1.5:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,HGBS11.SA,buy,61.2,20.23,20.1451,19.7422,20.7495,1.5,2.0,2.99,5.3,19.1669,71.3,excelente,44.0,favoravel,"Stop: -2.0% (1.0xATR, breakeven); Take: +3.0% (R:R 1.5:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,EQTL3.SA,buy,60.5,41.96,41.356,40.0139,43.9366,1.9,3.25,6.15,18.1,34.3568,66.2,bom,30.3,favoravel,"Stop: -3.2% (1.0xATR, breakeven); Take: +6.2% (R:R 1.9:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,VIVT3.SA,buy,60.5,41.59,41.1114,40.0478,44.5303,3.2,2.59,8.22,17.4,34.3621,60.1,bom,25.8,favoravel,"Stop: -2.6% (1.0xATR, breakeven); Take: +8.2% (R:R 3.2:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,MXRF11.SA,buy,60.4,9.76,9.7243,9.5298,10.016,1.5,2.0,2.99,5.4,9.2374,69.6,bom,47.9,favoravel,"Stop: -2.0% (1.0xATR, breakeven); Take: +3.0% (R:R 1.5:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,RAIL3.SA,buy,59.9,16.54,16.2446,15.5882,17.3247,1.6,4.04,6.53,30.4,11.5112,65.7,bom,21.4,favoravel,"Stop: -4.0% (1.0xATR, breakeven); Take: +6.5% (R:R 1.6:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,BRSR6.SA,buy,59.7,17.71,17.4609,16.9073,19.2397,3.2,3.17,10.04,13.7,15.2847,69.2,bom,25.8,favoravel,"Stop: -3.2% (1.0xATR, breakeven); Take: +10.0% (R:R 3.2:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,ITUB4.SA,buy,59.5,43.1,42.5838,41.4367,46.3203,3.3,2.69,8.67,20.1,34.4157,62.9,bom,30.5,favoravel,"Stop: -2.7% (1.0xATR, breakeven); Take: +8.7% (R:R 3.3:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,ABEV3.SA,buy,59.0,14.95,14.7899,14.4342,15.9007,3.1,2.41,7.43,13.1,12.9908,63.3,bom,33.0,favoravel,"Stop: -2.4% (1.0xATR, breakeven); Take: +7.4% (R:R 3.1:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,HGRE11.SA,buy,58.8,124.75,124.0576,121.5764,128.5898,1.8,2.0,3.63,14.8,106.3121,58.9,aceitavel,41.1,favoravel,"Stop: -2.0% (1.0xATR, breakeven); Take: +3.6% (R:R 1.8:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,IGTI11.SA,buy,58.5,27.66,27.2309,26.2773,29.644,2.5,3.5,8.72,15.1,23.4818,68.3,bom,31.0,favoravel,"Stop: -3.5% (1.0xATR, breakeven); Take: +8.7% (R:R 2.5:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,GOAU4.SA,buy,57.9,8.27,8.1671,7.9385,8.7868,2.7,2.8,7.49,13.7,7.1331,61.1,bom,24.1,favoravel,"Stop: -2.8% (1.0xATR, breakeven); Take: +7.5% (R:R 2.7:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,CXSE3.SA,buy,57.7,17.73,17.5494,17.148,18.5789,2.6,2.29,5.81,17.6,14.6111,62.1,bom,28.8,favoravel,"Stop: -2.3% (1.0xATR, breakeven); Take: +5.8% (R:R 2.6:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,EZTC3.SA,buy,57.5,14.39,14.0978,13.4485,15.5885,2.3,4.61,10.36,24.8,10.8176,67.3,bom,25.8,favoravel,"Stop: -4.6% (1.0xATR, breakeven); Take: +10.4% (R:R 2.3:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,BBAS3.SA,buy,57.2,24.0,23.6628,22.9135,25.8553,2.9,3.17,9.14,36.0,15.3537,66.7,bom,30.5,favoravel,"Stop: -3.2% (1.0xATR, breakeven); Take: +9.1% (R:R 2.9:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,ODPV3.SA,buy,56.8,13.56,13.3642,12.9292,14.3225,2.2,3.25,7.07,18.2,11.0923,64.9,bom,27.3,favoravel,"Stop: -3.2% (1.0xATR, breakeven); Take: +7.1% (R:R 2.2:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,BBDC4.SA,buy,56.6,19.22,18.9513,18.3542,20.644,2.8,3.15,8.81,23.7,14.6632,61.3,bom,24.2,favoravel,"Stop: -3.1% (1.0xATR, breakeven); Take: +8.8% (R:R 2.8:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,BRCR11.SA,buy,56.6,46.7,46.4065,45.4784,49.4869,3.3,2.0,6.6,3.2,45.1988,68.5,bom,47.3,favoravel,"Stop: -2.0% (1.0xATR, breakeven); Take: +6.6% (R:R 3.3:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,KLBN11.SA,buy,56.6,19.42,19.2098,18.7427,20.1483,2.0,2.43,4.83,16.5,16.2118,65.2,bom,19.6,favoravel,"Stop: -2.4% (1.0xATR, breakeven); Take: +4.8% (R:R 2.0:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,TAEE11.SA,buy,56.5,42.68,42.167,41.027,44.3163,1.9,2.7,5.04,23.4,32.7061,64.4,bom,29.8,favoravel,"Stop: -2.7% (1.0xATR, breakeven); Take: +5.0% (R:R 1.9:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,FLRY3.SA,buy,56.4,15.6,15.3679,14.8522,16.7943,2.8,3.36,9.14,19.2,12.6006,68.6,bom,26.2,favoravel,"Stop: -3.4% (1.0xATR, breakeven); Take: +9.1% (R:R 2.8:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,MULT3.SA,buy,56.3,31.73,31.2369,30.1412,33.8151,2.4,3.51,8.13,18.0,26.0179,66.7,bom,29.9,favoravel,"Stop: -3.5% (1.0xATR, breakeven); Take: +8.1% (R:R 2.4:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,RADL3.SA,buy,55.5,24.42,24.0542,23.2413,26.6178,3.2,3.38,10.5,23.4,18.7078,59.8,aceitavel,19.2,favoravel,"Stop: -3.4% (1.0xATR, breakeven); Take: +10.5% (R:R 3.2:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,LEVE3.SA,buy,55.2,35.65,35.2463,34.3492,37.2993,2.3,2.55,5.76,16.4,29.8203,63.1,bom,24.4,favoravel,"Stop: -2.5% (1.0xATR, breakeven); Take: +5.8% (R:R 2.3:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,BBSE3.SA,buy,55.1,34.79,34.5023,33.8123,36.0734,2.3,2.0,4.52,13.9,29.9695,64.4,bom,32.7,favoravel,"Stop: -2.0% (1.0xATR, breakeven); Take: +4.5% (R:R 2.3:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,EGIE3.SA,buy,55.1,32.19,31.8232,31.0082,33.5407,2.1,2.56,5.34,21.1,25.3898,60.8,bom,30.4,favoravel,"Stop: -2.6% (1.0xATR, breakeven); Take: +5.3% (R:R 2.1:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,ALUP11.SA,buy,55.0,35.12,34.6883,33.729,36.4757,1.9,2.77,5.09,21.3,27.6259,63.9,bom,34.5,favoravel,"Stop: -2.8% (1.0xATR, breakeven); Take: +5.1% (R:R 1.9:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,HGPO11.SA,buy,54.7,151.58,150.7909,147.7751,155.3146,1.5,2.0,2.98,8.1,139.26,66.2,bom,43.5,favoravel,"Stop: -2.0% (1.0xATR, breakeven); Take: +3.0% (R:R 1.5:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,ENGI11.SA,buy,54.6,51.17,50.3892,48.6542,53.9269,2.0,3.44,6.91,15.1,43.4275,64.4,bom,33.1,favoravel,"Stop: -3.4% (1.0xATR, breakeven); Take: +6.9% (R:R 2.0:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,RBRX11.SA,buy,54.0,8.59,8.5341,8.3634,8.7901,1.5,2.0,2.98,7.6,7.9373,62.5,bom,42.5,favoravel,"Stop: -2.0% (1.0xATR, breakeven); Take: +3.0% (R:R 1.5:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,VALE3.SA,buy,53.7,79.25,78.2282,75.9575,84.1927,2.6,2.9,7.53,22.2,61.6199,54.8,aceitavel,22.6,favoravel,"Stop: -2.9% (1.0xATR, breakeven); Take: +7.5% (R:R 2.6:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,ITSA4.SA,buy,52.1,13.69,13.5126,13.1183,14.6239,2.8,2.92,8.12,22.9,10.5602,56.6,aceitavel,26.3,favoravel,"Stop: -2.9% (1.0xATR, breakeven); Take: +8.1% (R:R 2.8:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,KNSC11.SA,buy,51.0,8.94,8.9034,8.7253,9.1705,1.5,2.0,2.99,4.5,8.5342,59.7,aceitavel,50.0,favoravel,"Stop: -2.0% (1.0xATR, breakeven); Take: +3.0% (R:R 1.5:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,AGRO3.SA,buy,48.9,20.51,20.2084,19.472,21.313,1.5,3.64,5.39,34.8,13.3724,59.3,aceitavel,34.1,favoravel,"Stop: -3.6% (1.0xATR, breakeven); Take: +5.4% (R:R 1.5:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,ALZR11.SA,buy,48.8,10.59,10.5562,10.3451,10.8729,1.5,2.0,2.99,5.3,10.0255,57.3,aceitavel,49.0,favoravel,"Stop: -2.0% (1.0xATR, breakeven); Take: +3.0% (R:R 1.5:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,RCRB11.SA,buy,45.6,140.83,140.0952,137.2933,144.2981,1.5,2.0,2.98,6.2,132.1645,55.1,aceitavel,31.6,favoravel,"Stop: -2.0% (1.0xATR, breakeven); Take: +3.0% (R:R 1.5:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,RANI3.SA,buy,41.3,9.54,9.4169,9.1433,10.0142,2.2,2.91,6.26,46.5,5.0998,57.1,insuficiente,21.4,favoravel,"Stop: -2.9% (1.0xATR, breakeven); Take: +6.3% (R:R 2.2:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,MLAS3.SA,buy,33.7,1.37,1.3424,1.281,1.5189,2.9,4.58,12.88,15.0,1.165,27.3,insuficiente,0.0,favoravel,"Stop: -4.6% (1.0xATR, breakeven); Take: +12.9% (R:R 2.9:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,BCIA11.SA,buy,30.7,93.48,93.0081,91.1479,96.4451,1.8,2.0,3.68,14.0,80.3603,33.3,insuficiente,25.0,favoravel,"Stop: -2.0% (1.0xATR, breakeven); Take: +3.7% (R:R 1.8:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,UNIP6.SA,hold,71.1,59.16,58.0646,56.7257,65.6977,2.7,4.11,11.05,20.3,47.1659,70.6,excelente,36.1,desfavoravel,"Stop: -4.1% (1.0xATR, breakeven); Take: +11.1% (R:R 2.7:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,BRCO11.SA,hold,70.5,116.71,116.1089,114.3758,120.2113,1.5,2.0,3.0,6.6,108.9774,67.0,bom,45.5,favoravel,"Stop: -2.0% (1.0xATR, breakeven); Take: +3.0% (R:R 1.5:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,CPTS11.SA,hold,70.3,7.93,7.8934,7.7714,8.1679,1.5,2.0,3.0,13.3,6.8744,62.0,bom,46.9,favoravel,"Stop: -2.0% (1.0xATR, breakeven); Take: +3.0% (R:R 1.5:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,ETH-USD,hold,69.2,2176.9824,2127.578,2067.1949,2394.7441,2.0,5.04,10.0,14.4,1863.6519,71.4,excelente,41.5,neutro,"Stop: -5.0% (1.0xATR, breakeven); Take: +10.0% (R:R 2.0:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,BTC-USD,hold,68.8,71470.3516,70336.9994,68951.7913,75248.192,1.5,3.52,5.29,15.6,60353.2215,70.0,excelente,37.9,neutro,"Stop: -3.5% (1.0xATR, breakeven); Take: +5.3% (R:R 1.5:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,MDIA3.SA,hold,68.4,22.47,22.1981,21.8657,24.1078,2.7,2.69,7.29,21.2,17.6987,70.1,excelente,33.1,neutro,"Stop: -2.7% (1.0xATR, breakeven); Take: +7.3% (R:R 2.7:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,TRXF11.SA,hold,67.9,91.6,91.439,89.768,94.348,1.5,2.0,3.0,2.9,88.9652,70.5,excelente,45.1,neutro,"Stop: -2.0% (1.0xATR, breakeven); Take: +3.0% (R:R 1.5:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,TGMA3.SA,hold,67.8,29.49,28.7716,27.8936,31.8846,1.5,5.41,8.12,16.9,24.5025,67.4,bom,30.3,desfavoravel,"Stop: -5.4% (1.0xATR, breakeven); Take: +8.1% (R:R 1.5:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,SOL-USD,hold,67.4,92.4304,90.5407,88.2312,103.264,2.6,4.54,11.72,28.2,66.3459,69.6,bom,63.0,neutro,"Stop: -4.5% (1.0xATR, breakeven); Take: +11.7% (R:R 2.6:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,LAVV3.SA,hold,66.9,14.29,13.9891,13.6214,15.8811,2.4,4.68,11.13,14.5,12.2153,68.5,bom,26.1,desfavoravel,"Stop: -4.7% (1.0xATR, breakeven); Take: +11.1% (R:R 2.4:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,POMO4.SA,hold,66.9,6.24,6.1436,6.0257,6.7943,2.6,3.43,8.88,17.3,5.1607,65.1,bom,27.9,desfavoravel,"Stop: -3.4% (1.0xATR, breakeven); Take: +8.9% (R:R 2.6:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,IVVB11.SA,hold,66.7,387.48,385.4704,379.7304,401.0567,1.8,2.0,3.5,10.6,346.2995,65.1,bom,41.3,neutro,"Stop: -2.0% (1.0xATR, breakeven); Take: +3.5% (R:R 1.8:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,MGLU3.SA,hold,66.7,8.92,8.6616,8.3457,10.6108,2.9,6.44,18.96,27.3,6.4805,66.4,bom,30.0,favoravel,"Stop: -6.4% (1.0xATR, breakeven); Take: +19.0% (R:R 2.9:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,ECOR3.SA,hold,66.2,8.27,8.0765,7.84,9.5034,2.9,5.2,14.91,24.3,6.2632,60.8,bom,21.8,desfavoravel,"Stop: -5.2% (1.0xATR, breakeven); Take: +14.9% (R:R 2.9:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,CSAN3.SA,hold,65.8,5.47,5.3292,5.1571,6.0871,2.0,5.72,11.28,50.0,2.735,71.4,excelente,28.1,desfavoravel,"Stop: -5.7% (1.0xATR, breakeven); Take: +11.3% (R:R 2.0:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,DOGE-USD,hold,65.8,0.0968,0.0948,0.0924,0.1084,2.6,4.59,11.96,14.2,0.0831,65.9,bom,59.8,neutro,"Stop: -4.6% (1.0xATR, breakeven); Take: +12.0% (R:R 2.6:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,ABCB4.SA,hold,64.0,25.8,25.467,25.06,27.4893,2.3,2.87,6.55,11.1,22.9378,67.2,bom,28.5,favoravel,"Stop: -2.9% (1.0xATR, breakeven); Take: +6.5% (R:R 2.3:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,JHSF3.SA,hold,64.0,8.86,8.7121,8.5314,9.9994,3.5,3.71,12.86,17.2,7.3317,62.2,bom,29.7,favoravel,"Stop: -3.7% (1.0xATR, breakeven); Take: +12.9% (R:R 3.5:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,LVBI11.SA,hold,63.2,108.7,108.2449,106.526,111.97,1.5,2.0,3.01,5.5,102.7046,64.4,bom,41.5,favoravel,"Stop: -2.0% (1.0xATR, breakeven); Take: +3.0% (R:R 1.5:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,DIRR3.SA,hold,61.4,14.3,14.0223,13.6829,16.086,2.9,4.32,12.49,29.1,10.1352,66.7,bom,31.0,neutro,"Stop: -4.3% (1.0xATR, breakeven); Take: +12.5% (R:R 2.9:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,CSNA3.SA,hold,60.4,6.54,6.3513,6.1207,7.1983,1.6,6.41,10.07,31.9,4.456,61.8,bom,29.7,desfavoravel,"Stop: -6.4% (1.0xATR, breakeven); Take: +10.1% (R:R 1.6:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,CVCB3.SA,hold,59.8,2.15,2.1034,2.0464,2.3775,2.2,4.82,10.58,20.6,1.7075,67.5,bom,31.2,favoravel,"Stop: -4.8% (1.0xATR, breakeven); Take: +10.6% (R:R 2.2:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,WIZC3.SA,hold,59.8,8.87,8.7276,8.5536,9.6897,2.6,3.57,9.24,24.7,6.6823,69.8,bom,36.8,neutro,"Stop: -3.6% (1.0xATR, breakeven); Take: +9.2% (R:R 2.6:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,ASAI3.SA,hold,59.1,8.16,7.9813,7.7629,9.5265,3.4,4.87,16.75,18.6,6.6454,69.5,bom,22.9,desfavoravel,"Stop: -4.9% (1.0xATR, breakeven); Take: +16.8% (R:R 3.4:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,GGRC11.SA,hold,58.9,10.17,10.1263,9.9666,10.4751,1.5,2.0,3.0,4.1,9.7532,60.3,bom,48.3,favoravel,"Stop: -2.0% (1.0xATR, breakeven); Take: +3.0% (R:R 1.5:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,MBRF3.SA,hold,58.7,19.97,19.5145,18.9579,22.8094,2.8,5.07,14.22,20.7,15.831,62.9,bom,31.7,neutro,"Stop: -5.1% (1.0xATR, breakeven); Take: +14.2% (R:R 2.8:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,IRIM11.SA,hold,57.9,63.56,63.2948,62.2888,65.9789,1.9,2.0,3.81,2.0,62.2838,68.3,bom,50.0,neutro,"Stop: -2.0% (1.0xATR, breakeven); Take: +3.8% (R:R 1.9:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,RBRP11.SA,hold,56.4,51.9,51.6107,50.862,53.7323,1.8,2.0,3.53,7.1,48.1929,60.3,bom,34.6,favoravel,"Stop: -2.0% (1.0xATR, breakeven); Take: +3.5% (R:R 1.8:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,HGLG11.SA,hold,55.4,155.8,155.1999,152.684,160.474,1.5,2.0,3.0,12.2,136.8256,61.3,bom,41.9,neutro,"Stop: -2.0% (1.0xATR, breakeven); Take: +3.0% (R:R 1.5:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,CURY3.SA,hold,54.8,36.16,35.4149,34.5043,40.3138,2.5,4.58,11.49,21.9,28.2522,57.8,aceitavel,17.2,favoravel,"Stop: -4.6% (1.0xATR, breakeven); Take: +11.5% (R:R 2.5:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,PSSA3.SA,hold,53.8,49.21,48.5867,47.825,53.3639,3.0,2.81,8.44,18.3,40.1879,65.7,bom,26.6,neutro,"Stop: -2.8% (1.0xATR, breakeven); Take: +8.4% (R:R 3.0:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,VINO11.SA,hold,53.7,5.04,4.9809,4.9086,5.2371,1.5,2.61,3.91,4.8,4.7992,71.4,excelente,44.6,desfavoravel,"Stop: -2.6% (1.0xATR, breakeven); Take: +3.9% (R:R 1.5:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,BEEF3.SA,hold,53.5,4.2,4.1042,3.9871,4.6921,2.3,5.07,11.72,26.4,3.091,57.7,aceitavel,14.4,desfavoravel,"Stop: -5.1% (1.0xATR, breakeven); Take: +11.7% (R:R 2.3:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,HAPV3.SA,hold,52.7,9.72,9.4073,9.025,11.3428,2.3,7.15,16.7,23.0,7.4892,62.5,bom,23.8,desfavoravel,"Stop: -7.2% (1.0xATR, breakeven); Take: +16.7% (R:R 2.3:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,TCSA3.SA,hold,52.2,1.33,1.2966,1.2557,1.6431,4.2,5.59,23.54,27.5,0.9638,57.1,aceitavel,24.0,neutro,"Stop: -5.6% (1.0xATR, breakeven); Take: +23.5% (R:R 4.2:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,RAIZ4.SA,hold,51.9,0.55,0.5273,0.4929,0.6357,1.5,10.39,15.58,18.4,0.4486,69.2,bom,19.2,desfavoravel,"Stop: -10.4% (1.0xATR, breakeven); Take: +15.6% (R:R 1.5:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,GRND3.SA,hold,50.7,4.78,4.7186,4.6436,5.0287,1.8,2.85,5.2,21.9,3.7312,65.6,bom,31.8,neutro,"Stop: -2.9% (1.0xATR, breakeven); Take: +5.2% (R:R 1.8:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,SANB11.SA,hold,50.0,30.24,29.818,29.3021,32.7488,2.7,3.1,8.3,14.6,25.839,61.3,bom,22.2,desfavoravel,"Stop: -3.1% (1.0xATR, breakeven); Take: +8.3% (R:R 2.7:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-06,IRDM11.SA,hold,49.6,58.5,58.5,57.33,60.255,1.5,2.0,3.0,4.1,56.1116,65.6,bom,37.5,neutro,"Stop: -2.0% (1.0xATR, breakeven); Take: +3.0% (R:R 1.5:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,LTC-USD,hold,49.0,56.3847,55.5755,54.5865,60.2865,2.2,3.19,6.92,22.5,43.6853,70.0,insuficiente,80.0,neutro,"Stop: -3.2% (1.0xATR, breakeven); Take: +6.9% (R:R 2.2:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,KNHY11.SA,hold,45.9,99.83,99.4899,97.8334,102.8249,1.5,2.0,3.0,6.8,92.9955,57.7,aceitavel,47.6,favoravel,"Stop: -2.0% (1.0xATR, breakeven); Take: +3.0% (R:R 1.5:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,SUZB3.SA,hold,45.7,51.16,50.5654,49.8386,53.3496,1.7,2.58,4.28,28.4,36.6132,50.0,fraco,25.0,desfavoravel,"Stop: -2.6% (1.0xATR, breakeven); Take: +4.3% (R:R 1.7:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,SYNE3.SA,hold,45.1,4.73,4.6683,4.5929,5.0894,2.6,2.9,7.6,29.9,3.3168,50.9,fraco,30.0,neutro,"Stop: -2.9% (1.0xATR, breakeven); Take: +7.6% (R:R 2.6:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-24,RBRF11.SA,hold,44.4,6.65,6.65,6.517,6.8581,1.6,2.0,3.13,5.4,6.2933,66.3,bom,39.9,neutro,"Stop: -2.0% (1.0xATR, breakeven); Take: +3.1% (R:R 1.6:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,GGBR4.SA,hold,41.3,18.34,18.1073,17.8229,19.6522,2.5,2.82,7.15,15.4,15.5209,50.0,fraco,14.6,desfavoravel,"Stop: -2.8% (1.0xATR, breakeven); Take: +7.2% (R:R 2.5:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,CRO-USD,hold,36.0,0.0753,0.0744,0.0732,0.1011,11.9,2.88,34.21,12.6,0.0659,54.5,insuficiente,50.0,desfavoravel,"Stop: -2.9% (1.0xATR, breakeven); Take: +34.2% (R:R 11.9:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,CYRE3.SA,hold,35.7,28.41,27.8012,27.0571,31.6929,2.4,4.76,11.56,25.8,21.0669,35.7,insuficiente,0.0,neutro,"Stop: -4.8% (1.0xATR, breakeven); Take: +11.6% (R:R 2.4:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"
+2026-03-25,VULC3.SA,hold,35.0,17.54,17.296,16.9979,19.2505,3.2,3.09,9.75,23.1,13.48,42.1,insuficiente,23.7,desfavoravel,"Stop: -3.1% (1.0xATR, breakeven); Take: +9.8% (R:R 3.2:1); Tight: 0.4xATR apos 3d; TimeStop: 25d; HardStop: 2% gap"

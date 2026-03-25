@@ -80,11 +80,24 @@ def step4_final_output():
     print(f"   Output em: {OUTPUT_BASE}/history_consolidated.parquet")
 
 
+def step5_ga():
+    """Step 5: GA signal generation (can run independently with just ETL data)."""
+    print("\n" + "=" * 80)
+    print("STEP 5/5 -- GA SIGNAL GENERATION (ga_run)")
+    print("=" * 80)
+    os.environ.setdefault("GA_RUN_MODE", "load")
+    from ga_run import run as ga_run
+    ga_run()
+    print("\n[OK] GA concluido.")
+    print(f"   Output: apply_last_5d__H5.csv + summary_latest.xlsx")
+
+
 STEPS = {
     1: ("ETL",              step1_etl),
     2: ("Binary Models",    step2_bin_models),
     3: ("Regression Models", step3_reg_models),
     4: ("Final Output",     step4_final_output),
+    5: ("GA Signals",       step5_ga),
 }
 
 
@@ -94,11 +107,26 @@ def main():
         "--steps",
         type=str,
         default="1,2,3,4",
-        help="Comma-separated step numbers to run (default: 1,2,3,4)",
+        help="Comma-separated step numbers to run (default: 1,2,3,4). Use 5 for GA only.",
+    )
+    parser.add_argument(
+        "--ga-only",
+        action="store_true",
+        help="Quick mode: run ETL + GA only (skip model training)",
+    )
+    parser.add_argument(
+        "--full",
+        action="store_true",
+        help="Full mode: run all steps including GA (1,2,3,4,5)",
     )
     args = parser.parse_args()
 
-    steps_to_run = [int(s.strip()) for s in args.steps.split(",")]
+    if args.ga_only:
+        steps_to_run = [1, 5]
+    elif args.full:
+        steps_to_run = [1, 2, 3, 4, 5]
+    else:
+        steps_to_run = [int(s.strip()) for s in args.steps.split(",")]
 
     print("=" * 80)
     print("STOCK PIPELINE RUNNER")

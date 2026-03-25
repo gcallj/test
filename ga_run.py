@@ -1827,11 +1827,82 @@ def build_direct_feature_signal(frame: pd.DataFrame, feat_cols: List[str]) -> Tu
     short_votes = np.where(valid_counts > 0, short_votes, np.nan)
     return directed.astype(np.float64), long_votes.astype(np.float64), short_votes.astype(np.float64)
 
-def load_full_history_all_cols(path: str) -> pd.DataFrame:
-    if path.endswith('.parquet'):
-        df = pd.read_parquet(path)
+
+def _build_history_from_etl(etl_path: str) -> pd.DataFrame:
+    """Build minimal history DataFrame from ETL parquet (OHLC data).
+    This allows GA to run independently without steps 2-3-4."""
+    if not os.path.exists(etl_path):
+        print(f"[ETL fallback] ETL parquet not found: {etl_path}")
+        return None
+    try:
+        etl_raw = pd.read_parquet(etl_path)
+    except Exception as e:
+        print(f"[ETL fallback] Failed to read ETL: {e}")
+        return None
+
+    if isinstance(etl_raw.columns[0], tuple):
+        # MultiIndex columns: (metric, ticker)
+        tickers = sorted(set(c[1] for c in etl_raw.columns if len(c) > 1 and c[1]))
+        metrics = sorted(set(c[0] for c in etl_raw.columns if len(c) > 1))
+        # Reshape wide → long
+        rows = []
+        for tkr in tickers:
+            cols_tkr = {m: (m, tkr) for m in metrics if (m, tkr) in etl_raw.columns}
+            if not cols_tkr:
+                continue
+            df_tkr = etl_raw[[cols_tkr[m] for m in cols_tkr]].copy()
+            df_tkr.columns = [m for m in cols_tkr]
+            df_tkr[TICKER_COL] = tkr
+            df_tkr[DATE_COL] = etl_raw.index if hasattr(etl_raw.index, 'date') else range(len(etl_raw))
+            rows.append(df_tkr)
+        if not rows:
+            return None
+        df = pd.concat(rows, ignore_index=True)
+        # Normalize column names
+        col_map = {}
+        for c in df.columns:
+            cl = str(c).lower().strip()
+            if cl in ('close', 'open', 'high', 'low', 'volume'):
+                col_map[c] = cl
+        df = df.rename(columns=col_map)
     else:
-        df = pd.read_csv(path, dtype={TICKER_COL:"string"}, low_memory=False)
+        df = etl_raw.copy()
+
+    # Ensure required columns exist
+    for col in [OPEN_COL, HIGH_COL, LOW_COL, CLOSE_COL]:
+        if col not in df.columns:
+            print(f"[ETL fallback] Missing column: {col}")
+            return None
+
+    print(f"[ETL fallback] Loaded {len(df)} rows, {df[TICKER_COL].nunique()} tickers from ETL")
+    return df
+
+
+def load_full_history_all_cols(path: str) -> pd.DataFrame:
+    """Load history data. Falls back to ETL parquet if main history is unavailable."""
+    df = None
+
+    # Try primary source (history_consolidated.parquet)
+    if os.path.exists(path):
+        try:
+            if path.endswith('.parquet'):
+                df = pd.read_parquet(path)
+            else:
+                df = pd.read_csv(path, dtype={TICKER_COL:"string"}, low_memory=False)
+            if len(df) < 100:
+                print(f"[WARN] Primary history has only {len(df)} rows, trying ETL fallback...")
+                df = None
+        except Exception as e:
+            print(f"[WARN] Failed to load {path}: {e}")
+            df = None
+
+    # Fallback: build history from ETL parquet (OHLC only, no ML features)
+    if df is None:
+        print(f"[GA] Primary history unavailable. Building from ETL data...")
+        df = _build_history_from_etl(ETL_PARQUET_PATH)
+        if df is None or len(df) == 0:
+            raise FileNotFoundError(f"No data available: {path} and ETL fallback both failed")
+
     df[TICKER_COL] = df[TICKER_COL].astype("string").str.strip()
     df[DATE_COL] = _parse_dates_smart(df[DATE_COL])
 
@@ -2623,36 +2694,39 @@ def run():
             strength = float(np.clip(abs(score_ev[i]) / score95, 0.0, 1.0))
             discount = global_params.entry_discount_atr_frac * (1.0 - global_params.score_strength_scaling * strength)
 
-            # Entrada: preco com desconto ATR
-            best_buy = round(close_val - discount * atr_val, 4)
+            # ── ENTRADA: preco com desconto ATR + suporte recente ──
+            atr_discount = discount * atr_val
+            # Suporte: minima dos ultimos 5 dias como piso
+            recent_lows = payload["low"][max(0, i-4):i+1]
+            recent_low = float(np.nanmin(recent_lows)) if len(recent_lows) > 0 else close_val
+            # Entrada = max(close - desconto ATR, suporte recente)
+            # Nao comprar abaixo do suporte (limita desconto excessivo)
+            best_buy = round(max(close_val - atr_discount, recent_low * 0.995), 4)
             entry_ref = best_buy if sig == "buy" else close_val
 
-            # -- Stop: ATR-based (protecao intraday) --
+            # ── STOP: ATR-based com minimo % ──
+            # Minimo: 2% do preco de entrada (evita stops irrealistas em low-vol)
+            MIN_STOP_PCT = 0.02  # 2% minimo
             stop_atr_val = global_params.stop_atr_mult * atr_val
-            stop_loss = round(entry_ref - stop_atr_val, 4)
-            stop_risk = entry_ref - stop_loss  # risco em R$
+            stop_pct_from_atr = stop_atr_val / max(entry_ref, ATR_EPS)
+            # Usar o MAIOR entre ATR-stop e minimo %
+            effective_stop_pct = max(stop_pct_from_atr, MIN_STOP_PCT)
+            stop_risk = entry_ref * effective_stop_pct
+            stop_loss = round(entry_ref - stop_risk, 4)
 
-            # -- Alvo: baseado no potencial estatistico da acao (nao ATR) --
-            # Usa retornos forward pre-computados em múltiplos horizontes
+            # ── ALVO: potencial estatistico + ATR floor ──
             potential = _potential_cache.get(i)
-            # ATR-based floor: garante alvo minimo = reward_risk_ratio * stop
-            atr_potential = global_params.reward_risk_ratio * stop_atr_val / max(close_val, ATR_EPS)
-            if potential is None or potential < atr_potential:
-                potential = atr_potential
+            # ATR-based floor: alvo minimo = R:R * stop
+            MIN_RR_RATIO = 1.5
+            min_target_pct = effective_stop_pct * MIN_RR_RATIO
+            if potential is None or potential < min_target_pct:
+                potential = min_target_pct
 
             take_profit = round(entry_ref * (1.0 + potential), 4)
-            take_reward = take_profit - entry_ref  # ganho em R$
+            take_reward = take_profit - entry_ref
 
-            # -- R:R calculation --
-            # Minimum meaningful stop risk: 0.1% of price
-            min_stop_risk = close_val * 0.001
-            if stop_risk < min_stop_risk:
-                stop_risk = min_stop_risk
-                stop_loss = round(entry_ref - stop_risk, 4)
+            # ── R:R calculation ──
             rr_ratio = take_reward / max(stop_risk, ATR_EPS)
-
-            # -- Forcar R:R > 1: se alvo insuficiente, ajustar take_profit --
-            MIN_RR_RATIO = 1.5
             if rr_ratio < MIN_RR_RATIO:
                 take_reward = stop_risk * MIN_RR_RATIO
                 take_profit = round(entry_ref + take_reward, 4)
@@ -2690,16 +2764,19 @@ def run():
             vote_consensus = float(np.clip(abs(vl - vs) * 3.0, 0.0, 1.0))
             q_ml = float(np.clip(0.5 * q_agree + 0.5 * vote_consensus, 0.0, 1.0))
 
-            # q_viability (v5): R:R ratio quality + liquidity
+            # q_viability (v6): R:R quality + liquidity + stop quality
             alvo_pct = take_reward / max(close_val, ATR_EPS)  # target as % of price
             vol_arr = payload.get("volume", np.full(n, np.nan))
             avg_vol_20 = float(np.nanmean(vol_arr[max(0, i-19):i+1])) if i < len(vol_arr) else 0.0
             vol_fin = avg_vol_20 * close_val  # volume financeiro medio 20d
-            # R:R quality: 0% at 1:1, 100% at 3:1+
-            q_rr = float(np.clip((rr_ratio - 1.0) / 2.0, 0.0, 1.0))
+            # R:R quality: capped at 3:1 (evita R:R artificialmente alto dominar)
+            q_rr = float(np.clip((min(rr_ratio, 5.0) - 1.0) / 2.0, 0.0, 1.0))
+            # Stop quality: penaliza stops < 3% (irrealistas p/ day-trade)
+            stop_pct_display = stop_risk / max(entry_ref, ATR_EPS)
+            q_stop = float(np.clip((stop_pct_display - 0.01) / 0.04, 0.0, 1.0))  # 0% at 1%, 100% at 5%+
             # Liquidity: 0% at R$100k, 100% at R$5M+
             q_liq = float(np.clip((vol_fin - 100_000) / 4_900_000, 0.0, 1.0))
-            q_viability = 0.5 * q_rr + 0.5 * q_liq
+            q_viability = 0.30 * q_rr + 0.35 * q_stop + 0.35 * q_liq
             # q_dist (v5): trade return distribution quality — big wins vs big losses
             q_dist = float(np.clip(bt_dist_quality, 0.0, 1.0))
 
@@ -2725,6 +2802,19 @@ def run():
             stop_pct_val = round(stop_risk / max(entry_ref, ATR_EPS) * 100.0, 2)
             alvo_pct_val = round(alvo_pct * 100, 2)
             rr_display = round(rr_ratio, 1)
+
+            # -- Exit rules string --
+            tighten_days = int(global_params.stop_tighten_after_bars)
+            tighten_factor = global_params.stop_tighten_factor
+            time_stop = int(global_params.time_stop_bars)
+            hard_stop_pct = global_params.max_loss_per_trade_pct * 100
+            exit_rules = (
+                f"Stop: -{stop_pct_val:.1f}% ({global_params.stop_atr_mult:.1f}xATR, breakeven); "
+                f"Take: +{alvo_pct_val:.1f}% (R:R {rr_display}:1); "
+                f"Tight: {tighten_factor:.1f}xATR apos {tighten_days}d; "
+                f"TimeStop: {time_stop}d; "
+                f"HardStop: {hard_stop_pct:.0f}% gap"
+            )
 
             results_apply.append({
                 # -- Decisao --
@@ -2753,6 +2843,7 @@ def run():
                     else "neutro" if regime_val >= 0.3
                     else "desfavoravel"
                 ),
+                "exit_rules": exit_rules,
             })
 
         results_summary.append({
