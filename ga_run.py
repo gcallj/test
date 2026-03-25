@@ -2814,6 +2814,63 @@ def run():
             if sig == "buy" and wr_tier == "insuficiente":
                 sig = "hold"  # insufficient backtest data for reliable signal
 
+            # ── UPSIDE SCORE: qualidade da oportunidade de subida (0-100) ──
+            # Combina fatores que historicamente predizem subida:
+            #   1. Proximity to support (quanto mais perto do suporte, melhor entrada)
+            #   2. Momentum direction (score_ev positivo e crescente)
+            #   3. Volatility-adjusted target (alvo % ajustado pela volatilidade)
+            #   4. Trend alignment (preco acima de MA relevante)
+            #   5. Upside potential vs downside risk (assimetria)
+
+            # (1) Proximity to support: 0-1 (1 = perto da minima recente)
+            recent_highs = payload["high"][max(0, i-19):i+1]
+            _finite_highs = recent_highs[np.isfinite(recent_highs)]
+            recent_high = float(np.max(_finite_highs)) if len(_finite_highs) > 0 else close_val
+            _range_20d = recent_high - recent_low if recent_high > recent_low else ATR_EPS
+            _pos_in_range = (close_val - recent_low) / _range_20d  # 0 = at low, 1 = at high
+            s_support = float(np.clip(1.0 - _pos_in_range, 0.0, 1.0))  # higher = closer to support
+
+            # (2) Momentum: score_ev direction and strength
+            _prev_score = score_ev[max(0, i-5)] if i >= 5 else 0.0
+            _score_accel = score_ev[i] - _prev_score if np.isfinite(_prev_score) else 0.0
+            s_momentum = float(np.clip(score_ev[i] / max(score95, ATR_EPS) + _score_accel * 2.0, -1.0, 1.0))
+            s_momentum = (s_momentum + 1.0) / 2.0  # normalize to 0-1
+
+            # (3) Volatility-adjusted target: alvo_pct relative to recent vol
+            _vol_20d = float(np.nanstd(np.diff(np.log(np.maximum(c[max(0,i-19):i+1], ATR_EPS))))) if i >= 2 else 0.02
+            _vol_20d = max(_vol_20d, 0.005) * np.sqrt(5)  # annualize to ~5 day horizon
+            _target_vs_vol = (take_reward / max(entry_ref, ATR_EPS)) / _vol_20d
+            s_target = float(np.clip(_target_vs_vol / 3.0, 0.0, 1.0))  # 0% at 0x vol, 100% at 3x vol
+
+            # (4) Trend alignment: price vs MA200 and MA50
+            _ma200 = ma200_apply[i] if i < len(ma200_apply) and np.isfinite(ma200_apply[i]) else np.nan
+            _ma50 = ma50_apply[i] if i < len(ma50_apply) and np.isfinite(ma50_apply[i]) else np.nan
+            s_trend = 0.5  # neutral default
+            if np.isfinite(_ma200):
+                _above_200 = close_val > _ma200
+                s_trend = 0.7 if _above_200 else 0.3
+                if np.isfinite(_ma50):
+                    _above_50 = close_val > _ma50
+                    _ma_cross = _ma50 > _ma200  # golden cross
+                    if _above_200 and _above_50 and _ma_cross:
+                        s_trend = 1.0  # ideal: above both MAs + golden cross
+                    elif _above_200 and _above_50:
+                        s_trend = 0.85
+                    elif not _above_200 and not _above_50:
+                        s_trend = 0.15
+
+            # (5) Asymmetry: upside vs downside (from historical potential and MDD)
+            _hist_upside = potential  # expected positive return
+            _hist_downside = queda_max_esperada  # expected max loss
+            s_asymmetry = float(np.clip(_hist_upside / max(_hist_downside, 0.01), 0.0, 2.0)) / 2.0
+
+            # Combined upside score (0-100)
+            upside_score = float(np.clip(
+                (0.20 * s_support + 0.25 * s_momentum + 0.20 * s_target +
+                 0.20 * s_trend + 0.15 * s_asymmetry) * 100.0,
+                0.0, 100.0
+            ))
+
             # Stop % and alvo % for display (always relative to entrada/best_buy)
             stop_pct_val = round((best_buy - stop_loss) / max(best_buy, ATR_EPS) * 100.0, 2)
             alvo_pct_val = round((take_profit - best_buy) / max(best_buy, ATR_EPS) * 100.0, 2)
@@ -2838,6 +2895,7 @@ def run():
                 "ticker": tkr,
                 "signal": sig,
                 "confidence": round(confidence, 1),
+                "upside_score": round(upside_score, 1),
                 # -- Compra --
                 "close": round(close_val, 4),
                 "entrada": best_buy,
@@ -2879,13 +2937,14 @@ def run():
 
     df_sum = pd.DataFrame(results_summary)
     df_app = pd.DataFrame(results_apply)
-    # Sort Apply: buy signals first, then by confidence descending
+    # Sort Apply: buy signals first, then by combined ranking score
     if not df_app.empty:
         # Keep only the most recent date per ticker
         df_app = df_app.sort_values("Date", ascending=False).drop_duplicates(subset=["ticker"], keep="first")
-        # Buy signals first, then by confidence descending
+        # Combined rank: 50% confidence + 50% upside_score (best opportunities first)
         df_app["_is_buy"] = (df_app["signal"] == "buy").astype(int)
-        df_app = df_app.sort_values(["_is_buy", "confidence"], ascending=[False, False]).drop(columns=["_is_buy"]).reset_index(drop=True)
+        df_app["_rank_score"] = 0.5 * df_app["confidence"] + 0.5 * df_app["upside_score"]
+        df_app = df_app.sort_values(["_is_buy", "_rank_score"], ascending=[False, False]).drop(columns=["_is_buy", "_rank_score"]).reset_index(drop=True)
 
     if not df_sum.empty:
         df_sum = df_sum.sort_values("test_sharpe", ascending=False)
