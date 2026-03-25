@@ -2713,7 +2713,9 @@ def run():
             # Entrada = max(close - desconto ATR, suporte recente)
             # Nao comprar abaixo do suporte (limita desconto excessivo)
             best_buy = round(max(close_val - atr_discount, recent_low * 0.995), 4)
-            entry_ref = best_buy if sig == "buy" else close_val
+            # Stop/alvo SEMPRE calculados a partir da entrada (best_buy)
+            # entry_ref = best_buy para todos os sinais (consistencia)
+            entry_ref = best_buy
 
             # ── STOP: ATR-based com minimo % ──
             stop_atr_val = global_params.stop_atr_mult * atr_val
@@ -2729,6 +2731,9 @@ def run():
             min_target_pct = effective_stop_pct * MIN_RR_RATIO
             if potential is None or potential < min_target_pct:
                 potential = min_target_pct
+            # Cap target: max 25% (evita alvos irrealistas como CRO-USD 35%)
+            MAX_TARGET_PCT = 0.25
+            potential = min(potential, MAX_TARGET_PCT)
 
             take_profit = round(entry_ref * (1.0 + potential), 4)
             take_reward = take_profit - entry_ref
@@ -2803,9 +2808,11 @@ def run():
                 0.0, 100.0
             ))
 
-            # -- Minimum confidence for buy: demote weak signals to hold --
+            # -- Quality gates: demote unreliable buys to hold --
             if sig == "buy" and confidence < MIN_BUY_CONFIDENCE:
-                sig = "hold"
+                sig = "hold"  # confidence too low
+            if sig == "buy" and wr_tier == "insuficiente":
+                sig = "hold"  # insufficient backtest data for reliable signal
 
             # Stop % and alvo % for display (always relative to entrada/best_buy)
             stop_pct_val = round((best_buy - stop_loss) / max(best_buy, ATR_EPS) * 100.0, 2)
