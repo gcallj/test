@@ -2036,10 +2036,14 @@ def build_temporal_windows(min_date: pd.Timestamp, max_date: pd.Timestamp, train
     return windows
 
 
-def vectorized_signals(payload: Dict[str, Any], gp: GlobalParams) -> np.ndarray:
+def vectorized_signals(payload: Dict[str, Any], gp: GlobalParams, apply_mode: bool = False) -> np.ndarray:
     """Pre-compute signals for ALL days using backtest-consistent logic.
     Returns array of strings: "buy", "sell", or "hold" for each day.
     Uses same rolling_quantile_trigger as backtest (not np.nanpercentile).
+
+    apply_mode: if True, skip transient filters (momentum, volume, score strength)
+                that can temporarily block ALL signals. Keeps structural filters
+                (MA trend, regime, volatility regime).
     """
     x = np.asarray(payload["score_matrix"], dtype=np.float64)
     c = np.asarray(payload["close"], dtype=np.float64)
@@ -2107,25 +2111,27 @@ def vectorized_signals(payload: Dict[str, Any], gp: GlobalParams) -> np.ndarray:
         long_ok = consec_long >= gp.entry_confirmation_days
         short_ok = consec_short >= gp.entry_confirmation_days
 
-        # Filters (same as backtest lines 779-808)
+        # Structural filters (always applied)
         if gp.volatility_filter_percentile > 0 and np.isfinite(vol_rank[i - 1]) and vol_rank[i - 1] < gp.volatility_filter_percentile:
             continue
         if gp.vol_regime_mode == 2 and np.isfinite(vol_rank[i - 1]) and vol_rank[i - 1] > 0.85:
             continue
         if atr[i - 1] < 0.01:
             continue
-        if gp.min_signal_strength > 0 and abs(score_ev[i - 1]) / score95 < gp.min_signal_strength:
-            continue
-        if gp.entry_score_threshold > 0 and abs(score_ev[i - 1]) / score95 < gp.entry_score_threshold:
-            continue
-        if gp.volume_confirm_mode == 1 and vol_ma20 is not None and i - 1 < len(vol_ma20):
-            if np.isfinite(vol_ma20[i - 1]) and vol_data[i - 1] < vol_ma20[i - 1]:
+        # Transient filters (skipped in apply_mode to avoid blocking all signals)
+        if not apply_mode:
+            if gp.min_signal_strength > 0 and abs(score_ev[i - 1]) / score95 < gp.min_signal_strength:
                 continue
-        elif gp.volume_confirm_mode == 2 and vol_ma50 is not None and i - 1 < len(vol_ma50):
-            if np.isfinite(vol_ma50[i - 1]) and vol_data[i - 1] < vol_ma50[i - 1]:
+            if gp.entry_score_threshold > 0 and abs(score_ev[i - 1]) / score95 < gp.entry_score_threshold:
                 continue
-        if mom_days > 0 and np.isfinite(mom_ret[i - 1]) and mom_ret[i - 1] < 0:
-            continue
+            if gp.volume_confirm_mode == 1 and vol_ma20 is not None and i - 1 < len(vol_ma20):
+                if np.isfinite(vol_ma20[i - 1]) and vol_data[i - 1] < vol_ma20[i - 1]:
+                    continue
+            elif gp.volume_confirm_mode == 2 and vol_ma50 is not None and i - 1 < len(vol_ma50):
+                if np.isfinite(vol_ma50[i - 1]) and vol_data[i - 1] < vol_ma50[i - 1]:
+                    continue
+            if mom_days > 0 and np.isfinite(mom_ret[i - 1]) and mom_ret[i - 1] < 0:
+                continue
         if gp.regime_threshold > 0 and np.isfinite(regime[i - 1]) and regime[i - 1] < gp.regime_threshold:
             long_ok = False
         if gp.ma_filter_mode == 1 and np.isfinite(ma[i - 1]):
@@ -2597,8 +2603,16 @@ def run():
         # Pre-compute ALL signals once (vectorized, backtest-consistent)
         signals_arr = vectorized_signals(payload, global_params)
 
+        # For apply period: also compute relaxed signals (skip momentum/volume/score filters)
+        # This avoids the problem where temporary filters block ALL signals in the apply window
+        signals_relaxed = vectorized_signals(payload, global_params, apply_mode=True)
+
         for i in range(max(0, n - APPLY_DAYS), n):
             sig = str(signals_arr[i])
+            # If strict signal is hold but relaxed signal is buy, use buy
+            # (the strict filters are for backtest accuracy, but in apply we want actionable signals)
+            if sig == "hold" and str(signals_relaxed[i]) == "buy":
+                sig = "buy"
 
             recent_scores = score_ev[max(0, i - lookback + 1):i + 1]
             score_100 = score_0_100_from_ev(score_ev[i], recent_scores, quality)
@@ -2621,23 +2635,21 @@ def run():
             # -- Alvo: baseado no potencial estatistico da acao (nao ATR) --
             # Usa retornos forward pre-computados em múltiplos horizontes
             potential = _potential_cache.get(i)
-            if potential is None:
-                # Fallback: usar ATR-based
-                potential = global_params.reward_risk_ratio * stop_atr_val / max(close_val, ATR_EPS)
+            # ATR-based floor: garante alvo minimo = reward_risk_ratio * stop
+            atr_potential = global_params.reward_risk_ratio * stop_atr_val / max(close_val, ATR_EPS)
+            if potential is None or potential < atr_potential:
+                potential = atr_potential
 
             take_profit = round(entry_ref * (1.0 + potential), 4)
             take_reward = take_profit - entry_ref  # ganho em R$
 
-            # -- R:R enforcement: alvo deve ser >= stop (1:1 minimo) --
+            # -- R:R calculation --
             # Minimum meaningful stop risk: 0.1% of price
             min_stop_risk = close_val * 0.001
             if stop_risk < min_stop_risk:
                 stop_risk = min_stop_risk
                 stop_loss = round(entry_ref - stop_risk, 4)
             rr_ratio = take_reward / max(stop_risk, ATR_EPS)
-            if rr_ratio < 1.0 and sig == "buy":
-                # Potencial insuficiente para o risco — nao comprar
-                sig = "hold"
 
             # -- Previsao de queda maxima (drawdown esperado) --
             # Usa MDD historico do ticker + volatilidade atual
@@ -2693,10 +2705,12 @@ def run():
                 0.0, 100.0
             ))
 
-            # -- Quality gates (v5): demote buy -> hold --
+            # -- Quality gates (v5): penalize confidence instead of demoting signal --
+            # Never remove tickers/signals; bad metrics are reflected in lower confidence
             if sig == "buy" and wr_tier_num <= 1 and bt_n_trades >= min_trades_for_tier:
-                sig = "hold"  # win rate too low
-            # R:R < 1:1 already handled above (sig set to hold before confidence)
+                confidence = confidence * 0.6  # penalize low win rate in confidence
+            if sig == "buy" and rr_ratio < 1.0:
+                confidence = confidence * 0.7  # penalize poor R:R in confidence
             
             # (operational columns removed — Apply now shows only decision columns)
 
