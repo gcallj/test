@@ -2651,6 +2651,13 @@ def run():
                 stop_loss = round(entry_ref - stop_risk, 4)
             rr_ratio = take_reward / max(stop_risk, ATR_EPS)
 
+            # -- Forcar R:R > 1: se alvo insuficiente, ajustar take_profit --
+            MIN_RR_RATIO = 1.5
+            if rr_ratio < MIN_RR_RATIO:
+                take_reward = stop_risk * MIN_RR_RATIO
+                take_profit = round(entry_ref + take_reward, 4)
+                rr_ratio = MIN_RR_RATIO
+
             # -- Previsao de queda maxima (drawdown esperado) --
             # Usa MDD historico do ticker + volatilidade atual
             hist_mdd = abs(st.get("mdd", 0.0))  # MDD do backtest inteiro
