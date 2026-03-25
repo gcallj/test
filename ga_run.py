@@ -131,6 +131,11 @@ RR_MULT_RANGE  = (1.5, 4.0)  # wider RR to pursue larger trend-following payoffs
 # Volume / liquidity filter (v5)
 MIN_VOL_FIN_DAILY = 50_000  # R$50k/dia minimum median financial volume
 
+# Apply output constraints
+MIN_STOP_PCT = 0.02       # 2% minimum stop (avoids unrealistic tight stops)
+MIN_RR_RATIO = 1.5        # Minimum risk-reward ratio
+MIN_BUY_CONFIDENCE = 40.0 # Minimum confidence to emit buy signal
+
 # Friction
 COST_BPS     = 12.0
 SLIPPAGE_BPS = 12.0
@@ -1853,7 +1858,12 @@ def _build_history_from_etl(etl_path: str) -> pd.DataFrame:
             df_tkr = etl_raw[[cols_tkr[m] for m in cols_tkr]].copy()
             df_tkr.columns = [m for m in cols_tkr]
             df_tkr[TICKER_COL] = tkr
-            df_tkr[DATE_COL] = etl_raw.index if hasattr(etl_raw.index, 'date') else range(len(etl_raw))
+            # Use index as date column, converting to datetime if needed
+            idx = etl_raw.index
+            if hasattr(idx, 'to_pydatetime') or hasattr(idx, 'date'):
+                df_tkr[DATE_COL] = idx.values
+            else:
+                df_tkr[DATE_COL] = pd.to_datetime(idx, errors='coerce')
             rows.append(df_tkr)
         if not rows:
             return None
@@ -2698,15 +2708,14 @@ def run():
             atr_discount = discount * atr_val
             # Suporte: minima dos ultimos 5 dias como piso
             recent_lows = payload["low"][max(0, i-4):i+1]
-            recent_low = float(np.nanmin(recent_lows)) if len(recent_lows) > 0 else close_val
+            _finite_lows = recent_lows[np.isfinite(recent_lows)]
+            recent_low = float(np.min(_finite_lows)) if len(_finite_lows) > 0 else close_val
             # Entrada = max(close - desconto ATR, suporte recente)
             # Nao comprar abaixo do suporte (limita desconto excessivo)
             best_buy = round(max(close_val - atr_discount, recent_low * 0.995), 4)
             entry_ref = best_buy if sig == "buy" else close_val
 
             # ── STOP: ATR-based com minimo % ──
-            # Minimo: 2% do preco de entrada (evita stops irrealistas em low-vol)
-            MIN_STOP_PCT = 0.02  # 2% minimo
             stop_atr_val = global_params.stop_atr_mult * atr_val
             stop_pct_from_atr = stop_atr_val / max(entry_ref, ATR_EPS)
             # Usar o MAIOR entre ATR-stop e minimo %
@@ -2717,7 +2726,6 @@ def run():
             # ── ALVO: potencial estatistico + ATR floor ──
             potential = _potential_cache.get(i)
             # ATR-based floor: alvo minimo = R:R * stop
-            MIN_RR_RATIO = 1.5
             min_target_pct = effective_stop_pct * MIN_RR_RATIO
             if potential is None or potential < min_target_pct:
                 potential = min_target_pct
@@ -2765,7 +2773,7 @@ def run():
             q_ml = float(np.clip(0.5 * q_agree + 0.5 * vote_consensus, 0.0, 1.0))
 
             # q_viability (v6): R:R quality + liquidity + stop quality
-            alvo_pct = take_reward / max(close_val, ATR_EPS)  # target as % of price
+            alvo_pct = take_reward / max(entry_ref, ATR_EPS)  # target as % of entry price
             vol_arr = payload.get("volume", np.full(n, np.nan))
             avg_vol_20 = float(np.nanmean(vol_arr[max(0, i-19):i+1])) if i < len(vol_arr) else 0.0
             vol_fin = avg_vol_20 * close_val  # volume financeiro medio 20d
@@ -2780,27 +2788,28 @@ def run():
             # q_dist (v5): trade return distribution quality — big wins vs big losses
             q_dist = float(np.clip(bt_dist_quality, 0.0, 1.0))
 
-            # Confidence (0-100): 8 fatores (v5)
-            # 20% win_rate_tier + 15% distribuicao + 15% viabilidade + 10% backtest
-            # + 10% sinal + 10% concordancia + 10% regime + 10% ML
+            # -- Quality penalty factors (applied before final score) --
+            penalty = 1.0
+            if sig == "buy" and wr_tier_num <= 1 and bt_n_trades >= min_trades_for_tier:
+                penalty *= 0.6  # penalize low win rate
+            if sig == "buy" and rr_ratio < 1.5:
+                penalty *= 0.7  # penalize poor R:R
+
+            # Confidence (0-100): 8 fatores (v6) with quality penalties
             confidence = float(np.clip(
                 (0.10 * q_bt + 0.10 * q_sig + 0.20 * q_wr + 0.15 * q_dist +
-                 0.10 * q_agree + 0.10 * q_regime + 0.10 * q_ml + 0.15 * q_viability) * 100.0,
+                 0.10 * q_agree + 0.10 * q_regime + 0.10 * q_ml + 0.15 * q_viability)
+                * penalty * 100.0,
                 0.0, 100.0
             ))
 
-            # -- Quality gates (v5): penalize confidence instead of demoting signal --
-            # Never remove tickers/signals; bad metrics are reflected in lower confidence
-            if sig == "buy" and wr_tier_num <= 1 and bt_n_trades >= min_trades_for_tier:
-                confidence = confidence * 0.6  # penalize low win rate in confidence
-            if sig == "buy" and rr_ratio < 1.0:
-                confidence = confidence * 0.7  # penalize poor R:R in confidence
-            
-            # (operational columns removed — Apply now shows only decision columns)
+            # -- Minimum confidence for buy: demote weak signals to hold --
+            if sig == "buy" and confidence < MIN_BUY_CONFIDENCE:
+                sig = "hold"
 
-            # Stop % and alvo % for display
-            stop_pct_val = round(stop_risk / max(entry_ref, ATR_EPS) * 100.0, 2)
-            alvo_pct_val = round(alvo_pct * 100, 2)
+            # Stop % and alvo % for display (always relative to entrada/best_buy)
+            stop_pct_val = round((best_buy - stop_loss) / max(best_buy, ATR_EPS) * 100.0, 2)
+            alvo_pct_val = round((take_profit - best_buy) / max(best_buy, ATR_EPS) * 100.0, 2)
             rr_display = round(rr_ratio, 1)
 
             # -- Exit rules string --

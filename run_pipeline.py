@@ -106,15 +106,16 @@ def main():
     parser.add_argument(
         "--steps",
         type=str,
-        default="1,2,3,4",
-        help="Comma-separated step numbers to run (default: 1,2,3,4). Use 5 for GA only.",
+        default=None,
+        help="Comma-separated step numbers to run. Use 5 for GA only.",
     )
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
         "--ga-only",
         action="store_true",
         help="Quick mode: run ETL + GA only (skip model training)",
     )
-    parser.add_argument(
+    mode.add_argument(
         "--full",
         action="store_true",
         help="Full mode: run all steps including GA (1,2,3,4,5)",
@@ -125,8 +126,10 @@ def main():
         steps_to_run = [1, 5]
     elif args.full:
         steps_to_run = [1, 2, 3, 4, 5]
-    else:
+    elif args.steps:
         steps_to_run = [int(s.strip()) for s in args.steps.split(",")]
+    else:
+        steps_to_run = [1, 2, 3, 4]
 
     print("=" * 80)
     print("STOCK PIPELINE RUNNER")

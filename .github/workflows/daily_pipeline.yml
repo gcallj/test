@@ -46,11 +46,8 @@ jobs:
           ls -1 output/data/models/*.json output/data/models/*.cbm 2>/dev/null | head -5
           echo "  total files: $(ls output/data/models/ | wc -l)"
 
-      - name: Run ETL (download fresh market data)
-        run: python -u run_pipeline.py --steps 1
-
-      - name: Run GA load (generate signals + send Telegram)
-        run: python -u ga_run.py
+      - name: Run ETL + GA (download data + generate signals)
+        run: python -u run_pipeline.py --ga-only
 
       - name: Verify outputs before upload
         if: always()
