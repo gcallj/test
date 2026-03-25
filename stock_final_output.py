@@ -734,19 +734,52 @@ def run_final_output():
     else:
         print(f"[ens] ENS parquet nao encontrado em {HIST_ENS_PATH}. Continuando sem ensemble.")
 
-    reg_ds = open_parquet_dataset_with_retry(HIST_REG_WIDE_PATH, format="parquet")
-    reg_date_type = reg_ds.schema.field("Date").type if "Date" in reg_ds.schema.names else None
+    REG_AVAILABLE = False
+    reg_ds = None
+    reg_date_type = None
+    if HIST_REG_WIDE_PATH.exists():
+        try:
+            reg_ds = open_parquet_dataset_with_retry(HIST_REG_WIDE_PATH, format="parquet")
+            reg_date_type = reg_ds.schema.field("Date").type if "Date" in reg_ds.schema.names else None
+            REG_AVAILABLE = True
+            print(f"[reg] REG parquet OK")
+        except Exception as e_reg:
+            print(f"[reg] REG parquet CORROMPIDO ou ilegivel: {e_reg}")
+            print(f"[reg] Continuando SEM forecasts de regressao — apenas OHLC + fundamentais")
+            reg_ds = None
+    else:
+        print(f"[reg] REG parquet nao encontrado em {HIST_REG_WIDE_PATH}. Continuando sem regressao.")
 
     if OVERWRITE_OUTPUTS and OUT_HIST_PARQUET.exists() and WRITE_PARQUET:
         OUT_HIST_PARQUET.unlink()
 
-    print("[scan] coletando tickers .SA do REG (streaming)...")
-    try:
-        tickers_sa = collect_sa_tickers_from_reg_dataset(reg_ds, ticker_col="ticker", batch_size=500_000)
-    except Exception as e:
-        print(f"[warn] falha no scan inicial do REG: {e}. Reabrindo dataset e tentando novamente...")
-        reg_ds = open_parquet_dataset_with_retry(HIST_REG_WIDE_PATH, format="parquet")
-        tickers_sa = collect_sa_tickers_from_reg_dataset(reg_ds, ticker_col="ticker", batch_size=500_000)
+    print("[scan] coletando tickers .SA ...")
+    if REG_AVAILABLE and reg_ds is not None:
+        try:
+            tickers_sa = collect_sa_tickers_from_reg_dataset(reg_ds, ticker_col="ticker", batch_size=500_000)
+        except Exception as e:
+            print(f"[warn] falha no scan do REG: {e}. Tentando via ETL...")
+            tickers_sa = []
+    else:
+        tickers_sa = []
+    # Fallback: collect tickers from ETL parquet if REG unavailable
+    if len(tickers_sa) == 0:
+        try:
+            _etl_path = Path("./output/data/expanded_stock_reduced.parquet")
+            if _etl_path.exists():
+                _etl_df = pd.read_parquet(_etl_path)
+                if isinstance(_etl_df.columns[0], tuple):
+                    # MultiIndex columns: (metric, ticker) - extract tickers from column level
+                    _all_tickers = set(c[1] for c in _etl_df.columns if len(c) > 1)
+                    tickers_sa = sorted([t for t in _all_tickers if looks_like_equity_br(str(t))])
+                elif "ticker" in _etl_df.columns:
+                    tickers_sa = sorted(_etl_df["ticker"].dropna().unique().tolist())
+                    tickers_sa = [t for t in tickers_sa if looks_like_equity_br(str(t))]
+                del _etl_df
+                print(f"[scan] tickers coletados via ETL: {len(tickers_sa)}")
+        except Exception as e2:
+            print(f"[warn] falha no scan ETL: {e2}")
+            tickers_sa = []
     tickers_sa_set = set(tickers_sa)
     print(f"[scan] tickers .SA únicos: {len(tickers_sa)}")
 
@@ -767,7 +800,7 @@ def run_final_output():
         print("[fund] nenhum .SA no histórico (fund_score neutro=0.5)")
 
     ens_cols = [c for c in ["Date","ticker","split","p_up20","p_dd5","pred_up20","pred_dd5"] if ENS_AVAILABLE and c in ens_ds.schema.names]
-    reg_cols = [c for c in ["Date","ticker","best_buy_price","buy_err_lo","buy_err_hi","best_sell_price","sell_err_lo","sell_err_hi"] if c in reg_ds.schema.names]
+    reg_cols = [c for c in ["Date","ticker","best_buy_price","buy_err_lo","buy_err_hi","best_sell_price","sell_err_lo","sell_err_hi"] if REG_AVAILABLE and reg_ds is not None and c in reg_ds.schema.names]
 
     print(f"[cols] ENS_AVAILABLE={ENS_AVAILABLE}, ens_cols={ens_cols}")
     print(f"[cols] reg_cols={reg_cols}")
@@ -787,32 +820,47 @@ def run_final_output():
         try:
             print(f"  [DBG] building filters...", flush=True)
             ens_f = (ds.field("Date") >= arrow_date_scalar(s, ens_date_type)) & (ds.field("Date") < arrow_date_scalar(e, ens_date_type)) if (ENS_AVAILABLE and ens_date_type is not None) else None
-            reg_f = (ds.field("Date") >= arrow_date_scalar(s, reg_date_type)) & (ds.field("Date") < arrow_date_scalar(e, reg_date_type)) if reg_date_type is not None else None
-            print(f"  [DBG] reading reg_tbl...", flush=True)
+            if REG_AVAILABLE and reg_ds is not None:
+                reg_f = (ds.field("Date") >= arrow_date_scalar(s, reg_date_type)) & (ds.field("Date") < arrow_date_scalar(e, reg_date_type)) if reg_date_type is not None else None
+                print(f"  [DBG] reading reg_tbl...", flush=True)
 
-            reg_tbl = dataset_to_table_with_retry(reg_ds, columns=reg_cols, filter_expr=reg_f)
-            print(f"  [DBG] reg_tbl rows={reg_tbl.num_rows}", flush=True)
-            if reg_tbl.num_rows == 0:
+                reg_tbl = dataset_to_table_with_retry(reg_ds, columns=reg_cols, filter_expr=reg_f)
+                print(f"  [DBG] reg_tbl rows={reg_tbl.num_rows}", flush=True)
+                if reg_tbl.num_rows == 0:
+                    del reg_tbl
+                    continue
+
+                print(f"  [DBG] safe_to_pandas...", flush=True)
+                reg_chunk = safe_to_pandas(reg_tbl)
                 del reg_tbl
-                continue
-
-            print(f"  [DBG] safe_to_pandas...", flush=True)
-            reg_chunk = safe_to_pandas(reg_tbl)
-            del reg_tbl
-            print(f"  [DBG] prepare_regression_wide...", flush=True)
-            reg_p = prepare_regression_wide(reg_chunk)
-            print(f"  [DBG] filtering tickers (tickers_sa_set has {len(tickers_sa_set)} items)...", flush=True)
-            # Include all allowed suffixes, not just .SA
-            if ALLOWED_SUFFIXES:
-                allowed_mask = reg_p["ticker"].apply(lambda t: any(t.endswith(sfx) for sfx in ALLOWED_SUFFIXES))
-                reg_p = reg_p[allowed_mask]
+                print(f"  [DBG] prepare_regression_wide...", flush=True)
+                reg_p = prepare_regression_wide(reg_chunk)
+                print(f"  [DBG] filtering tickers (tickers_sa_set has {len(tickers_sa_set)} items)...", flush=True)
+                # Include all allowed suffixes, not just .SA
+                if ALLOWED_SUFFIXES:
+                    allowed_mask = reg_p["ticker"].apply(lambda t: any(t.endswith(sfx) for sfx in ALLOWED_SUFFIXES))
+                    reg_p = reg_p[allowed_mask]
+                else:
+                    reg_p = reg_p[reg_p["ticker"].isin(tickers_sa_set)]
+                del reg_chunk
+                print(f"  [DBG] reg_p rows after filter={len(reg_p)}", flush=True)
+                if reg_p.empty:
+                    del reg_p
+                    continue
             else:
-                reg_p = reg_p[reg_p["ticker"].isin(tickers_sa_set)]
-            del reg_chunk
-            print(f"  [DBG] reg_p rows after filter={len(reg_p)}", flush=True)
-            if reg_p.empty:
-                del reg_p
-                continue
+                # REG unavailable: build minimal reg_p from OHLC data
+                if all_closes_df.empty:
+                    continue
+                mask_ohlc = (all_closes_df["Date"] >= s) & (all_closes_df["Date"] < e)
+                reg_p = all_closes_df[mask_ohlc].copy()
+                if reg_p.empty:
+                    continue
+                # Add empty regression columns
+                for _rc in ["best_buy_price","buy_err_lo","buy_err_hi","best_sell_price","sell_err_lo","sell_err_hi",
+                            "best_buy_value","best_sell_value","err_buy_pct","err_sell_pct",
+                            "downside_pct","upside_pct","risk_return"]:
+                    reg_p[_rc] = np.nan
+                reg_p["split"] = ""
 
             if ENS_AVAILABLE and ens_ds is not None:
                 print(f"  [DBG] reading ens_tbl...", flush=True)
@@ -829,9 +877,10 @@ def run_final_output():
                 ens_k = pd.DataFrame(columns=["Date","ticker","split","p_up20","p_dd5","pred_up20","pred_dd5","up20_bin","dd5_bin"])
 
             print(f"  [DBG] merge_reg_ens...", flush=True)
+            _reg_has_ohlc = all(c in reg_p.columns for c in ["open", "high", "low", "close"])
             df = merge_reg_ens(reg_p, ens_k)
             del reg_p, ens_k
-            if not all_closes_df.empty:
+            if not all_closes_df.empty and not _reg_has_ohlc:
                 # Filtra fatia de data
                 mask_ohlc = (all_closes_df["Date"] >= s) & (all_closes_df["Date"] < e)
                 chunk_ohlc = all_closes_df[mask_ohlc]
@@ -852,9 +901,10 @@ def run_final_output():
                 continue
 
             print(f"  [DBG] compute_core_metrics + finalize...", flush=True)
+            if "price" not in df.columns:
+                df["price"] = df["close"]
             df = compute_core_metrics(df)
             df = add_fund_and_3_evfund(df, fund_all)
-            df["price"] = df["close"]
             out = finalize_chunk(df)
             del df
 
@@ -892,11 +942,13 @@ def run_final_output():
 
     import pandas as pd
 
-    OUT_HIST_PARQUET = "./output/history_consolidated.parquet"
-
-    N = 20
-    df_tail = pd.read_parquet(OUT_HIST_PARQUET).tail(N)
-    print(df_tail.to_string(index=False))
+    _out_path = "./output/history_consolidated.parquet"
+    if os.path.exists(_out_path) and rows_total > 0:
+        N = 20
+        df_tail = pd.read_parquet(_out_path).tail(N)
+        print(df_tail.to_string(index=False))
+    else:
+        print(f"[WARN] Parquet nao gerado ou vazio (rows={rows_total})")
 
 
     # ALTERNATIVA 2: DIAGNÓSTICO DO SCORE
