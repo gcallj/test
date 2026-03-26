@@ -2889,11 +2889,23 @@ def run():
                 f"HardStop: {hard_stop_pct:.0f}% gap"
             )
 
+            # ── RANKING SCORE: combina todos os fatores para ranking final ──
+            # Pondera: qualidade historica + timing atual + risco
+            rank_score = round(
+                0.30 * confidence +          # qualidade do backtest
+                0.30 * upside_score +         # timing/momentum atual
+                0.15 * min(rr_ratio / 3.0, 1.0) * 100 +  # risco-retorno (cap 3:1)
+                0.10 * bt_win_rate * 100 +    # win rate direto
+                0.10 * regime_val * 100 +     # regime de mercado
+                0.05 * q_stop * 100           # qualidade do stop
+            , 1)
+
             results_apply.append({
                 # -- Decisao --
                 "Date": pd.to_datetime(dates[i]).strftime("%Y-%m-%d"),
                 "ticker": tkr,
                 "signal": sig,
+                "rank_score": rank_score,
                 "confidence": round(confidence, 1),
                 "upside_score": round(upside_score, 1),
                 # -- Compra --
@@ -2917,6 +2929,12 @@ def run():
                     else "neutro" if regime_val >= 0.3
                     else "desfavoravel"
                 ),
+                # -- Detalhes upside --
+                "s_suporte": round(s_support * 100, 1),
+                "s_momentum": round(s_momentum * 100, 1),
+                "s_alvo_vol": round(s_target * 100, 1),
+                "s_tendencia": round(s_trend * 100, 1),
+                "s_assimetria": round(s_asymmetry * 100, 1),
                 "exit_rules": exit_rules,
             })
 
@@ -2937,14 +2955,12 @@ def run():
 
     df_sum = pd.DataFrame(results_summary)
     df_app = pd.DataFrame(results_apply)
-    # Sort Apply: buy signals first, then by combined ranking score
+    # Sort Apply: buy signals first, then by rank_score descending
     if not df_app.empty:
         # Keep only the most recent date per ticker
         df_app = df_app.sort_values("Date", ascending=False).drop_duplicates(subset=["ticker"], keep="first")
-        # Combined rank: 50% confidence + 50% upside_score (best opportunities first)
         df_app["_is_buy"] = (df_app["signal"] == "buy").astype(int)
-        df_app["_rank_score"] = 0.5 * df_app["confidence"] + 0.5 * df_app["upside_score"]
-        df_app = df_app.sort_values(["_is_buy", "_rank_score"], ascending=[False, False]).drop(columns=["_is_buy", "_rank_score"]).reset_index(drop=True)
+        df_app = df_app.sort_values(["_is_buy", "rank_score"], ascending=[False, False]).drop(columns=["_is_buy"]).reset_index(drop=True)
 
     if not df_sum.empty:
         df_sum = df_sum.sort_values("test_sharpe", ascending=False)
