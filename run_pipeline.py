@@ -123,7 +123,7 @@ def main():
     args = parser.parse_args()
 
     if args.ga_only:
-        steps_to_run = [1, 5]
+        steps_to_run = [1, 4, 5]  # ETL + rebuild history + GA
     elif args.full:
         steps_to_run = [1, 2, 3, 4, 5]
     elif args.steps:

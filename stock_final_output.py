@@ -897,6 +897,8 @@ def run_final_output():
                 df["close"] = np.nan
 
             df = df.dropna(subset=["open", "high", "low", "close"]).copy()
+            # Remove rows with OHLC=0 (incomplete yfinance data for latest date)
+            df = df[(df["open"] > 0) & (df["high"] > 0) & (df["low"] > 0) & (df["close"] > 0)].copy()
             if df.empty:
                 continue
 
