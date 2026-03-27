@@ -8,13 +8,13 @@ on:
 jobs:
   pipeline:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
 
     env:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-      GA_RUN_MODE: "load"      # daily = load checkpoint, no retrain
-      GA_FAST_MODE: "true"     # ignored in load mode, but set for safety
+      GA_RUN_MODE: "load"
+      GA_FAST_MODE: "true"
 
     steps:
       - name: Checkout
