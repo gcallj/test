@@ -134,7 +134,7 @@ MIN_VOL_FIN_DAILY = 50_000  # R$50k/dia minimum median financial volume
 # Apply output constraints
 MIN_STOP_PCT = 0.02       # 2% minimum stop (avoids unrealistic tight stops)
 MIN_RR_RATIO = 1.5        # Minimum risk-reward ratio
-MIN_BUY_CONFIDENCE = 40.0 # Minimum confidence to emit buy signal
+MIN_BUY_CONFIDENCE = 50.0 # Minimum confidence to emit buy signal (assertive trades only)
 
 # Friction
 COST_BPS     = 12.0
@@ -2704,17 +2704,34 @@ def run():
             strength = float(np.clip(abs(score_ev[i]) / score95, 0.0, 1.0))
             discount = global_params.entry_discount_atr_frac * (1.0 - global_params.score_strength_scaling * strength)
 
-            # ── ENTRADA: preco com desconto ATR + suporte recente ──
+            # ── ENTRADA: preco otimizado para compra no dia seguinte ──
+            # Objetivo: melhor preco possivel que seja ACIMA da minima esperada
             atr_discount = discount * atr_val
-            # Suporte: minima dos ultimos 5 dias como piso
-            recent_lows = payload["low"][max(0, i-4):i+1]
+
+            # Suporte: minima dos ultimos 20 dias
+            recent_lows = payload["low"][max(0, i-19):i+1]
             _finite_lows = recent_lows[np.isfinite(recent_lows)]
             recent_low = float(np.min(_finite_lows)) if len(_finite_lows) > 0 else close_val
-            # Entrada = max(close - desconto ATR, suporte recente)
-            # Nao comprar abaixo do suporte (limita desconto excessivo)
-            best_buy = round(max(close_val - atr_discount, recent_low * 0.995), 4)
-            # Stop/alvo SEMPRE calculados a partir da entrada (best_buy)
-            # entry_ref = best_buy para todos os sinais (consistencia)
+
+            # Resistencia: maxima dos ultimos 20 dias
+            recent_highs = payload["high"][max(0, i-19):i+1]
+            _finite_highs = recent_highs[np.isfinite(recent_highs)]
+            recent_high = float(np.max(_finite_highs)) if len(_finite_highs) > 0 else close_val
+
+            # Minima tipica do dia seguinte: estimada como close - frac*ATR
+            # Historicamente, a minima intraday fica ~0.3-0.7 ATR abaixo do close
+            intraday_dip = 0.5 * atr_val  # estimativa conservadora da dip intraday
+            next_day_low_est = close_val - intraday_dip
+
+            # Entrada = melhor preco entre:
+            #   - close com desconto ATR (limite agressivo)
+            #   - dip intraday estimada (mais realista)
+            # Piso: nunca abaixo da minima recente (suporte forte)
+            raw_entry = min(close_val - atr_discount, next_day_low_est)
+            best_buy = round(max(raw_entry, recent_low), 4)
+
+            # Garantir entrada <= close (nao comprar acima do fechamento)
+            best_buy = min(best_buy, round(close_val, 4))
             entry_ref = best_buy
 
             # ── STOP: ATR-based com minimo % ──
@@ -2725,15 +2742,28 @@ def run():
             stop_risk = entry_ref * effective_stop_pct
             stop_loss = round(entry_ref - stop_risk, 4)
 
-            # ── ALVO: potencial estatistico + ATR floor ──
+            # ── ALVO: baseado em resistencia + potencial estatistico ──
             potential = _potential_cache.get(i)
-            # ATR-based floor: alvo minimo = R:R * stop
             min_target_pct = effective_stop_pct * MIN_RR_RATIO
-            if potential is None or potential < min_target_pct:
+
+            # Resistencia como alvo natural (maxima recente)
+            resistance_pct = (recent_high - entry_ref) / max(entry_ref, ATR_EPS)
+
+            # Escolher o melhor alvo entre:
+            #   - resistencia (preco ja atingiu esse nivel recentemente)
+            #   - potencial estatistico (retorno forward historico)
+            #   - minimo R:R (floor)
+            if resistance_pct > min_target_pct:
+                # Resistencia viavel — usar como alvo primario
+                potential = resistance_pct
+            elif potential is not None and potential > min_target_pct:
+                # Potencial estatistico bom — usar
+                pass
+            else:
                 potential = min_target_pct
-            # Cap target: max 25% (evita alvos irrealistas como CRO-USD 35%)
-            MAX_TARGET_PCT = 0.25
-            potential = min(potential, MAX_TARGET_PCT)
+
+            # Cap: max 25%
+            potential = min(potential, 0.25)
 
             take_profit = round(entry_ref * (1.0 + potential), 4)
             take_reward = take_profit - entry_ref
@@ -2901,41 +2931,23 @@ def run():
             , 1)
 
             results_apply.append({
-                # -- Decisao --
                 "Date": pd.to_datetime(dates[i]).strftime("%Y-%m-%d"),
                 "ticker": tkr,
                 "signal": sig,
-                "rank_score": rank_score,
-                "confidence": round(confidence, 1),
-                "upside_score": round(upside_score, 1),
-                # -- Compra --
+                "rank": rank_score,
                 "close": round(close_val, 4),
                 "entrada": best_buy,
-                # -- Venda (stop e alvo) --
                 "stop": stop_loss,
                 "alvo": take_profit,
                 "RR": rr_display,
-                # -- Risco --
                 "stop_pct": stop_pct_val,
                 "alvo_pct": alvo_pct_val,
-                "queda_max": round(queda_max_esperada * 100, 1),
-                "piso": queda_max_preco,
-                # -- Qualidade --
                 "win_rate": round(bt_win_rate * 100, 1),
-                "wr_tier": wr_tier,
-                "dist_quality": round(bt_dist_quality * 100, 1),
                 "regime": (
                     "favoravel" if regime_val >= 0.6
                     else "neutro" if regime_val >= 0.3
                     else "desfavoravel"
                 ),
-                # -- Detalhes upside --
-                "s_suporte": round(s_support * 100, 1),
-                "s_momentum": round(s_momentum * 100, 1),
-                "s_alvo_vol": round(s_target * 100, 1),
-                "s_tendencia": round(s_trend * 100, 1),
-                "s_assimetria": round(s_asymmetry * 100, 1),
-                "exit_rules": exit_rules,
             })
 
         results_summary.append({
@@ -2960,7 +2972,7 @@ def run():
         # Keep only the most recent date per ticker
         df_app = df_app.sort_values("Date", ascending=False).drop_duplicates(subset=["ticker"], keep="first")
         df_app["_is_buy"] = (df_app["signal"] == "buy").astype(int)
-        df_app = df_app.sort_values(["_is_buy", "rank_score"], ascending=[False, False]).drop(columns=["_is_buy"]).reset_index(drop=True)
+        df_app = df_app.sort_values(["_is_buy", "rank"], ascending=[False, False]).drop(columns=["_is_buy"]).reset_index(drop=True)
 
     if not df_sum.empty:
         df_sum = df_sum.sort_values("test_sharpe", ascending=False)
