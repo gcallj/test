@@ -38,17 +38,22 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Restore model/checkpoint cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            output/data/models/
-            global_ga_checkpoint.json
-          key: models-${{ github.sha }}
-          restore-keys: models-
+      - name: Verify checkpoint exists (from git)
+        run: |
+          echo "Checkpoint file:"
+          cat global_ga_checkpoint.json | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'  fitness={d[\"fitness\"]:.4f}  genome_len={len(d[\"genome\"])}')"
+          echo "Models dir:"
+          ls -1 output/data/models/*.json output/data/models/*.cbm 2>/dev/null | head -5
+          echo "  total files: $(ls output/data/models/ | wc -l)"
 
-      - name: Run daily predict (ETL + forward-fill + FINAL + GA load)
-        run: python -u predict_daily.py
+      - name: Run ETL + GA (download data + generate signals)
+        run: python -u run_pipeline.py --ga-only
+
+      - name: Verify outputs before upload
+        if: always()
+        run: |
+          echo "=== Output files ==="
+          ls -lh summary_latest.xlsx apply_last_*d__H*.csv 2>/dev/null || echo "WARNING: output files missing!"
 
       - name: Upload artifacts
         if: always()

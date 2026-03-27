@@ -128,6 +128,14 @@ ATR_EPS = 1e-12
 ATR_MULT_RANGE = (1.5, 3.5)
 RR_MULT_RANGE  = (1.5, 4.0)  # wider RR to pursue larger trend-following payoffs
 
+# Volume / liquidity filter (v5)
+MIN_VOL_FIN_DAILY = 50_000  # R$50k/dia minimum median financial volume
+
+# Apply output constraints
+MIN_STOP_PCT = 0.02       # 2% minimum stop (avoids unrealistic tight stops)
+MIN_RR_RATIO = 1.5        # Minimum risk-reward ratio
+MIN_BUY_CONFIDENCE = 40.0 # Minimum confidence to emit buy signal
+
 # Friction
 COST_BPS     = 12.0
 SLIPPAGE_BPS = 12.0
@@ -340,6 +348,11 @@ GLOBAL_PARAM_SPECS = [
     ("partial_take_level_2", 1.0, 3.0, 0.25, False),  # 2nd partial at higher RR multiple
     ("min_signal_strength", 0.0, 0.40, 0.05, False),  # minimum abs(score_ev)/score95 to enter
     ("trailing_stop_mode", 0.0, 2.0, 1.0, True),  # 0=off, 1=breakeven after 1x, 2=trail at 50% after 2x
+    # -- NEW genes for v4 (signal precision + regime) --
+    ("volume_confirm_mode", 0.0, 2.0, 1.0, True),  # 0=off, 1=vol>MA20, 2=vol>MA50
+    ("momentum_confirm_days", 0.0, 5.0, 1.0, True),  # 0=off, 1-5=require positive return over N days
+    ("entry_score_threshold", 0.0, 0.50, 0.05, False),  # min score_ev strength to enter
+    ("regime_threshold", 0.20, 0.70, 0.05, False),  # min regime_score to allow long entries
 ]
 
 
@@ -372,6 +385,11 @@ class GlobalParams:
     partial_take_level_2: float  # 2nd partial take at this RR multiple
     min_signal_strength: float  # min |score_ev|/score95 to enter trade
     trailing_stop_mode: int  # 0=off, 1=breakeven after 1x stop, 2=trail at 50% after 2x
+    # -- NEW v4 genes (signal precision + regime) --
+    volume_confirm_mode: int  # 0=off, 1=vol>MA20, 2=vol>MA50
+    momentum_confirm_days: int  # 0=off, 1-5=require positive return over N days
+    entry_score_threshold: float  # min score_ev/score95 to enter
+    regime_threshold: float  # min regime_score to allow long entries
 
 
 def sanitize_global_genome(genome: List[float]) -> List[float]:
@@ -433,57 +451,71 @@ def ewm_mean_np(x: np.ndarray, span: int) -> np.ndarray:
     return out
 
 
+@njit(cache=True)
+def _rolling_percentile_rank_numba(x, valid, n, window):
+    """Numba-accelerated rolling percentile rank. O(n*w) but in native code."""
+    out = np.full(n, np.nan, dtype=np.float64)
+    for i in range(n):
+        if not valid[i]:
+            continue
+        start = max(0, i - window + 1)
+        count = 0
+        rank = 0
+        xi = x[i]
+        for j in range(start, i + 1):
+            if valid[j]:
+                count += 1
+                if x[j] <= xi:
+                    rank += 1
+        if count >= 20:
+            out[i] = rank / count
+    return out
+
+
 def rolling_percentile_rank(arr: np.ndarray, window: int = 252) -> np.ndarray:
     x = np.asarray(arr, dtype=np.float64)
-    out = np.full_like(x, np.nan, dtype=np.float64)
-    valid = np.isfinite(x)
     n = len(x)
     if n == 0:
-        return out
+        return np.full(0, np.nan)
+    valid = np.isfinite(x)
+    return _rolling_percentile_rank_numba(x, valid, n, window)
 
-    from bisect import bisect_right, insort
 
-    sorted_vals = []
+@njit(cache=True)
+def _rolling_quantile_trigger_numba(x, valid, n, window, q):
+    """Numba-accelerated rolling quantile trigger."""
+    out = np.full(n, np.nan, dtype=np.float64)
     for i in range(n):
-        xi = x[i]
-        if np.isfinite(xi):
-            insort(sorted_vals, float(xi))
-        j_rm = i - window
-        if j_rm >= 0 and valid[j_rm]:
-            xrm = float(x[j_rm])
-            k = bisect_right(sorted_vals, xrm) - 1
-            if k >= 0:
-                sorted_vals.pop(k)
-        if len(sorted_vals) >= 20 and np.isfinite(xi):
-            out[i] = bisect_right(sorted_vals, float(xi)) / float(len(sorted_vals))
+        if not valid[i]:
+            continue
+        start = max(0, i - window + 1)
+        # Collect valid values in window
+        count = 0
+        for j in range(start, i + 1):
+            if valid[j]:
+                count += 1
+        if count < 20:
+            continue
+        # Extract window values
+        vals = np.empty(count, dtype=np.float64)
+        k = 0
+        for j in range(start, i + 1):
+            if valid[j]:
+                vals[k] = x[j]
+                k += 1
+        vals.sort()
+        idx = min(max(int(np.ceil(q * count)) - 1, 0), count - 1)
+        out[i] = vals[idx]
     return out
 
 
 def rolling_quantile_trigger(arr: np.ndarray, q: float, window: int = SCORE_LOOKBACK) -> np.ndarray:
     x = np.asarray(arr, dtype=np.float64)
-    out = np.full_like(x, np.nan, dtype=np.float64)
-    valid = np.isfinite(x)
     n = len(x)
     if n == 0:
-        return out
-
-    from bisect import bisect_left, insort
-
-    sorted_vals = []
-    for i in range(n):
-        xi = x[i]
-        if np.isfinite(xi):
-            insort(sorted_vals, float(xi))
-        j_rm = i - window
-        if j_rm >= 0 and valid[j_rm]:
-            xrm = float(x[j_rm])
-            k = bisect_left(sorted_vals, xrm)
-            if k < len(sorted_vals):
-                sorted_vals.pop(k)
-        if len(sorted_vals) >= 20 and np.isfinite(xi):
-            idx = int(np.clip(math.ceil(q * len(sorted_vals)) - 1, 0, len(sorted_vals) - 1))
-            out[i] = sorted_vals[idx]
-    return out
+        return np.full(0, np.nan)
+    valid = np.isfinite(x)
+    return _rolling_quantile_trigger_numba(x, valid, n, window, q)
 
 
 def precompute_global_payloads(
@@ -533,6 +565,63 @@ def precompute_global_payloads(
 
     return payloads_by_window
 
+def compute_regime_score(c: np.ndarray, ma200: np.ndarray, vol_rank: np.ndarray) -> np.ndarray:
+    """Score de 0 (bear) a 1 (bull) para cada barra.
+    Combina: tendência longa (close>MA200), tendência média (MA50),
+    slope da MA200, e volatilidade baixa."""
+    n = len(c)
+    regime = np.full(n, 0.5, dtype=np.float64)
+
+    # Tendência longa: close > MA200
+    trend_long = np.where(np.isfinite(ma200) & (c > ma200), 0.30, 0.0)
+
+    # Tendência média: close > MA50 (rolling)
+    ma50 = rolling_mean_np(c, 50, 10)
+    trend_med = np.where(np.isfinite(ma50) & (c > ma50), 0.20, 0.0)
+
+    # Slope da MA200 (positiva = uptrend)
+    ma200_shift = np.roll(ma200, 20)
+    ma200_shift[:20] = np.nan
+    ma200_slope = np.where(
+        np.isfinite(ma200) & np.isfinite(ma200_shift) & (ma200 > 1e-6),
+        (ma200 - ma200_shift) / np.maximum(ma200, 1e-6),
+        0.0
+    )
+    slope_score = np.clip((ma200_slope + 0.05) * 5.0, 0.0, 0.25)
+
+    # Volatilidade baixa = favorável
+    vol_score = np.where(np.isfinite(vol_rank), np.clip((1.0 - vol_rank) * 0.15, 0.0, 0.15), 0.075)
+
+    # RSI zone (não oversold nem overbought) — approximate via price momentum
+    # Use 14-day ROC as RSI proxy to avoid recomputing
+    roc14 = np.empty(n, dtype=np.float64)
+    roc14[:14] = 0.0
+    roc14[14:] = (c[14:] / np.maximum(c[:-14], 1e-8)) - 1.0
+    # Map: moderate momentum [−5%, +10%] → bonus, extremes → 0
+    rsi_proxy = np.where((roc14 > -0.05) & (roc14 < 0.10), 0.10, 0.0)
+
+    regime = np.clip(trend_long + trend_med + slope_score + vol_score + rsi_proxy, 0.0, 1.0)
+    return regime
+
+
+def compute_weighted_votes(x: np.ndarray, z_threshold: float, feat_n: int):
+    """Votação ponderada por magnitude: combina contagem binária com peso contínuo."""
+    binary_long = (x > z_threshold).sum(axis=1) / feat_n
+    binary_short = (x < -z_threshold).sum(axis=1) / feat_n
+
+    # Peso contínuo: magnitude do excesso sobre threshold
+    z_excess_long = np.maximum(x - z_threshold, 0.0)
+    z_excess_short = np.maximum(-x - z_threshold, 0.0)
+    weighted_long = np.nanmean(z_excess_long, axis=1)
+    weighted_short = np.nanmean(z_excess_short, axis=1)
+
+    # Mix 50% binário + 50% ponderado (normalizado)
+    votes_long = 0.5 * binary_long + 0.5 * np.clip(weighted_long / 1.5, 0.0, 1.0)
+    votes_short = 0.5 * binary_short + 0.5 * np.clip(weighted_short / 1.5, 0.0, 1.0)
+
+    return votes_long, votes_short
+
+
 def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalParams, precomputed: Optional[Dict[str, np.ndarray]] = None) -> Dict[str, float]:
     o = np.asarray(o, dtype=np.float64)
     h = np.asarray(h, dtype=np.float64)
@@ -551,8 +640,8 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
     else:
         vol_rank = rolling_percentile_rank(atr / np.maximum(c, ATR_EPS), 252)
 
-    votes_long = (x > gp.z_threshold).sum(axis=1) / feat_n
-    votes_short = (x < -gp.z_threshold).sum(axis=1) / feat_n
+    # Weighted voting (magnitude-aware)
+    votes_long, votes_short = compute_weighted_votes(x, gp.z_threshold, feat_n)
     score_raw = votes_long - votes_short
     score_ev = ewm_mean_np(score_raw, int(gp.signal_ema_span))
     score_pctl = rolling_quantile_trigger(score_ev, float(gp.score_percentile_trigger), max(63, SCORE_LOOKBACK))
@@ -560,6 +649,25 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
     score95 = np.nanpercentile(np.abs(score_ev), 95) if np.isfinite(np.nanmax(np.abs(score_ev))) else 1.0
     score95 = max(score95, ATR_EPS)
 
+    # Regime score (multi-factor bull/bear detection)
+    ma200 = rolling_mean_np(c, 200, 50)
+    regime_score = compute_regime_score(c, ma200, vol_rank)
+
+    # Volume confirmation: precompute volume moving averages
+    vol_data = precomputed.get("volume", None) if precomputed is not None else None
+    vol_ma20 = None
+    vol_ma50 = None
+    if vol_data is not None and gp.volume_confirm_mode > 0:
+        vol_arr = np.asarray(vol_data, dtype=np.float64)
+        vol_ma20 = rolling_mean_np(vol_arr, 20, 5)
+        if gp.volume_confirm_mode == 2:
+            vol_ma50 = rolling_mean_np(vol_arr, 50, 10)
+
+    # Momentum confirmation: precompute N-day returns
+    mom_days = int(gp.momentum_confirm_days)
+    mom_ret = np.full(n, np.nan, dtype=np.float64)
+    if mom_days > 0:
+        mom_ret[mom_days:] = (c[mom_days:] / np.maximum(c[:-mom_days], 1e-8)) - 1.0
 
     equity = 1.0
     peak = 1.0
@@ -699,6 +807,24 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
             if gp.min_signal_strength > 0:
                 if abs(score_ev[i - 1]) / score95 < gp.min_signal_strength:
                     continue
+            # Entry score threshold filter (v4)
+            if gp.entry_score_threshold > 0:
+                if abs(score_ev[i - 1]) / score95 < gp.entry_score_threshold:
+                    continue
+            # Volume confirmation filter (v4)
+            if gp.volume_confirm_mode == 1 and vol_ma20 is not None and i - 1 < len(vol_ma20):
+                if np.isfinite(vol_ma20[i - 1]) and vol_data[i - 1] < vol_ma20[i - 1]:
+                    continue
+            elif gp.volume_confirm_mode == 2 and vol_ma50 is not None and i - 1 < len(vol_ma50):
+                if np.isfinite(vol_ma50[i - 1]) and vol_data[i - 1] < vol_ma50[i - 1]:
+                    continue
+            # Momentum confirmation filter (v4)
+            if mom_days > 0 and np.isfinite(mom_ret[i - 1]) and mom_ret[i - 1] < 0:
+                continue
+            # Regime filter (v4): continuous regime score replaces binary MA filter
+            if gp.regime_threshold > 0 and np.isfinite(regime_score[i - 1]):
+                if regime_score[i - 1] < gp.regime_threshold:
+                    continue  # market regime unfavorable for longs
 
             vl = votes_long[i - 1]
             vs = votes_short[i - 1]
@@ -731,7 +857,12 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
             side = 1 if long_ok else (-1 if (short_ok and not LONG_ONLY) else 0)
             if side != 0 and np.isfinite(o[i]) and np.isfinite(atr[i]):
                 strength = float(np.clip(abs(score_ev[i - 1]) / score95, 0.0, 1.0))
-                discount = gp.entry_discount_atr_frac * (1.0 - gp.score_strength_scaling * strength)
+                # Support-adaptive discount: scale by distance to recent support
+                base_discount = gp.entry_discount_atr_frac * (1.0 - gp.score_strength_scaling * strength)
+                recent_low = np.nanmin(l[max(0, i - 10):i]) if i > 0 else l[i]
+                support_dist = (o[i] - recent_low) / max(atr[i], ATR_EPS) if np.isfinite(recent_low) else 1.0
+                support_factor = float(np.clip(support_dist / 3.0, 0.3, 1.5))
+                discount = base_discount * support_factor
                 limit_px = o[i] - side * discount * atr[i]
                 fill = (l[i] <= limit_px <= h[i])
                 if fill and limit_px > 0:
@@ -764,6 +895,22 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
     trades_per_year = len(tr) / n_years
     ann_factor = np.sqrt(min(trades_per_year, 252))
     ann_sharpe = float(np.mean(tr) / (np.std(tr) + 1e-12) * ann_factor)
+    # -- Trade return distribution buckets (v5) --
+    # Faixas: >15%, 10-15%, 5-10%, 2-5%, 0-2%, -2-0%, -5 to -2%, -10 to -5%, <-10%
+    pct_gt15  = float((tr > 0.15).mean())
+    pct_10_15 = float(((tr > 0.10) & (tr <= 0.15)).mean())
+    pct_5_10  = float(((tr > 0.05) & (tr <= 0.10)).mean())
+    pct_2_5   = float(((tr > 0.02) & (tr <= 0.05)).mean())
+    pct_0_2   = float(((tr > 0.00) & (tr <= 0.02)).mean())
+    pct_n2_0  = float(((tr > -0.02) & (tr <= 0.00)).mean())
+    pct_n5_n2 = float(((tr > -0.05) & (tr <= -0.02)).mean())
+    pct_n10_n5= float(((tr > -0.10) & (tr <= -0.05)).mean())
+    pct_lt_n10= float((tr <= -0.10).mean())
+    # Quality score from distribution: big wins vs big losses ratio
+    big_wins = pct_gt15 + pct_10_15 + pct_5_10  # trades > +5%
+    big_losses = pct_lt_n10 + pct_n10_n5 + pct_n5_n2  # trades < -2%
+    dist_quality = float(np.clip((big_wins - big_losses + 0.5), 0.0, 1.0))  # 0.5 = neutral
+
     return {
         "total_return": float(equity - 1.0),
         "mdd": float(mdd),
@@ -773,6 +920,12 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
         "avg_trade": float(np.mean(tr)),
         "trade_std": float(np.std(tr)),
         "exposure": exposure,
+        # Distribution buckets
+        "pct_gt15": pct_gt15, "pct_10_15": pct_10_15, "pct_5_10": pct_5_10,
+        "pct_2_5": pct_2_5, "pct_0_2": pct_0_2, "pct_n2_0": pct_n2_0,
+        "pct_n5_n2": pct_n5_n2, "pct_n10_n5": pct_n10_n5, "pct_lt_n10": pct_lt_n10,
+        "dist_quality": dist_quality,
+        "big_wins_pct": big_wins, "big_losses_pct": big_losses,
     }
 
 
@@ -795,6 +948,9 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
     ntr       = np.array([s.get("n_trades", 0.0)      for s in per_ticker_stats], dtype=np.float64)
     exposure  = np.array([s.get("exposure", 0.0)      for s in per_ticker_stats], dtype=np.float64)
     win_rates = np.array([s.get("win_rate", 0.0)      for s in per_ticker_stats], dtype=np.float64)
+    dist_qual  = np.array([s.get("dist_quality", 0.5)  for s in per_ticker_stats], dtype=np.float64)
+    big_wins   = np.array([s.get("big_wins_pct", 0.0)  for s in per_ticker_stats], dtype=np.float64)
+    big_losses = np.array([s.get("big_losses_pct", 0.0) for s in per_ticker_stats], dtype=np.float64)
 
     med_sharpe        = float(np.median(sharpe))
     mean_sharpe       = float(np.mean(sharpe))
@@ -871,27 +1027,28 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
     if mean_ret < 0.0:
         underperf_penalty += abs(mean_ret) * 30.0
 
-    # -- Win-rate bonus (v3: more aggressive tiers) ------------------------
+    # -- Win-rate bonus (v5: single mechanism, no double-counting) ----------
+    # Removed direct 1.5*mean + 1.1*median from fitness formula.
+    # All win rate influence flows through this tiered bonus only.
     win_rate_bonus = 0.0
     # Sub-50% hard penalty
     if mean_win_rate < 0.50:
-        win_rate_bonus -= (0.50 - mean_win_rate) * 10.0  # was 8.0
-    # Tiered bonuses starting at 52%
-    if mean_win_rate > 0.52:
-        win_rate_bonus += (mean_win_rate - 0.52) * 6.0   # was 5.0
-    if mean_win_rate > 0.56:
-        win_rate_bonus += (mean_win_rate - 0.56) * 5.0   # new tier
+        win_rate_bonus -= (0.50 - mean_win_rate) * 12.0
+    # Base: linear from 50% upward
+    if mean_win_rate > 0.50:
+        win_rate_bonus += (mean_win_rate - 0.50) * 5.0
+    # Tiered bonuses (cumulative)
+    if mean_win_rate > 0.55:
+        win_rate_bonus += (mean_win_rate - 0.55) * 4.0
     if mean_win_rate > 0.60:
-        win_rate_bonus += (mean_win_rate - 0.60) * 8.0   # big bonus above 60% (was 6.0)
+        win_rate_bonus += (mean_win_rate - 0.60) * 6.0
     if mean_win_rate > 0.65:
-        win_rate_bonus += (mean_win_rate - 0.65) * 10.0  # premium tier for 65%+
-    # Median win rate
+        win_rate_bonus += (mean_win_rate - 0.65) * 8.0
+    # Median win rate (consistency across tickers)
     if med_win_rate > 0.55:
-        win_rate_bonus += (med_win_rate - 0.55) * 5.0    # was 4.0
+        win_rate_bonus += (med_win_rate - 0.55) * 3.0
     if med_win_rate > 0.62:
-        win_rate_bonus += (med_win_rate - 0.62) * 7.0    # was 5.0
-    if med_win_rate > 0.68:
-        win_rate_bonus += (med_win_rate - 0.68) * 8.0    # premium tier (was 6.0)
+        win_rate_bonus += (med_win_rate - 0.62) * 5.0
 
     # -- Consistency bonus: reward stable per-ticker performance -----------
     consistency_bonus = 0.0
@@ -911,7 +1068,20 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
         calmar = mean_ret / abs(median_mdd)
         calmar_bonus = 0.8 * float(np.clip(calmar, 0.0, 5.0))
 
-    # -- Main fitness (v4) -------------------------------------------------
+    # -- Distribution quality bonus (v5) ------------------------------------
+    # Reward strategies where big wins >> big losses across tickers
+    mean_dist_qual = float(np.mean(dist_qual))
+    mean_big_wins = float(np.mean(big_wins))
+    mean_big_losses = float(np.mean(big_losses))
+    dist_bonus = 0.0
+    if mean_dist_qual > 0.55:
+        dist_bonus += (mean_dist_qual - 0.55) * 4.0   # reward good distribution
+    if mean_dist_qual > 0.70:
+        dist_bonus += (mean_dist_qual - 0.70) * 6.0   # extra reward
+    if mean_big_losses > 0.15:
+        dist_bonus -= (mean_big_losses - 0.15) * 5.0  # penalize many big losses
+
+    # -- Main fitness (v5) -------------------------------------------------
     fitness = (
         1.8 * np.clip(mean_excess, -1.0, 5.0) +   # beat B&H: highest weight
         1.3 * np.clip(med_excess,  -1.0, 5.0) +
@@ -921,11 +1091,11 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
         0.5 * np.clip(mean_sharpe, -2.0, 3.0) +
         0.4 * np.clip(med_sharpe,  -2.0, 3.0) +
         0.3 * pct_positive +
-        1.5 * mean_win_rate +                       # win rate main weight (was 1.1)
-        1.1 * med_win_rate +                        # median win rate (was 0.8)
+        # Win rate: use ONLY tiered bonus (no double-counting with direct weight)
         win_rate_bonus +
         consistency_bonus +
-        calmar_bonus +                               # NEW: Calmar ratio (return/MDD trade-off)
+        calmar_bonus +
+        dist_bonus +                                   # v5: distribution quality (big wins vs big losses)
         trade_bonus -
         mdd_penalty -
         underperf_penalty
@@ -1662,11 +1832,87 @@ def build_direct_feature_signal(frame: pd.DataFrame, feat_cols: List[str]) -> Tu
     short_votes = np.where(valid_counts > 0, short_votes, np.nan)
     return directed.astype(np.float64), long_votes.astype(np.float64), short_votes.astype(np.float64)
 
-def load_full_history_all_cols(path: str) -> pd.DataFrame:
-    if path.endswith('.parquet'):
-        df = pd.read_parquet(path)
+
+def _build_history_from_etl(etl_path: str) -> pd.DataFrame:
+    """Build minimal history DataFrame from ETL parquet (OHLC data).
+    This allows GA to run independently without steps 2-3-4."""
+    if not os.path.exists(etl_path):
+        print(f"[ETL fallback] ETL parquet not found: {etl_path}")
+        return None
+    try:
+        etl_raw = pd.read_parquet(etl_path)
+    except Exception as e:
+        print(f"[ETL fallback] Failed to read ETL: {e}")
+        return None
+
+    if isinstance(etl_raw.columns[0], tuple):
+        # MultiIndex columns: (metric, ticker)
+        tickers = sorted(set(c[1] for c in etl_raw.columns if len(c) > 1 and c[1]))
+        metrics = sorted(set(c[0] for c in etl_raw.columns if len(c) > 1))
+        # Reshape wide → long
+        rows = []
+        for tkr in tickers:
+            cols_tkr = {m: (m, tkr) for m in metrics if (m, tkr) in etl_raw.columns}
+            if not cols_tkr:
+                continue
+            df_tkr = etl_raw[[cols_tkr[m] for m in cols_tkr]].copy()
+            df_tkr.columns = [m for m in cols_tkr]
+            df_tkr[TICKER_COL] = tkr
+            # Use index as date column, converting to datetime if needed
+            idx = etl_raw.index
+            if hasattr(idx, 'to_pydatetime') or hasattr(idx, 'date'):
+                df_tkr[DATE_COL] = idx.values
+            else:
+                df_tkr[DATE_COL] = pd.to_datetime(idx, errors='coerce')
+            rows.append(df_tkr)
+        if not rows:
+            return None
+        df = pd.concat(rows, ignore_index=True)
+        # Normalize column names
+        col_map = {}
+        for c in df.columns:
+            cl = str(c).lower().strip()
+            if cl in ('close', 'open', 'high', 'low', 'volume'):
+                col_map[c] = cl
+        df = df.rename(columns=col_map)
     else:
-        df = pd.read_csv(path, dtype={TICKER_COL:"string"}, low_memory=False)
+        df = etl_raw.copy()
+
+    # Ensure required columns exist
+    for col in [OPEN_COL, HIGH_COL, LOW_COL, CLOSE_COL]:
+        if col not in df.columns:
+            print(f"[ETL fallback] Missing column: {col}")
+            return None
+
+    print(f"[ETL fallback] Loaded {len(df)} rows, {df[TICKER_COL].nunique()} tickers from ETL")
+    return df
+
+
+def load_full_history_all_cols(path: str) -> pd.DataFrame:
+    """Load history data. Falls back to ETL parquet if main history is unavailable."""
+    df = None
+
+    # Try primary source (history_consolidated.parquet)
+    if os.path.exists(path):
+        try:
+            if path.endswith('.parquet'):
+                df = pd.read_parquet(path)
+            else:
+                df = pd.read_csv(path, dtype={TICKER_COL:"string"}, low_memory=False)
+            if len(df) < 100:
+                print(f"[WARN] Primary history has only {len(df)} rows, trying ETL fallback...")
+                df = None
+        except Exception as e:
+            print(f"[WARN] Failed to load {path}: {e}")
+            df = None
+
+    # Fallback: build history from ETL parquet (OHLC only, no ML features)
+    if df is None:
+        print(f"[GA] Primary history unavailable. Building from ETL data...")
+        df = _build_history_from_etl(ETL_PARQUET_PATH)
+        if df is None or len(df) == 0:
+            raise FileNotFoundError(f"No data available: {path} and ETL fallback both failed")
+
     df[TICKER_COL] = df[TICKER_COL].astype("string").str.strip()
     df[DATE_COL] = _parse_dates_smart(df[DATE_COL])
 
@@ -1871,37 +2117,68 @@ def build_temporal_windows(min_date: pd.Timestamp, max_date: pd.Timestamp, train
     return windows
 
 
-def generate_signal_global(payload: Dict[str, Any], gp: GlobalParams, day_index: int) -> str:
+def vectorized_signals(payload: Dict[str, Any], gp: GlobalParams, apply_mode: bool = False) -> np.ndarray:
+    """Pre-compute signals for ALL days using backtest-consistent logic.
+    Returns array of strings: "buy", "sell", or "hold" for each day.
+    Uses same rolling_quantile_trigger as backtest (not np.nanpercentile).
+
+    apply_mode: if True, skip transient filters (momentum, volume, score strength)
+                that can temporarily block ALL signals. Keeps structural filters
+                (MA trend, regime, volatility regime).
+    """
     x = np.asarray(payload["score_matrix"], dtype=np.float64)
     c = np.asarray(payload["close"], dtype=np.float64)
     atr = np.asarray(payload["atr"], dtype=np.float64)
-    if day_index <= 0 or day_index >= len(c) or x.ndim != 2:
-        return "hold"
+    n = len(c)
+    signals = np.array(["hold"] * n, dtype=object)
+    if n < 2 or x.ndim != 2:
+        return signals
 
     feat_n = max(1, x.shape[1])
-    votes_long = (x > gp.z_threshold).sum(axis=1) / feat_n
-    votes_short = (x < -gp.z_threshold).sum(axis=1) / feat_n
+    votes_long, votes_short = compute_weighted_votes(x, gp.z_threshold, feat_n)
     score_raw = votes_long - votes_short
-    score_ev = pd.Series(score_raw).ewm(span=int(gp.signal_ema_span), adjust=False).mean().to_numpy()
+    score_ev = ewm_mean_np(score_raw, int(gp.signal_ema_span))
+    # Use SAME rolling_quantile_trigger as backtest (not np.nanpercentile)
+    score_pctl = rolling_quantile_trigger(score_ev, float(gp.score_percentile_trigger), max(63, SCORE_LOOKBACK))
 
-    ma = pd.Series(c).rolling(int(gp.ma_filter_period), min_periods=max(20, int(gp.ma_filter_period // 2))).mean().to_numpy()
+    ma = rolling_mean_np(c, int(gp.ma_filter_period), max(20, int(gp.ma_filter_period // 2)))
     vol_rel = atr / np.maximum(c, ATR_EPS)
     vol_rank = rolling_percentile_rank(vol_rel, 252)
+    ma200 = rolling_mean_np(c, 200, 50)
+    regime = compute_regime_score(c, ma200, vol_rank)
 
+    # Momentum
+    mom_days = int(gp.momentum_confirm_days)
+    mom_ret = np.full(n, np.nan)
+    if mom_days > 0:
+        mom_ret[mom_days:] = (c[mom_days:] / np.maximum(c[:-mom_days], 1e-8)) - 1.0
+
+    # Volume confirmation
+    vol_data = payload.get("volume", None)
+    vol_ma20 = vol_ma50 = None
+    if vol_data is not None and gp.volume_confirm_mode > 0:
+        vol_arr = np.asarray(vol_data, dtype=np.float64)
+        vol_ma20 = rolling_mean_np(vol_arr, 20, 5)
+        if gp.volume_confirm_mode == 2:
+            vol_ma50 = rolling_mean_np(vol_arr, 50, 10)
+
+    score95 = np.nanpercentile(np.abs(score_ev), 95) if np.isfinite(np.nanmax(np.abs(score_ev))) else 1.0
+    score95 = max(score95, ATR_EPS)
+
+    # Vectorized consecutive signal tracking
     consec_long = 0
     consec_short = 0
-    for i in range(1, day_index + 1):
-        lookback = max(63, SCORE_LOOKBACK)
-        w = score_ev[max(0, i - lookback + 1):i + 1]
-        if len(w) < 20:
-            pctl = 0.0
-        else:
-            pctl = float(np.nanpercentile(w, gp.score_percentile_trigger * 100))
+    for i in range(1, n):
+        if not (np.isfinite(score_ev[i - 1]) and np.isfinite(score_pctl[i - 1])):
+            consec_long = 0
+            consec_short = 0
+            continue
 
+        # Raw signal condition (same as backtest lines 810-813)
         vl = votes_long[i - 1]
         vs = votes_short[i - 1]
-        long_raw = (vl >= gp.vote_threshold_long) and (score_ev[i - 1] >= pctl)
-        short_raw = (vs >= gp.vote_threshold_short) and (-score_ev[i - 1] >= pctl)
+        long_raw = (vl >= gp.vote_threshold_long) and (score_ev[i - 1] >= score_pctl[i - 1])
+        short_raw = (vs >= gp.vote_threshold_short) and (-score_ev[i - 1] >= score_pctl[i - 1])
 
         if long_raw:
             consec_long += 1
@@ -1912,28 +2189,57 @@ def generate_signal_global(payload: Dict[str, Any], gp: GlobalParams, day_index:
         else:
             consec_short = 0
 
-    long_ok = consec_long >= gp.entry_confirmation_days
-    short_ok = consec_short >= gp.entry_confirmation_days
+        long_ok = consec_long >= gp.entry_confirmation_days
+        short_ok = consec_short >= gp.entry_confirmation_days
 
-    if gp.volatility_filter_percentile > 0 and np.isfinite(vol_rank[day_index - 1]) and vol_rank[day_index - 1] < gp.volatility_filter_percentile:
-        long_ok = False
-        short_ok = False
-
-    if gp.ma_filter_mode == 1 and np.isfinite(ma[day_index - 1]):
-        if c[day_index - 1] < ma[day_index - 1]:
+        # Structural filters (always applied)
+        if gp.volatility_filter_percentile > 0 and np.isfinite(vol_rank[i - 1]) and vol_rank[i - 1] < gp.volatility_filter_percentile:
+            continue
+        if gp.vol_regime_mode == 2 and np.isfinite(vol_rank[i - 1]) and vol_rank[i - 1] > 0.85:
+            continue
+        if atr[i - 1] < 0.01:
+            continue
+        # Transient filters (skipped in apply_mode to avoid blocking all signals)
+        if not apply_mode:
+            if gp.min_signal_strength > 0 and abs(score_ev[i - 1]) / score95 < gp.min_signal_strength:
+                continue
+            if gp.entry_score_threshold > 0 and abs(score_ev[i - 1]) / score95 < gp.entry_score_threshold:
+                continue
+            if gp.volume_confirm_mode == 1 and vol_ma20 is not None and i - 1 < len(vol_ma20):
+                if np.isfinite(vol_ma20[i - 1]) and vol_data[i - 1] < vol_ma20[i - 1]:
+                    continue
+            elif gp.volume_confirm_mode == 2 and vol_ma50 is not None and i - 1 < len(vol_ma50):
+                if np.isfinite(vol_ma50[i - 1]) and vol_data[i - 1] < vol_ma50[i - 1]:
+                    continue
+            if mom_days > 0 and np.isfinite(mom_ret[i - 1]) and mom_ret[i - 1] < 0:
+                continue
+        if gp.regime_threshold > 0 and np.isfinite(regime[i - 1]) and regime[i - 1] < gp.regime_threshold:
             long_ok = False
-        if c[day_index - 1] > ma[day_index - 1]:
-            short_ok = False
-    elif gp.ma_filter_mode == 2 and np.isfinite(ma[day_index - 1]):
-        if c[day_index - 1] < ma[day_index - 1]:
-            long_ok = False
-        if c[day_index - 1] > ma[day_index - 1]:
-            short_ok = False
+        if gp.ma_filter_mode == 1 and np.isfinite(ma[i - 1]):
+            if c[i - 1] < ma[i - 1]:
+                long_ok = long_ok and (score_ev[i - 1] * 0.5 >= score_pctl[i - 1])
+            if c[i - 1] > ma[i - 1]:
+                short_ok = short_ok and (-score_ev[i - 1] * 0.5 >= score_pctl[i - 1])
+        elif gp.ma_filter_mode == 2 and np.isfinite(ma[i - 1]):
+            if c[i - 1] < ma[i - 1]:
+                long_ok = False
+            if c[i - 1] > ma[i - 1]:
+                short_ok = False
 
-    if long_ok:
-        return "buy"
-    if (not LONG_ONLY) and short_ok:
-        return "sell"
+        if long_ok:
+            signals[i] = "buy"
+        elif short_ok and not LONG_ONLY:
+            signals[i] = "sell"
+
+    return signals
+
+
+def generate_signal_global(payload: Dict[str, Any], gp: GlobalParams, day_index: int) -> str:
+    """DEPRECATED: Use vectorized_signals() instead. Kept for backward compatibility."""
+    sigs = vectorized_signals(payload, gp)
+    if day_index < 0 or day_index >= len(sigs):
+        return "hold"
+    return str(sigs[day_index])
     return "hold"
 
 # -- Telegram notification -------------------------------------------------
@@ -2181,8 +2487,12 @@ def run():
             reasons["few_valid"] = reasons.get("few_valid", 0) + 1
             continue
 
+        # Extract volume data if available
+        vol = g["volume"].to_numpy(np.float64) if "volume" in g.columns else np.full(len(c), np.nan)
+
         ticker_payloads[str(tkr)] = {
             "open": o, "high": h, "low": l, "close": c, "atr": atr,
+            "volume": vol, "ret_fwd": ret_fwd_temp,
             "score_matrix": directed_cols, "dates": dates, "ma": ma,
             "feat_cols": feat_cols, "valid_mask": valid_mask,
             "long_votes": long_votes, "short_votes": short_votes,
@@ -2194,6 +2504,8 @@ def run():
 
     prep_dt = time.perf_counter() - prep_t0
     print(f"[PHASE1] done payloads={len(ticker_payloads)} in {prep_dt:.1f}s")
+    if reasons:
+        print(f"[PHASE1] filtered: {reasons}")
 
     if not ticker_payloads:
         print("Nenhum ticker preparado.")
@@ -2241,6 +2553,11 @@ def run():
         except Exception as e:
             print(f"[WARN] global checkpoint load failed: {e}")
 
+    if global_params is None and run_mode == "load":
+        print("[FATAL] load mode but no valid checkpoint found! Cannot generate signals.")
+        print(f"  Checkpoint path: {out_global_ckpt} (exists={os.path.exists(out_global_ckpt)})")
+        raise SystemExit(1)
+
     if global_params is None:
         dmin = pd.to_datetime(df[DATE_COL].min())
         dmax = pd.to_datetime(df[DATE_COL].max())
@@ -2285,8 +2602,8 @@ def run():
         # Generate apply signals (vectorized pre-compute, loop only for signals)
         x = np.asarray(payload["score_matrix"], dtype=np.float64)
         feat_n = max(1, x.shape[1])
-        votes_long = (x > global_params.z_threshold).sum(axis=1) / feat_n
-        votes_short = (x < -global_params.z_threshold).sum(axis=1) / feat_n
+        # Weighted voting (magnitude-aware, consistent with backtest)
+        votes_long, votes_short = compute_weighted_votes(x, global_params.z_threshold, feat_n)
         score_raw = votes_long - votes_short
         score_ev = ewm_mean_np(score_raw, int(global_params.signal_ema_span))
         
@@ -2301,131 +2618,324 @@ def run():
         bt_n_trades = st.get("n_trades", 0.0)
         n_years = max(n / 252.0, 0.1)
         trades_per_year = bt_n_trades / n_years
-        
+
+        # -- Win rate tier (v5): per-ticker quality classification --
+        # Tiers based on win rate + minimum trades for statistical significance
+        min_trades_for_tier = 20  # need at least 20 trades for reliable win rate
+        if bt_n_trades < min_trades_for_tier:
+            wr_tier = "insuficiente"  # not enough data
+            wr_tier_num = 0
+        elif bt_win_rate >= 0.70:
+            wr_tier = "excelente"
+            wr_tier_num = 4
+        elif bt_win_rate >= 0.60:
+            wr_tier = "bom"
+            wr_tier_num = 3
+        elif bt_win_rate >= 0.52:
+            wr_tier = "aceitavel"
+            wr_tier_num = 2
+        elif bt_win_rate >= 0.45:
+            wr_tier = "fraco"
+            wr_tier_num = 1
+        else:
+            wr_tier = "ruim"
+            wr_tier_num = 0
+
+        # -- Distribution metrics (v5) --
+        bt_dist_quality = st.get("dist_quality", 0.5)
+        bt_big_wins = st.get("big_wins_pct", 0.0)
+        bt_big_losses = st.get("big_losses_pct", 0.0)
+        bt_pct_gt15 = st.get("pct_gt15", 0.0)
+        bt_pct_10_15 = st.get("pct_10_15", 0.0)
+        bt_pct_5_10 = st.get("pct_5_10", 0.0)
+        bt_pct_2_5 = st.get("pct_2_5", 0.0)
+        bt_pct_0_2 = st.get("pct_0_2", 0.0)
+        bt_pct_n2_0 = st.get("pct_n2_0", 0.0)
+        bt_pct_n5_n2 = st.get("pct_n5_n2", 0.0)
+        bt_pct_n10_n5 = st.get("pct_n10_n5", 0.0)
+        bt_pct_lt_n10 = st.get("pct_lt_n10", 0.0)
+
         ma_arr = payload.get("ma", np.full(n, np.nan))
 
+        # Regime score for apply output (v4)
+        ma200_apply = rolling_mean_np(c, 200, 50)
+        vol_rank_apply = rolling_percentile_rank(payload["atr"] / np.maximum(c, ATR_EPS), 252)
+        regime_arr = compute_regime_score(c, ma200_apply, vol_rank_apply)
+        # MA50 for regime display
+        ma50_apply = rolling_mean_np(c, 50, 10)
+
+        # -- Pre-compute potential (upside) per day using vectorized forward returns --
+        _potential_cache: Dict[int, float] = {}
+        for fwd_h in [5, 10, 21]:
+            # Vectorized forward return for this horizon
+            if n > fwd_h:
+                fwd_ret_h = np.empty(n, dtype=np.float64)
+                fwd_ret_h[:-fwd_h] = (c[fwd_h:] / np.maximum(c[:-fwd_h], ATR_EPS)) - 1.0
+                fwd_ret_h[-fwd_h:] = np.nan
+                # Rolling stats over last 252 days of positive forward returns
+                for i_pot in range(max(0, n - APPLY_DAYS), n):
+                    window = fwd_ret_h[max(0, i_pot - 252):i_pot]
+                    pos = window[np.isfinite(window) & (window > 0)]
+                    if len(pos) >= 10:
+                        pot = 0.6 * float(np.median(pos)) + 0.4 * float(np.percentile(pos, 75))
+                        if i_pot not in _potential_cache or pot > _potential_cache[i_pot]:
+                            _potential_cache[i_pot] = pot
+
+        # Pre-compute ALL signals once (vectorized, backtest-consistent)
+        signals_arr = vectorized_signals(payload, global_params)
+
+        # For apply period: also compute relaxed signals (skip momentum/volume/score filters)
+        # This avoids the problem where temporary filters block ALL signals in the apply window
+        signals_relaxed = vectorized_signals(payload, global_params, apply_mode=True)
+
         for i in range(max(0, n - APPLY_DAYS), n):
-            sig = generate_signal_global(payload, global_params, i)
+            sig = str(signals_arr[i])
+            # If strict signal is hold but relaxed signal is buy, use buy
+            # (the strict filters are for backtest accuracy, but in apply we want actionable signals)
+            if sig == "hold" and str(signals_relaxed[i]) == "buy":
+                sig = "buy"
 
             recent_scores = score_ev[max(0, i - lookback + 1):i + 1]
             score_100 = score_0_100_from_ev(score_ev[i], recent_scores, quality)
 
             atr_val = max(payload["atr"][i], ATR_EPS)
             close_val = c[i]
-            
+
             strength = float(np.clip(abs(score_ev[i]) / score95, 0.0, 1.0))
             discount = global_params.entry_discount_atr_frac * (1.0 - global_params.score_strength_scaling * strength)
+
+            # ── ENTRADA: preco com desconto ATR + suporte recente ──
+            atr_discount = discount * atr_val
+            # Suporte: minima dos ultimos 5 dias como piso
+            recent_lows = payload["low"][max(0, i-4):i+1]
+            _finite_lows = recent_lows[np.isfinite(recent_lows)]
+            recent_low = float(np.min(_finite_lows)) if len(_finite_lows) > 0 else close_val
+            # Entrada = max(close - desconto ATR, suporte recente)
+            # Nao comprar abaixo do suporte (limita desconto excessivo)
+            best_buy = round(max(close_val - atr_discount, recent_low * 0.995), 4)
+            # Stop/alvo SEMPRE calculados a partir da entrada (best_buy)
+            # entry_ref = best_buy para todos os sinais (consistencia)
+            entry_ref = best_buy
+
+            # ── STOP: ATR-based com minimo % ──
+            stop_atr_val = global_params.stop_atr_mult * atr_val
+            stop_pct_from_atr = stop_atr_val / max(entry_ref, ATR_EPS)
+            # Usar o MAIOR entre ATR-stop e minimo %
+            effective_stop_pct = max(stop_pct_from_atr, MIN_STOP_PCT)
+            stop_risk = entry_ref * effective_stop_pct
+            stop_loss = round(entry_ref - stop_risk, 4)
+
+            # ── ALVO: potencial estatistico + ATR floor ──
+            potential = _potential_cache.get(i)
+            # ATR-based floor: alvo minimo = R:R * stop
+            min_target_pct = effective_stop_pct * MIN_RR_RATIO
+            if potential is None or potential < min_target_pct:
+                potential = min_target_pct
+            # Cap target: max 25% (evita alvos irrealistas como CRO-USD 35%)
+            MAX_TARGET_PCT = 0.25
+            potential = min(potential, MAX_TARGET_PCT)
+
+            take_profit = round(entry_ref * (1.0 + potential), 4)
+            take_reward = take_profit - entry_ref
+
+            # ── R:R calculation ──
+            rr_ratio = take_reward / max(stop_risk, ATR_EPS)
+            if rr_ratio < MIN_RR_RATIO:
+                take_reward = stop_risk * MIN_RR_RATIO
+                take_profit = round(entry_ref + take_reward, 4)
+                rr_ratio = MIN_RR_RATIO
+
+            # -- Previsao de queda maxima (drawdown esperado) --
+            # Usa MDD historico do ticker + volatilidade atual
+            hist_mdd = abs(st.get("mdd", 0.0))  # MDD do backtest inteiro
+            vol_atual = atr_val / max(close_val, ATR_EPS)
+            # Ajuste pela volatilidade atual vs media
+            vol_med = float(np.nanmedian(payload["atr"] / np.maximum(c, ATR_EPS)))
+            vol_factor = vol_atual / max(vol_med, ATR_EPS)
+            queda_max_esperada = min(hist_mdd * float(np.clip(vol_factor, 0.5, 2.0)), 0.50)
+            queda_max_preco = round(close_val * (1.0 - queda_max_esperada), 4)
             
-            # Sempre calcular best_buy e best_sell como referencia
-            best_buy = round(close_val - discount * atr_val, 4)
-            best_sell = round(close_val + discount * atr_val, 4)
-            
-            # Entry ref: usar best_buy se sinal compra, best_sell se venda, close se hold
-            if sig == "buy":
-                entry_ref = best_buy
-            elif sig == "sell":
-                entry_ref = best_sell
-            else:
-                entry_ref = close_val
-            
-            # Stop loss e take profit baseados no ATR e params do GA
-            stop_atr = global_params.stop_atr_mult * atr_val
-            take_atr = global_params.reward_risk_ratio * stop_atr
-            
-            if sig == "buy":
-                stop_loss = round(entry_ref - stop_atr, 4)
-                take_profit = round(entry_ref + take_atr, 4)
-            elif sig == "sell":
-                stop_loss = round(entry_ref + stop_atr, 4)
-                take_profit = round(entry_ref - take_atr, 4)
-            else:
-                # Para hold em LONG_ONLY: stop sempre abaixo do close, take sempre acima
-                stop_loss = round(close_val - stop_atr, 4)
-                take_profit = round(close_val + take_atr, 4)
-            
-            # Confidence (0-100): combina qualidade do backtest, forca do sinal e consistencia
-            # q_backtest: sharpe e win_rate do backtest
-            q_bt = float(np.clip(_sigmoid((bt_sharpe - 0.1) / 0.3) * 0.5 + bt_win_rate * 0.5, 0.0, 1.0))
+            # Confidence (0-100): modelo de 7 fatores (v5)
+            # q_backtest: sharpe e win_rate do backtest (heavier win_rate weight)
+            q_bt = float(np.clip(_sigmoid((bt_sharpe - 0.1) / 0.3) * 0.3 + bt_win_rate * 0.7, 0.0, 1.0))
             # q_signal: forca direcional do sinal atual
             q_sig = strength
-            # q_trades: confianca aumenta com mais trades historicos
-            q_tr = float(np.clip(trades_per_year / 20.0, 0.0, 1.0))
-            # q_agreement: concordancia entre features (votes)
+            # q_winrate: win rate tier — penaliza fortemente tickers com win rate ruim
+            # Maps tier_num (0-4) to quality score (0.0-1.0)
+            q_wr = float(np.clip(wr_tier_num / 4.0, 0.0, 1.0))
+            # Extra penalty: win rate abaixo de 50% -> q_wr cai para 0
+            if bt_win_rate < 0.50 and bt_n_trades >= min_trades_for_tier:
+                q_wr = float(np.clip((bt_win_rate - 0.40) / 0.10, 0.0, q_wr))  # gradual from 40-50%
+            # q_agreement: concordancia entre features (votes) — weighted
             vl = votes_long[i] if i < len(votes_long) else 0.0
             vs = votes_short[i] if i < len(votes_short) else 0.0
             q_agree = float(np.clip(max(vl, vs) * 2.0, 0.0, 1.0))
-            
+            # q_regime (v4): qualidade do regime de mercado
+            regime_val = float(regime_arr[i]) if i < len(regime_arr) and np.isfinite(regime_arr[i]) else 0.5
+            q_regime = float(np.clip(regime_val, 0.0, 1.0))
+            # q_ml (v4): concordância do ensemble ML (buy_trust proxy)
+            vote_consensus = float(np.clip(abs(vl - vs) * 3.0, 0.0, 1.0))
+            q_ml = float(np.clip(0.5 * q_agree + 0.5 * vote_consensus, 0.0, 1.0))
+
+            # q_viability (v6): R:R quality + liquidity + stop quality
+            alvo_pct = take_reward / max(entry_ref, ATR_EPS)  # target as % of entry price
+            vol_arr = payload.get("volume", np.full(n, np.nan))
+            avg_vol_20 = float(np.nanmean(vol_arr[max(0, i-19):i+1])) if i < len(vol_arr) else 0.0
+            vol_fin = avg_vol_20 * close_val  # volume financeiro medio 20d
+            # R:R quality: capped at 3:1 (evita R:R artificialmente alto dominar)
+            q_rr = float(np.clip((min(rr_ratio, 5.0) - 1.0) / 2.0, 0.0, 1.0))
+            # Stop quality: penaliza stops < 3% (irrealistas p/ day-trade)
+            stop_pct_display = stop_risk / max(entry_ref, ATR_EPS)
+            q_stop = float(np.clip((stop_pct_display - 0.01) / 0.04, 0.0, 1.0))  # 0% at 1%, 100% at 5%+
+            # Liquidity: 0% at R$100k, 100% at R$5M+
+            q_liq = float(np.clip((vol_fin - 100_000) / 4_900_000, 0.0, 1.0))
+            q_viability = 0.30 * q_rr + 0.35 * q_stop + 0.35 * q_liq
+            # q_dist (v5): trade return distribution quality — big wins vs big losses
+            q_dist = float(np.clip(bt_dist_quality, 0.0, 1.0))
+
+            # -- Quality penalty factors (applied before final score) --
+            penalty = 1.0
+            if sig == "buy" and wr_tier_num <= 1 and bt_n_trades >= min_trades_for_tier:
+                penalty *= 0.6  # penalize low win rate
+            if sig == "buy" and rr_ratio < 1.5:
+                penalty *= 0.7  # penalize poor R:R
+
+            # Confidence (0-100): 8 fatores (v6) with quality penalties
             confidence = float(np.clip(
-                (0.30 * q_bt + 0.25 * q_sig + 0.15 * q_tr + 0.30 * q_agree) * 100.0,
+                (0.10 * q_bt + 0.10 * q_sig + 0.20 * q_wr + 0.15 * q_dist +
+                 0.10 * q_agree + 0.10 * q_regime + 0.10 * q_ml + 0.15 * q_viability)
+                * penalty * 100.0,
                 0.0, 100.0
             ))
-            
-            # -- Operational columns --------------------------------------
-            stop_atr_val   = global_params.stop_atr_mult * atr_val
-            tight_stop     = round(entry_ref - global_params.stop_tighten_factor * stop_atr_val, 4)
-            stop_pct       = round(abs(entry_ref - stop_loss) / max(entry_ref, ATR_EPS) * 100.0, 2)
-            take_pct       = round(abs(take_profit - entry_ref) / max(entry_ref, ATR_EPS) * 100.0, 2)
-            rr_text        = f"{global_params.reward_risk_ratio:.1f}:1"
-            # trailing mode label
-            _tmode = int(global_params.trailing_stop_mode)
-            trailing_label = {0: "fixed", 1: "breakeven", 2: "trail-50%"}.get(_tmode, "fixed")
-            # MA filter reference
-            ma_val = float(ma_arr[i]) if i < len(ma_arr) and np.isfinite(ma_arr[i]) else float("nan")
-            above_ma = (close_val >= ma_val) if np.isfinite(ma_val) else True
-            # exit rules summary (plain text for operator)
-            _stop_pct_str  = f"{stop_pct:.1f}%"
-            _take_pct_str  = f"{take_pct:.1f}%"
-            _tight_str     = f"{round(global_params.stop_tighten_factor * global_params.stop_atr_mult, 2)}xATR apos {global_params.stop_tighten_after_bars}d"
-            exit_rules     = (
-                f"Stop: -{_stop_pct_str} ({global_params.stop_atr_mult}xATR, {trailing_label}); "
-                f"Take: +{_take_pct_str} (R:R {rr_text}); "
-                f"Tight: {_tight_str}; "
-                f"TimeStop: {global_params.time_stop_bars}d; "
-                f"HardStop: {int(global_params.max_loss_per_trade_pct*100)}% gap"
+
+            # -- Quality gates: demote unreliable buys to hold --
+            if sig == "buy" and confidence < MIN_BUY_CONFIDENCE:
+                sig = "hold"  # confidence too low
+            if sig == "buy" and wr_tier == "insuficiente":
+                sig = "hold"  # insufficient backtest data for reliable signal
+
+            # ── UPSIDE SCORE: qualidade da oportunidade de subida (0-100) ──
+            # Combina fatores que historicamente predizem subida:
+            #   1. Proximity to support (quanto mais perto do suporte, melhor entrada)
+            #   2. Momentum direction (score_ev positivo e crescente)
+            #   3. Volatility-adjusted target (alvo % ajustado pela volatilidade)
+            #   4. Trend alignment (preco acima de MA relevante)
+            #   5. Upside potential vs downside risk (assimetria)
+
+            # (1) Proximity to support: 0-1 (1 = perto da minima recente)
+            recent_highs = payload["high"][max(0, i-19):i+1]
+            _finite_highs = recent_highs[np.isfinite(recent_highs)]
+            recent_high = float(np.max(_finite_highs)) if len(_finite_highs) > 0 else close_val
+            _range_20d = recent_high - recent_low if recent_high > recent_low else ATR_EPS
+            _pos_in_range = (close_val - recent_low) / _range_20d  # 0 = at low, 1 = at high
+            s_support = float(np.clip(1.0 - _pos_in_range, 0.0, 1.0))  # higher = closer to support
+
+            # (2) Momentum: score_ev direction and strength
+            _prev_score = score_ev[max(0, i-5)] if i >= 5 else 0.0
+            _score_accel = score_ev[i] - _prev_score if np.isfinite(_prev_score) else 0.0
+            s_momentum = float(np.clip(score_ev[i] / max(score95, ATR_EPS) + _score_accel * 2.0, -1.0, 1.0))
+            s_momentum = (s_momentum + 1.0) / 2.0  # normalize to 0-1
+
+            # (3) Volatility-adjusted target: alvo_pct relative to recent vol
+            _vol_20d = float(np.nanstd(np.diff(np.log(np.maximum(c[max(0,i-19):i+1], ATR_EPS))))) if i >= 2 else 0.02
+            _vol_20d = max(_vol_20d, 0.005) * np.sqrt(5)  # annualize to ~5 day horizon
+            _target_vs_vol = (take_reward / max(entry_ref, ATR_EPS)) / _vol_20d
+            s_target = float(np.clip(_target_vs_vol / 3.0, 0.0, 1.0))  # 0% at 0x vol, 100% at 3x vol
+
+            # (4) Trend alignment: price vs MA200 and MA50
+            _ma200 = ma200_apply[i] if i < len(ma200_apply) and np.isfinite(ma200_apply[i]) else np.nan
+            _ma50 = ma50_apply[i] if i < len(ma50_apply) and np.isfinite(ma50_apply[i]) else np.nan
+            s_trend = 0.5  # neutral default
+            if np.isfinite(_ma200):
+                _above_200 = close_val > _ma200
+                s_trend = 0.7 if _above_200 else 0.3
+                if np.isfinite(_ma50):
+                    _above_50 = close_val > _ma50
+                    _ma_cross = _ma50 > _ma200  # golden cross
+                    if _above_200 and _above_50 and _ma_cross:
+                        s_trend = 1.0  # ideal: above both MAs + golden cross
+                    elif _above_200 and _above_50:
+                        s_trend = 0.85
+                    elif not _above_200 and not _above_50:
+                        s_trend = 0.15
+
+            # (5) Asymmetry: upside vs downside (from historical potential and MDD)
+            _hist_upside = potential  # expected positive return
+            _hist_downside = queda_max_esperada  # expected max loss
+            s_asymmetry = float(np.clip(_hist_upside / max(_hist_downside, 0.01), 0.0, 2.0)) / 2.0
+
+            # Combined upside score (0-100)
+            upside_score = float(np.clip(
+                (0.20 * s_support + 0.25 * s_momentum + 0.20 * s_target +
+                 0.20 * s_trend + 0.15 * s_asymmetry) * 100.0,
+                0.0, 100.0
+            ))
+
+            # Stop % and alvo % for display (always relative to entrada/best_buy)
+            stop_pct_val = round((best_buy - stop_loss) / max(best_buy, ATR_EPS) * 100.0, 2)
+            alvo_pct_val = round((take_profit - best_buy) / max(best_buy, ATR_EPS) * 100.0, 2)
+            rr_display = round(rr_ratio, 1)
+
+            # -- Exit rules string --
+            tighten_days = int(global_params.stop_tighten_after_bars)
+            tighten_factor = global_params.stop_tighten_factor
+            time_stop = int(global_params.time_stop_bars)
+            hard_stop_pct = global_params.max_loss_per_trade_pct * 100
+            exit_rules = (
+                f"Stop: -{stop_pct_val:.1f}% ({global_params.stop_atr_mult:.1f}xATR, breakeven); "
+                f"Take: +{alvo_pct_val:.1f}% (R:R {rr_display}:1); "
+                f"Tight: {tighten_factor:.1f}xATR apos {tighten_days}d; "
+                f"TimeStop: {time_stop}d; "
+                f"HardStop: {hard_stop_pct:.0f}% gap"
             )
 
-            # -- Position management columns (for users already holding) --
-            # stop_distance/take_distance: absolute R$ to subtract/add from YOUR entry price
-            stop_distance = round(stop_atr_val, 4)
-            take_distance = round(global_params.reward_risk_ratio * stop_atr_val, 4)
-            # Tightened stop distance (after N bars holding)
-            tight_stop_dist = round(global_params.stop_tighten_factor * stop_atr_val, 4)
-            # Sell percentage at take profit
-            # If take triggers before partials: sell 100%
-            # If partials trigger first: sell partial_take_pct at each level
-            rr = global_params.reward_risk_ratio
-            p1_level = global_params.partial_take_level
-            p2_level = global_params.partial_take_level_2
-            has_p1 = global_params.partial_take_pct > 0 and p1_level <= rr
-            has_p2 = global_params.partial_take_pct_2 > 0 and p2_level <= rr
-            if has_p1 or has_p2:
-                # Partials trigger at or before take profit
-                sell_pct_at_take = 100.0
-                if has_p1:
-                    sell_pct_at_take -= round(global_params.partial_take_pct * 100, 1)
-                if has_p2:
-                    sell_pct_at_take -= round(global_params.partial_take_pct_2 * 100, 1)
-                sell_pct_at_take = max(sell_pct_at_take, 0.0)
-            else:
-                sell_pct_at_take = 100.0
+            # ── RANKING SCORE: combina todos os fatores para ranking final ──
+            # Pondera: qualidade historica + timing atual + risco
+            rank_score = round(
+                0.30 * confidence +          # qualidade do backtest
+                0.30 * upside_score +         # timing/momentum atual
+                0.15 * min(rr_ratio / 3.0, 1.0) * 100 +  # risco-retorno (cap 3:1)
+                0.10 * bt_win_rate * 100 +    # win rate direto
+                0.10 * regime_val * 100 +     # regime de mercado
+                0.05 * q_stop * 100           # qualidade do stop
+            , 1)
 
             results_apply.append({
+                # -- Decisao --
                 "Date": pd.to_datetime(dates[i]).strftime("%Y-%m-%d"),
                 "ticker": tkr,
-                "close": round(close_val, 4),
                 "signal": sig,
+                "rank_score": rank_score,
                 "confidence": round(confidence, 1),
-                # -- Nova entrada --
+                "upside_score": round(upside_score, 1),
+                # -- Compra --
+                "close": round(close_val, 4),
                 "entrada": best_buy,
+                # -- Venda (stop e alvo) --
                 "stop": stop_loss,
                 "alvo": take_profit,
-                # -- Gestao de posicao (aplique ao SEU preco de entrada) --
-                "ATR": round(atr_val, 4),
-                "stop_dist": stop_distance,
-                "alvo_dist": take_distance,
-                "tight_stop": tight_stop_dist,
-                "tight_dias": int(global_params.stop_tighten_after_bars),
-                "time_stop": int(global_params.time_stop_bars),
+                "RR": rr_display,
+                # -- Risco --
+                "stop_pct": stop_pct_val,
+                "alvo_pct": alvo_pct_val,
+                "queda_max": round(queda_max_esperada * 100, 1),
+                "piso": queda_max_preco,
+                # -- Qualidade --
+                "win_rate": round(bt_win_rate * 100, 1),
+                "wr_tier": wr_tier,
+                "dist_quality": round(bt_dist_quality * 100, 1),
+                "regime": (
+                    "favoravel" if regime_val >= 0.6
+                    else "neutro" if regime_val >= 0.3
+                    else "desfavoravel"
+                ),
+                # -- Detalhes upside --
+                "s_suporte": round(s_support * 100, 1),
+                "s_momentum": round(s_momentum * 100, 1),
+                "s_alvo_vol": round(s_target * 100, 1),
+                "s_tendencia": round(s_trend * 100, 1),
+                "s_assimetria": round(s_asymmetry * 100, 1),
+                "exit_rules": exit_rules,
             })
 
         results_summary.append({
@@ -2437,17 +2947,20 @@ def run():
             "test_win_rate": st["win_rate"],
             "test_avg_trade": st["avg_trade"],
             "buy_hold_return": buyhold_capped(c),
+            "wr_tier": wr_tier,
+            "dist_quality": round(bt_dist_quality * 100, 1),
+            "big_wins": round(bt_big_wins * 100, 1),
+            "big_losses": round(bt_big_losses * 100, 1),
         })
 
     df_sum = pd.DataFrame(results_summary)
     df_app = pd.DataFrame(results_apply)
-    # Sort Apply: buy signals first, then by confidence descending
+    # Sort Apply: buy signals first, then by rank_score descending
     if not df_app.empty:
         # Keep only the most recent date per ticker
         df_app = df_app.sort_values("Date", ascending=False).drop_duplicates(subset=["ticker"], keep="first")
-        # Buy signals first, then by confidence descending
         df_app["_is_buy"] = (df_app["signal"] == "buy").astype(int)
-        df_app = df_app.sort_values(["_is_buy", "confidence"], ascending=[False, False]).drop(columns=["_is_buy"]).reset_index(drop=True)
+        df_app = df_app.sort_values(["_is_buy", "rank_score"], ascending=[False, False]).drop(columns=["_is_buy"]).reset_index(drop=True)
 
     if not df_sum.empty:
         df_sum = df_sum.sort_values("test_sharpe", ascending=False)
@@ -2548,20 +3061,23 @@ def run():
 
                     # Header comments explaining each column
                     col_comments = {
-                        "Date": "Data do pregao (fechamento)",
-                        "ticker": "Codigo do ativo (ex: PETR4.SA, BTC-USD)",
-                        "close": "Preco de fechamento no dia",
-                        "signal": "buy = abrir posicao comprada\nhold = aguardar, nao comprar agora",
-                        "confidence": "0 a 100: quao confiavel e o sinal\n30% backtest (sharpe+winrate)\n25% forca direcional\n15% qtd trades historicos\n30% concordancia entre features",
-                        "entrada": "Preco sugerido de compra (close ajustado por ATR).\nUse como ordem limite.",
-                        "stop": "Stop loss se comprar HOJE no preco 'entrada'.\n= entrada - stop_dist",
-                        "alvo": "Take profit se comprar HOJE no preco 'entrada'.\n= entrada + alvo_dist\nVender 100% ao atingir.",
-                        "ATR": "Average True Range: volatilidade diaria em R$.\nBase para calcular stop e alvo.\nAtualiza todo dia.",
-                        "stop_dist": "Distancia do stop em R$ (= 1x ATR).\nJA COMPRADO? Seu stop = SEU_PRECO - stop_dist\nAtualiza diariamente.",
-                        "alvo_dist": "Distancia do alvo em R$ (= 1x ATR).\nJA COMPRADO? Seu alvo = SEU_PRECO + alvo_dist\nAtualiza diariamente.",
-                        "tight_stop": "Stop apertado (= 0.4x ATR) ativado apos 'tight_dias'.\nJA COMPRADO ha N dias? Seu stop = SEU_PRECO - tight_stop",
-                        "tight_dias": "Apos quantos dias de posicao o stop aperta.\nEx: 3 = apos 3 dias, stop encurta de stop_dist para tight_stop.",
-                        "time_stop": "Dias maximo na posicao. Se nao atingiu 50% do alvo ate aqui, saia.\nTrailing: apos lucro > stop_dist, stop sobe para preco de entrada (breakeven).",
+                        "Date": "Data do pregao",
+                        "ticker": "Codigo do ativo",
+                        "signal": "buy = comprar | hold = aguardar",
+                        "confidence": "0-100: confianca no sinal\n20% win_rate + 15% distribuicao + 15% viabilidade\n10% backtest + 10% sinal + 10% acordo + 10% regime + 10% ML",
+                        "close": "Preco de fechamento",
+                        "entrada": "Preco sugerido de compra (ordem limite)",
+                        "stop": "Stop loss (baseado em ATR)",
+                        "alvo": "Alvo de venda (baseado no potencial estatistico da acao,\nnao no ATR. Usa mediana+P75 dos retornos forward positivos)",
+                        "RR": "Risco:Retorno. Minimo 1.0 para comprar.\nEx: 2.5 = alvo 2.5x maior que stop",
+                        "stop_pct": "Stop em % do preco de entrada",
+                        "alvo_pct": "Alvo em % do preco de entrada",
+                        "queda_max": "Previsao de queda maxima (%) baseada no MDD historico\najustado pela volatilidade atual",
+                        "piso": "Preco piso estimado (close * (1 - queda_max))",
+                        "win_rate": "Win rate do backtest (% trades positivos)",
+                        "wr_tier": "Classificacao: excelente(70%+) bom(60%+) aceitavel(52%+) fraco(<52%) ruim(<45%)",
+                        "dist_quality": "Qualidade da distribuicao (big wins vs big losses, 0-100)",
+                        "regime": "Regime de mercado: favoravel/neutro/desfavoravel",
                     }
 
                     # Write headers with comments
@@ -2572,11 +3088,10 @@ def run():
 
                     # Column widths
                     apply_widths = {
-                        "Date": 12, "ticker": 12, "close": 10,
-                        "signal": 8, "confidence": 12,
-                        "entrada": 10, "stop": 10, "alvo": 10,
-                        "ATR": 9, "stop_dist": 10, "alvo_dist": 10,
-                        "tight_stop": 10, "tight_dias": 10, "time_stop": 10,
+                        "Date": 12, "ticker": 12, "signal": 8, "confidence": 11,
+                        "close": 10, "entrada": 10, "stop": 10, "alvo": 10, "RR": 6,
+                        "stop_pct": 9, "alvo_pct": 9, "queda_max": 10, "piso": 10,
+                        "win_rate": 10, "wr_tier": 12, "dist_quality": 12, "regime": 13,
                     }
                     for col_idx, col_name in enumerate(df_app.columns):
                         ws_app.set_column(col_idx, col_idx, apply_widths.get(col_name, 11))
@@ -2591,7 +3106,7 @@ def run():
                     int_buy    = wb.add_format({"bg_color": "#C6EFCE", "font_color": "#276221", "num_format": "0"})
                     int_hold   = wb.add_format({"num_format": "0"})
 
-                    price_cols = {"close", "entrada", "stop", "alvo", "ATR", "stop_dist", "alvo_dist", "tight_stop"}
+                    price_cols = {"close", "entrada", "stop", "alvo", "piso"}
                     # Note: venda_pct and trailing removed (always 100% and breakeven with current genome)
                     score_cols = {"confidence"}
                     int_cols = {"tight_dias", "time_stop"}
@@ -2641,7 +3156,11 @@ def run():
     print(f"Saved: {out_xlsx} | {out_apply_csv}")
 
     # -- Send to Telegram --------------------------------------------------
-    _send_telegram(out_xlsx)
+    if os.path.exists(out_xlsx):
+        print(f"[TELEGRAM] Sending {out_xlsx} ({os.path.getsize(out_xlsx)} bytes)...")
+        _send_telegram(out_xlsx)
+    else:
+        print(f"[TELEGRAM] SKIP — file not found: {out_xlsx}")
 
 
 if __name__ == "__main__":

@@ -25,7 +25,9 @@ with open("global_ga_checkpoint.json") as f:
     ckpt = json.load(f)
 gp = decode_global_params(ckpt["genome"])
 
-hc = pd.read_parquet("output/history_consolidated.parquet")
+_hc_candidates = ["output/history_consolidated.parquet", "history_consolidated.parquet"]
+_hc_path = next((p for p in _hc_candidates if os.path.exists(p)), _hc_candidates[0])
+hc = pd.read_parquet(_hc_path)
 hc["Date"] = pd.to_datetime(hc["Date"])
 
 etl = pd.read_parquet("output/data/expanded_stock_reduced.parquet")
