@@ -333,38 +333,36 @@ def sanitize_params(p: Params) -> Params:
 # ==============================================================================
 
 GLOBAL_PARAM_SPECS = [
-    ("vote_threshold_long", 0.15, 0.55, 0.05, False),  # tighter range (was 0.20-0.60)
+    ("vote_threshold_long", 0.15, 0.55, 0.05, False),
     ("vote_threshold_short", 0.10, 0.55, 0.05, False),
     ("z_threshold", 0.15, 0.80, 0.05, False),
     ("signal_ema_span", 2.0, 12.0, 1.0, True),
     ("entry_confirmation_days", 1.0, 3.0, 1.0, True),
     ("score_percentile_trigger", 0.35, 0.80, 0.05, False),
-    ("stop_atr_mult", 1.0, 2.5, 0.25, False),  # tighter stops (was 1.0-4.0)
+    ("stop_atr_mult", 1.5, 4.0, 0.25, False),    # WIDER stops: 1.5-4.0 ATR (was 1.0-2.5)
     ("stop_tighten_after_bars", 3.0, 15.0, 1.0, True),
     ("stop_tighten_factor", 0.40, 0.85, 0.05, False),
-    ("max_loss_per_trade_pct", 0.02, 0.10, 0.01, False),  # tighter hard stop (was 0.02-0.15)
-    ("reward_risk_ratio", 1.0, 5.0, 0.25, False),
+    ("max_loss_per_trade_pct", 0.03, 0.12, 0.01, False),  # wider hard stop
+    ("reward_risk_ratio", 1.5, 5.0, 0.25, False),  # higher minimum R:R
     ("partial_take_pct", 0.0, 0.60, 0.10, False),
     ("partial_take_level", 0.5, 1.5, 0.25, False),
-    ("time_stop_bars", 5.0, 25.0, 1.0, True),
+    ("time_stop_bars", 10.0, 30.0, 1.0, True),    # longer time stop
     ("entry_discount_atr_frac", 0.0, 0.5, 0.05, False),
     ("volatility_filter_percentile", 0.0, 0.40, 0.05, False),
     ("score_strength_scaling", 0.0, 1.0, 0.1, False),
     ("ma_filter_period", 100.0, 300.0, 50.0, True),
     ("ma_filter_mode", 0.0, 2.0, 1.0, True),
-    ("consecutive_loss_cooldown", 5.0, 20.0, 1.0, True),  # lowered min from 8->5 for more flexibility
-    ("equity_drawdown_stop_pct", 0.08, 0.22, 0.02, False),  # tighter range (was 0.08-0.30) — cap at 22% to help MDD
-    # -- NEW genes for v3 --
-    ("vol_regime_mode", 0.0, 2.0, 1.0, True),  # 0=off, 1=conservative(widen stops in high vol), 2=aggressive(skip high vol)
-    ("partial_take_pct_2", 0.0, 0.40, 0.10, False),  # 2nd partial take (0=disabled)
-    ("partial_take_level_2", 1.0, 3.0, 0.25, False),  # 2nd partial at higher RR multiple
-    ("min_signal_strength", 0.0, 0.40, 0.05, False),  # minimum abs(score_ev)/score95 to enter
-    ("trailing_stop_mode", 0.0, 2.0, 1.0, True),  # 0=off, 1=breakeven after 1x, 2=trail at 50% after 2x
-    # -- NEW genes for v4 (signal precision + regime) --
-    ("volume_confirm_mode", 0.0, 2.0, 1.0, True),  # 0=off, 1=vol>MA20, 2=vol>MA50
-    ("momentum_confirm_days", 0.0, 5.0, 1.0, True),  # 0=off, 1-5=require positive return over N days
-    ("entry_score_threshold", 0.0, 0.50, 0.05, False),  # min score_ev strength to enter
-    ("regime_threshold", 0.20, 0.70, 0.05, False),  # min regime_score to allow long entries
+    ("consecutive_loss_cooldown", 5.0, 20.0, 1.0, True),
+    ("equity_drawdown_stop_pct", 0.10, 0.25, 0.02, False),
+    ("vol_regime_mode", 0.0, 2.0, 1.0, True),
+    ("partial_take_pct_2", 0.0, 0.40, 0.10, False),
+    ("partial_take_level_2", 1.0, 3.0, 0.25, False),
+    ("min_signal_strength", 0.0, 0.40, 0.05, False),
+    ("trailing_stop_mode", 0.0, 2.0, 1.0, True),
+    ("volume_confirm_mode", 0.0, 2.0, 1.0, True),
+    ("momentum_confirm_days", 0.0, 5.0, 1.0, True),
+    ("entry_score_threshold", 0.0, 0.50, 0.05, False),
+    ("regime_threshold", 0.20, 0.70, 0.05, False),
 ]
 
 
@@ -2978,6 +2976,24 @@ def run():
             else:
                 potencial = "-"
 
+            # ── SAIDA: melhor preco de venda no dia seguinte ──
+            # Estima a maxima do proximo dia usando historico de intraday highs
+            _hist_highs = payload["high"][max(0, i-59):i+1]
+            _hist_closes_h = c[max(0, i-60):i]
+            if len(_hist_closes_h) >= 10 and len(_hist_highs) >= 10:
+                _intraday_peaks = (_hist_highs[-len(_hist_closes_h):] - _hist_closes_h) / np.maximum(_hist_closes_h, ATR_EPS)
+                _finite_peaks = _intraday_peaks[np.isfinite(_intraday_peaks)]
+                if len(_finite_peaks) >= 5:
+                    _typical_peak = float(np.percentile(_finite_peaks, 70))  # P70: 70% chance de atingir
+                else:
+                    _typical_peak = 0.005
+            else:
+                _typical_peak = 0.005
+            _typical_peak = float(np.clip(_typical_peak, 0.003, 0.03))
+            best_sell = round(close_val * (1.0 + _typical_peak), 4)
+            # Saida nao pode ser acima do alvo (senao ignora o take profit)
+            best_sell = min(best_sell, take_profit)
+
             results_apply.append({
                 "Date": pd.to_datetime(dates[i]).strftime("%Y-%m-%d"),
                 "ticker": tkr,
@@ -2987,14 +3003,13 @@ def run():
                 "confidence": round(confidence, 1),
                 "close": round(close_val, 4),
                 "entrada": best_buy,
+                "saida": best_sell,
                 "stop": stop_loss,
                 "alvo": take_profit,
                 "RR": rr_display,
                 "stop_pct": stop_pct_val,
                 "alvo_pct": alvo_pct_val,
                 "win_rate": round(bt_win_rate * 100, 1),
-                "custo_pct": round(COST_PER_TRADE_PCT * 100, 2),
-                "lucro_liq_pct": round(_net_pct * 100, 1),
                 "queda_max": round(queda_max_esperada * 100, 1),
                 "regime": (
                     "favoravel" if regime_val >= 0.6
