@@ -254,7 +254,7 @@ GA_RUN_MC_EVERY_WINDOW = False
 # On Windows, ProcessPoolExecutor with large payload initargs causes deadlocks.
 # Force single-threaded evaluation on Windows; use multiprocessing on Linux/Mac.
 import platform as _platform
-GA_EVAL_WORKERS = 1 if _platform.system() == "Windows" else max(1, min(8, (os.cpu_count() or 2)))
+GA_EVAL_WORKERS = int(os.getenv("GA_EVAL_WORKERS", "2"))  # 2 workers to avoid OOM on 16GB
 GA_TWO_STAGE = True
 RUN_MODE = os.getenv("GA_RUN_MODE", "train")  # "train" retrains, "load" skips GA (daily use)
 SLOW_STEP_PRINT_SEC = 2.0  # print only timings above this per-step threshold
