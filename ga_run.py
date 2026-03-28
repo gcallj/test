@@ -2730,8 +2730,9 @@ def run():
             raw_entry = min(close_val - atr_discount, next_day_low_est)
             best_buy = round(max(raw_entry, recent_low), 4)
 
-            # Garantir entrada <= close (nao comprar acima do fechamento)
-            best_buy = min(best_buy, round(close_val, 4))
+            # Garantir desconto minimo de 0.5% (ordem limite deve ter vantagem)
+            max_entry = round(close_val * 0.995, 4)
+            best_buy = min(best_buy, max_entry)
             entry_ref = best_buy
 
             # ── STOP: ATR-based com minimo % ──
@@ -2944,6 +2945,7 @@ def run():
                 "stop_pct": stop_pct_val,
                 "alvo_pct": alvo_pct_val,
                 "win_rate": round(bt_win_rate * 100, 1),
+                "queda_max": round(queda_max_esperada * 100, 1),
                 "regime": (
                     "favoravel" if regime_val >= 0.6
                     else "neutro" if regime_val >= 0.3
