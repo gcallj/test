@@ -339,21 +339,21 @@ GLOBAL_PARAM_SPECS = [
     ("signal_ema_span", 2.0, 12.0, 1.0, True),
     ("entry_confirmation_days", 1.0, 3.0, 1.0, True),
     ("score_percentile_trigger", 0.35, 0.80, 0.05, False),
-    ("stop_atr_mult", 1.5, 4.0, 0.25, False),    # WIDER stops: 1.5-4.0 ATR (was 1.0-2.5)
+    ("stop_atr_mult", 1.0, 2.5, 0.25, False),
     ("stop_tighten_after_bars", 3.0, 15.0, 1.0, True),
     ("stop_tighten_factor", 0.40, 0.85, 0.05, False),
-    ("max_loss_per_trade_pct", 0.03, 0.12, 0.01, False),  # wider hard stop
-    ("reward_risk_ratio", 1.5, 5.0, 0.25, False),  # higher minimum R:R
+    ("max_loss_per_trade_pct", 0.02, 0.10, 0.01, False),
+    ("reward_risk_ratio", 1.0, 5.0, 0.25, False),
     ("partial_take_pct", 0.0, 0.60, 0.10, False),
     ("partial_take_level", 0.5, 1.5, 0.25, False),
-    ("time_stop_bars", 10.0, 30.0, 1.0, True),    # longer time stop
+    ("time_stop_bars", 5.0, 25.0, 1.0, True),
     ("entry_discount_atr_frac", 0.0, 0.5, 0.05, False),
     ("volatility_filter_percentile", 0.0, 0.40, 0.05, False),
     ("score_strength_scaling", 0.0, 1.0, 0.1, False),
     ("ma_filter_period", 100.0, 300.0, 50.0, True),
     ("ma_filter_mode", 0.0, 2.0, 1.0, True),
     ("consecutive_loss_cooldown", 5.0, 20.0, 1.0, True),
-    ("equity_drawdown_stop_pct", 0.10, 0.25, 0.02, False),
+    ("equity_drawdown_stop_pct", 0.08, 0.22, 0.02, False),
     ("vol_regime_mode", 0.0, 2.0, 1.0, True),
     ("partial_take_pct_2", 0.0, 0.40, 0.10, False),
     ("partial_take_level_2", 1.0, 3.0, 0.25, False),
