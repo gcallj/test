@@ -1,0 +1,88 @@
+name: Retrain GA (Strategy C)
+
+on:
+  workflow_dispatch:
+    inputs:
+      ngen:
+        description: 'Number of GA generations'
+        default: '40'
+        type: string
+      pop_size:
+        description: 'Population size'
+        default: '50'
+        type: string
+
+jobs:
+  retrain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360    # 6 hours max
+
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      GA_RUN_MODE: "train"
+      GA_FAST_MODE: "false"
+      GA_EVAL_WORKERS: "2"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ hashFiles('requirements.txt') }}
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Show current checkpoint
+        run: |
+          echo "Before retrain:"
+          python3 -c "import json; d=json.load(open('global_ga_checkpoint.json')); print(f'  fitness={d[\"fitness\"]:.4f}  genome_len={len(d[\"genome\"])}')"
+
+      - name: Run ETL (fresh data)
+        run: python -u run_pipeline.py --steps 1
+
+      - name: Retrain GA (full mode)
+        run: python -u run_pipeline.py --steps 5
+        env:
+          GA_RUN_MODE: "train"
+
+      - name: Show results
+        if: always()
+        run: |
+          echo "After retrain:"
+          python3 -c "import json; d=json.load(open('global_ga_checkpoint.json')); print(f'  fitness={d[\"fitness\"]:.4f}')"
+          echo "=== Output files ==="
+          ls -lh summary_latest.xlsx apply_last_*d__H*.csv 2>/dev/null
+
+      - name: Commit retrained checkpoint
+        if: success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add global_ga_checkpoint.json apply_last_5d__H5.csv summary_latest.xlsx
+          git commit -m "Retrain GA: fitness=$(python3 -c 'import json; print(f\"{json.load(open(\"global_ga_checkpoint.json\"))[\"fitness\"]:.4f}\")')" || echo "No changes"
+          git push
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: retrain-output-${{ github.run_number }}
+          path: |
+            summary_latest.xlsx
+            apply_last_5d__H5.csv
+            global_ga_checkpoint.json
+          retention-days: 30
