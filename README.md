@@ -2,8 +2,8 @@
 
 Pipeline completo de geração de sinais de compra para ~94 ativos do mercado brasileiro (ações, FIIs, índices, moedas, commodities). Combina modelos de classificação binária, regressão de preços e otimização genética (GA) com walk-forward backtesting.
 
-> **Última atualização de resultados (Mar/2026)**
-> Fitness: **10.59** | Median MDD: **-23.6%** ✅ | Win Rate: **55.4%** ✅ | Retorno médio: **+5385%** vs Buy & Hold **+577%** ✅
+> **Ultima atualizacao (27/Mar/2026)**
+> Win Rate: **59.5%** | Trades/ticker: **105** | MDD: **-21.1%** | Custos: **R$7 corretagem + B3 + IR 15%**
 
 ---
 
@@ -663,141 +663,87 @@ Protege contra regimes de mercado adversos onde os stops são acionados repetida
 
 ## 11. Saidas no Modo Apply (Planilha)
 
-O modo apply (`RUN_MODE = "load"`) aplica o genoma salvo aos dados mais recentes e gera os sinais dos **ultimos 5 dias de pregao** para todos os tickers. Nao simula abertura/fechamento de posicoes — apenas emite recomendacoes operacionais com todos os niveis de preco necessarios para operar.
+O modo apply (`GA_RUN_MODE=load`) aplica o genoma treinado aos dados mais recentes e gera sinais operacionais. Inclui custos reais brasileiros (corretagem R$7, B3, IR 15%).
 
-### 11.1 Colunas do CSV / aba "Apply" do xlsx (18 colunas)
+### 11.1 Colunas do `apply_last_5d__H5.csv`
 
-#### Identificacao e preco
+| Coluna | Descricao | Interpretacao |
+|--------|-----------|--------------|
+| `Date` | Data do pregao | Ultimo dia de dados disponiveis |
+| `ticker` | Codigo Yahoo Finance | Ex: `PETR4.SA`, `VALE3.SA` |
+| `signal` | **Sinal de trading** | `buy` = comprar; `hold` = aguardar |
+| `potencial` | **Classificacao do trade** | `alto` = lucro liq >=10% + WR >=60%; `medio` = liq >=5%; `baixo` = demais; `-` = hold |
+| `rank` | **Score de ranking** (0-100) | Combina 30% confidence + 30% upside + 15% R:R + 10% win_rate + 10% regime + 5% stop quality |
+| `confidence` | **Confianca no sinal** (0-100) | Qualidade do backtest: 20% win_rate + 15% distribuicao + 15% viabilidade + 10% backtest + 10% sinal + 10% acordo + 10% regime + 10% ML |
+| `close` | Preco de fechamento | Ultimo preco de referencia |
+| `entrada` | **Preco de compra** (ordem limite) | Estimado no P30 das dips intraday historicas (70% chance de execucao). Sempre abaixo do close (min 0.5% desconto). Piso: minima 20 dias |
+| `stop` | **Stop loss** (R$) | ATR-based, minimo 2% do preco de entrada. Consistente com logica do backtest |
+| `alvo` | **Take profit** (R$) | Baseado na resistencia 20 dias (vende a 98% da maxima). Deve cobrir custos + IR |
+| `RR` | **Risk/Reward ratio** | Alvo / Stop. Minimo 1.5. Valores altos = maior assimetria |
+| `stop_pct` | Stop em % da entrada | Quanto pode perder se parar no stop |
+| `alvo_pct` | Alvo em % da entrada | Quanto pode ganhar se atingir o alvo |
+| `win_rate` | Taxa de acerto historica (%) | Percentual de trades lucrativos no backtest. Todos tickers com >20 trades |
+| `custo_pct` | Custo total por trade (%) | R$7 corretagem x2 + B3 0.065% + slippage 0.20% = ~0.55% |
+| `lucro_liq_pct` | **Lucro liquido estimado** (%) | (alvo% - custo%) x (1 - IR 15%). O que realmente sobra no bolso |
+| `queda_max` | Drawdown maximo esperado (%) | Estimativa baseada no MDD historico + volatilidade atual |
+| `regime` | Condicao de mercado | `favoravel` = acima MA200+MA50; `neutro` = misto; `desfavoravel` = abaixo |
 
-| Coluna | Tipo | Descricao | Como interpretar |
-|--------|------|-----------|-----------------|
-| `Date` | date | Data do pregao | Use o registro mais recente por ticker |
-| `ticker` | str | Codigo Yahoo Finance | Ex: `VALE3.SA`, `ITUB4.SA` |
-| `close` | float | Preco de fechamento do dia | Preco de referencia atual |
+### 11.2 Classificacao de potencial
 
-#### Sinal e qualidade
+| Potencial | Criterio | Acao sugerida |
+|-----------|----------|---------------|
+| **alto** | `lucro_liq_pct >= 10%` E `win_rate >= 60%` | Prioridade maxima. Alto retorno + alto acerto |
+| **medio** | `lucro_liq_pct >= 5%` | Bom risco-retorno, operar com tamanho normal |
+| **baixo** | Demais buys | Cautela. Considerar apenas se diversificando |
+| `-` | Hold signals | Nao operar |
 
-| Coluna | Tipo | Descricao | Como interpretar |
-|--------|------|-----------|-----------------|
-| `signal_eod` | str | **Sinal do fechamento** | `buy` = sinal de compra; `hold` = aguardar |
-| `score_100` | float [0-100] | **Intensidade direcional** | >55 bullish, <45 bearish, 45-55 neutro |
-| `confidence` | float [0-100] | **Confianca geral no sinal** | >60 = alta confianca; <40 = sinal fraco |
+### 11.3 Como operar
 
-#### Filtro de tendencia
+**1. Filtrar:** `signal == "buy"` + `potencial` = "alto" ou "medio"
 
-| Coluna | Tipo | Descricao | Como interpretar |
-|--------|------|-----------|-----------------|
-| `above_sma300` | str | Preco acima da SMA de 300 periodos | `SIM` = tendencia de alta; `NAO` = tendencia de baixa |
-
-#### Volatilidade
-
-| Coluna | Tipo | Descricao | Como interpretar |
-|--------|------|-----------|-----------------|
-| `atr` | float | ATR (Average True Range) atual | Volatilidade diaria em R$; usado para calcular stop/take |
-
-#### Niveis de entrada
-
-| Coluna | Tipo | Descricao | Como interpretar |
-|--------|------|-----------|-----------------|
-| `entry_ref_price` | float | Referencia para calculo de stop e take (R$) | = `best_buy_value` se buy; = close se hold |
-| `best_buy_value` | float | Preco sugerido para ordem limitada de compra (R$) | `close - entry_discount_atr_frac x ATR` (abaixo do close) |
-
-#### Niveis de saida (OPERACIONAIS)
-
-| Coluna | Tipo | Descricao | Como interpretar |
-|--------|------|-----------|-----------------|
-| `stop_loss` | float | **Stop loss inicial** (R$) | `entry_ref - stop_atr_mult x ATR`. Colocar na ordem. |
-| `stop_pct` | float | **Distancia do stop em %** | Ex: 5.2 = stop esta 5.2% abaixo do entry_ref |
-| `tightened_stop` | float | **Stop apertado** (R$) | Ativado apos N dias. `entry_ref - (tighten_factor x stop_atr_mult x ATR)` |
-| `take_profit` | float | **Take profit** (R$) | `entry_ref + reward_risk_ratio x stop_abs`. Colocar na ordem. |
-| `take_pct` | float | **Distancia do take em %** | Ex: 5.2 = take esta 5.2% acima do entry_ref |
-| `time_stop_bars` | int | **Time stop** (dias uteis) | Se posicao nao atingiu stop nem take em N dias, fechar |
-| `trailing_mode` | str | **Modo do trailing stop** | `fixed` / `breakeven` / `trail-50%` (ver detalhes abaixo) |
-
-#### Resumo de regras
-
-| Coluna | Tipo | Descricao | Como interpretar |
-|--------|------|-----------|-----------------|
-| `exit_rules` | str | **Resumo completo das regras de saida** | Texto legivel com todos os parametros de saida em uma linha |
-
-### 11.2 Como interpretar `score_100`
-
-| Faixa | Significado pratico |
-|-------|---------------------|
-| 70-100 | Bullish forte — multiplas features alinhadas para alta |
-| 55-70 | Bullish moderado — maioria das features favoravel |
-| 45-55 | Neutro — sem consenso direcional claro |
-| 30-45 | Bearish moderado — maioria das features favoravel a queda |
-| 0-30 | Bearish forte — grande consenso de queda |
-
-### 11.3 Como interpretar `confidence`
-
-Combina 4 fatores com pesos fixos:
-
-| Fator | Peso | Origem |
-|-------|------|--------|
-| Qualidade do backtest no ticker (sharpe x win_rate) | 30% | Historico do GA |
-| Forca do sinal atual (`|score_ev| / score95`) | 25% | Sinal em relacao ao historico |
-| Volume de trades historicos (mais trades = mais estatistica) | 15% | Backtest |
-| Concordancia entre features (% na mesma direcao) | 30% | Votacao atual |
-
-### 11.4 Relacao entre colunas de niveis de preco
-
-```
-close (preco atual)
-  |
-  +-- best_buy_value  = close - entry_discount_atr_frac x ATR   <-- ordem limitada de compra
-  |
-  +-- entry_ref_price = best_buy_value (se buy) ou close (se hold)
-        |
-        +-- stop_loss      = entry_ref - stop_atr_mult x ATR              (stop_pct = distancia em %)
-        +-- tightened_stop = entry_ref - tighten_factor x stop_atr_mult x ATR   (ativado apos N dias)
-        +-- take_profit    = entry_ref + reward_risk_ratio x stop_abs     (take_pct = distancia em %)
-```
-
-> **stop_loss e take_profit sao os mesmos parametros usados no backtest historico.** O resultado historico (`test_return`, `test_win_rate`) foi gerado usando exatamente esses criterios de saida.
-
-### 11.5 Guia operacional: como usar a aba Apply para operar
-
-**Passo 1 — Filtrar candidatos:**
-1. `signal_eod == "buy"` (condicao obrigatoria)
-2. `confidence >= 60` (sinal confiavel)
-3. `score_100 >= 60` (score bullish)
-4. `above_sma300 == "SIM"` (tendencia favoravel)
-5. Cruzar com aba Summary: `test_return > 0`, `test_win_rate >= 0.55`, `test_trades >= 20`
-
-**Passo 2 — Montar a ordem de compra:**
+**2. Montar ordem:**
 - Tipo: **Ordem limitada** (BUY LIMIT)
-- Preco: `best_buy_value`
-- Stop Loss: `stop_loss`
-- Take Profit: `take_profit`
+- Preco: coluna `entrada`
+- Stop Loss: coluna `stop`
+- Take Profit: coluna `alvo`
+- Validade: 1 dia (se nao preencher, reavaliar)
 
-**Passo 3 — Gerenciar a posicao aberta:**
-- **Dia 1 a N:** Manter stop em `stop_loss`. Trailing stop conforme `trailing_mode`:
-  - `fixed`: stop nunca muda
-  - `breakeven`: apos lucro >= 1x stop_abs, mover stop para `entry_ref_price` (empate)
-  - `trail-50%`: apos lucro >= 2x stop_abs, trail stop a 50% do lucro maximo
-- **Apos `time_stop_bars` dias** (coluna `time_stop_bars`): se posicao nao bateu stop nem take, **fechar a mercado**
-- **Apos tighten (ver `tightened_stop`)**: apos `stop_tighten_after_bars` dias, mover stop para `tightened_stop` (mais apertado)
-- **Hard stop**: se gap de abertura > `max_loss_per_trade_pct` (2%), fechar imediatamente
+**3. Gerenciar posicao:**
+- **Stop**: manter no nivel da coluna `stop`
+- **Breakeven**: apos lucro >= 1x stop, mover stop para preco de entrada
+- **Time stop**: se em 25 dias nao bateu stop nem alvo, fechar
+- **Hard stop**: se abertura com gap > 2% contra, fechar imediatamente
 
-**Passo 4 — Ler `exit_rules` para confirmacao:**
-A coluna `exit_rules` resume todas as regras em texto legivel. Exemplo:
+**4. Custos ja considerados:**
+- Corretagem: R$7 por ordem (compra + venda = R$14)
+- Taxas B3: 0.065% (emolumentos + liquidacao)
+- Slippage: 0.20% estimado
+- IR: 15% sobre lucro liquido (swing trade)
+- A coluna `lucro_liq_pct` ja desconta TUDO
+
+### 11.4 Relacao entre niveis de preco
+
 ```
-Stop: -5.2% (2.5xATR, breakeven); Take: +5.2% (R:R 1.0:1); Tight: 1.12xATR apos 7d; TimeStop: 14d; HardStop: 2% gap
+close (preco atual do dia)
+  |
+  +-- entrada = close - desconto (P30 das dips intraday 60d)
+        |
+        +-- stop  = entrada - max(ATR, 2% x entrada)
+        +-- alvo  = 98% x maxima_20_dias (resistencia)
+        |
+        lucro_liq = (alvo - entrada - custos) x 0.85  (apos IR)
 ```
 
-### 11.6 Selecao de ativos para operar
+### 11.5 Selecao de ativos
 
-Filtros sugeridos (em ordem de importancia):
+Filtros recomendados (em ordem):
 
-1. `signal_eod == "buy"` — condicao obrigatoria
-2. `confidence >= 60` — sinal confiavel
-3. `score_100 >= 60` — score bullish
-4. `above_sma300 == "SIM"` — tendencia de alta confirmada
-5. `test_return > 0` (aba Summary) — ticker foi lucrativo historicamente
-6. `test_win_rate >= 0.55` (aba Summary) — >55% de acerto historico
-7. `test_trades >= 20` (aba Summary) — amostra estatistica suficiente
+1. `signal == "buy"` — obrigatorio
+2. `potencial == "alto"` — foco nos melhores trades
+3. `rank >= 70` — score combinado alto
+4. `win_rate >= 60` — acerto historico consistente
+5. `regime == "favoravel"` — mercado a favor
+6. `lucro_liq_pct >= 8` — retorno liquido atrativo
 
 ---
 

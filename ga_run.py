@@ -134,12 +134,24 @@ MIN_VOL_FIN_DAILY = 50_000  # R$50k/dia minimum median financial volume
 # Apply output constraints
 MIN_STOP_PCT = 0.02       # 2% minimum stop (avoids unrealistic tight stops)
 MIN_RR_RATIO = 1.5        # Minimum risk-reward ratio
-MIN_BUY_CONFIDENCE = 40.0 # Minimum confidence to emit buy signal
+MIN_BUY_CONFIDENCE = 50.0 # Minimum confidence to emit buy signal (assertive trades only)
 
-# Friction
-COST_BPS     = 12.0
-SLIPPAGE_BPS = 12.0
-COST_PER_TRADE_PCT = 0.0020  # fixed round-trip friction per completed trade
+# Friction — custos realistas Brasil
+# Corretagem: R$7.00 por ordem (compra + venda = R$14 round-trip)
+BROKERAGE_PER_ORDER = 7.00     # R$ por ordem
+DEFAULT_POSITION_SIZE = 5000.0 # R$ posicao tipica para calculo de custo %
+# B3 fees: emolumentos + liquidacao ≈ 0.0325% por operacao (compra+venda)
+B3_FEES_PCT = 0.000325 * 2    # 0.065% round-trip
+# Slippage estimado
+SLIPPAGE_BPS = 10.0           # 0.10% por lado
+# IR: 15% sobre lucro liquido (swing trade), 20% day trade
+IR_SWING_PCT = 0.15
+# Custo total por trade (round-trip):
+#   corretagem: 2*7/5000 = 0.28%
+#   B3: 0.065%
+#   slippage: 0.20%
+#   total: ~0.55% (sem IR)
+COST_PER_TRADE_PCT = (2 * BROKERAGE_PER_ORDER / DEFAULT_POSITION_SIZE) + B3_FEES_PCT + (2 * SLIPPAGE_BPS / 10000)
 
 MIN_PRICE     = 0.01
 CAP_DAILY_RET = 0.30
@@ -242,7 +254,7 @@ GA_RUN_MC_EVERY_WINDOW = False
 # On Windows, ProcessPoolExecutor with large payload initargs causes deadlocks.
 # Force single-threaded evaluation on Windows; use multiprocessing on Linux/Mac.
 import platform as _platform
-GA_EVAL_WORKERS = 1 if _platform.system() == "Windows" else max(1, min(8, (os.cpu_count() or 2)))
+GA_EVAL_WORKERS = int(os.getenv("GA_EVAL_WORKERS", "1"))  # 1 worker (sequential) to avoid OOM on 16GB
 GA_TWO_STAGE = True
 RUN_MODE = os.getenv("GA_RUN_MODE", "train")  # "train" retrains, "load" skips GA (daily use)
 SLOW_STEP_PRINT_SEC = 2.0  # print only timings above this per-step threshold
@@ -265,13 +277,12 @@ if FAST_MODE:
     GA_MAX_WINDOWS     = 4   # 4 uniformly-sampled windows: covers crisis periods
     GA_MAX_WINDOWS_STAGE2 = 5
 else:
-    # FULL production mode v4: larger population for better exploration
-    # ~50% more exploration vs v3 (30->50 pop, 20->30 gen stage1)
-    GA_STAGE1_POP_SIZE = 50    # was 30 — more diverse initial exploration
-    GA_STAGE1_NGEN     = 30    # was 20 — more generations for convergence
-    GA_STAGE2_POP_SIZE = 80    # was 60 — larger refinement pool
-    GA_STAGE2_NGEN     = 25    # was 15 — more refinement steps
-    GA_MAX_WINDOWS     = 10    # was 8 — better crisis coverage
+    # FULL production mode v6: larger population + more generations for deeper optimization
+    GA_STAGE1_POP_SIZE = 50    # balanced for 16GB RAM
+    GA_STAGE1_NGEN     = 40    # deep convergence
+    GA_STAGE2_POP_SIZE = 80
+    GA_STAGE2_NGEN     = 25
+    GA_MAX_WINDOWS     = 10
     GA_MAX_WINDOWS_STAGE2 = 10
 
 # ==============================================================================
@@ -321,16 +332,16 @@ def sanitize_params(p: Params) -> Params:
 # ==============================================================================
 
 GLOBAL_PARAM_SPECS = [
-    ("vote_threshold_long", 0.15, 0.55, 0.05, False),  # tighter range (was 0.20-0.60)
+    ("vote_threshold_long", 0.15, 0.55, 0.05, False),
     ("vote_threshold_short", 0.10, 0.55, 0.05, False),
     ("z_threshold", 0.15, 0.80, 0.05, False),
     ("signal_ema_span", 2.0, 12.0, 1.0, True),
     ("entry_confirmation_days", 1.0, 3.0, 1.0, True),
     ("score_percentile_trigger", 0.35, 0.80, 0.05, False),
-    ("stop_atr_mult", 1.0, 2.5, 0.25, False),  # tighter stops (was 1.0-4.0)
+    ("stop_atr_mult", 1.0, 2.5, 0.25, False),
     ("stop_tighten_after_bars", 3.0, 15.0, 1.0, True),
     ("stop_tighten_factor", 0.40, 0.85, 0.05, False),
-    ("max_loss_per_trade_pct", 0.02, 0.10, 0.01, False),  # tighter hard stop (was 0.02-0.15)
+    ("max_loss_per_trade_pct", 0.02, 0.10, 0.01, False),
     ("reward_risk_ratio", 1.0, 5.0, 0.25, False),
     ("partial_take_pct", 0.0, 0.60, 0.10, False),
     ("partial_take_level", 0.5, 1.5, 0.25, False),
@@ -340,19 +351,17 @@ GLOBAL_PARAM_SPECS = [
     ("score_strength_scaling", 0.0, 1.0, 0.1, False),
     ("ma_filter_period", 100.0, 300.0, 50.0, True),
     ("ma_filter_mode", 0.0, 2.0, 1.0, True),
-    ("consecutive_loss_cooldown", 5.0, 20.0, 1.0, True),  # lowered min from 8->5 for more flexibility
-    ("equity_drawdown_stop_pct", 0.08, 0.22, 0.02, False),  # tighter range (was 0.08-0.30) — cap at 22% to help MDD
-    # -- NEW genes for v3 --
-    ("vol_regime_mode", 0.0, 2.0, 1.0, True),  # 0=off, 1=conservative(widen stops in high vol), 2=aggressive(skip high vol)
-    ("partial_take_pct_2", 0.0, 0.40, 0.10, False),  # 2nd partial take (0=disabled)
-    ("partial_take_level_2", 1.0, 3.0, 0.25, False),  # 2nd partial at higher RR multiple
-    ("min_signal_strength", 0.0, 0.40, 0.05, False),  # minimum abs(score_ev)/score95 to enter
-    ("trailing_stop_mode", 0.0, 2.0, 1.0, True),  # 0=off, 1=breakeven after 1x, 2=trail at 50% after 2x
-    # -- NEW genes for v4 (signal precision + regime) --
-    ("volume_confirm_mode", 0.0, 2.0, 1.0, True),  # 0=off, 1=vol>MA20, 2=vol>MA50
-    ("momentum_confirm_days", 0.0, 5.0, 1.0, True),  # 0=off, 1-5=require positive return over N days
-    ("entry_score_threshold", 0.0, 0.50, 0.05, False),  # min score_ev strength to enter
-    ("regime_threshold", 0.20, 0.70, 0.05, False),  # min regime_score to allow long entries
+    ("consecutive_loss_cooldown", 5.0, 20.0, 1.0, True),
+    ("equity_drawdown_stop_pct", 0.08, 0.22, 0.02, False),
+    ("vol_regime_mode", 0.0, 2.0, 1.0, True),
+    ("partial_take_pct_2", 0.0, 0.40, 0.10, False),
+    ("partial_take_level_2", 1.0, 3.0, 0.25, False),
+    ("min_signal_strength", 0.0, 0.40, 0.05, False),
+    ("trailing_stop_mode", 0.0, 2.0, 1.0, True),
+    ("volume_confirm_mode", 0.0, 2.0, 1.0, True),
+    ("momentum_confirm_days", 0.0, 5.0, 1.0, True),
+    ("entry_score_threshold", 0.0, 0.50, 0.05, False),
+    ("regime_threshold", 0.20, 0.70, 0.05, False),
 ]
 
 
@@ -715,7 +724,7 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
             hard_loss = abs(o[i] / max(entry_px, ATR_EPS) - 1.0)
 
             if hard_loss > gp.max_loss_per_trade_pct:
-                ret = (o[i] / entry_px - 1.0) * pos - 0.0005
+                ret = (o[i] / entry_px - 1.0) * pos - COST_PER_TRADE_PCT
                 equity *= (1.0 + ret)
                 trade_rets.append(ret)
                 consec_stops += 1 if ret < 0 else 0
@@ -777,8 +786,16 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
                     else:
                         exit_px = min(ideal_exit, o[i]) if o[i] < ideal_exit else ideal_exit
                 
-                cost = 0.0003 if (partial_taken or partial_taken_2) else 0.0005
-                ret = (exit_px / entry_px - 1.0) * pos - cost
+                gross_ret = (exit_px / entry_px - 1.0) * pos
+                # Custos: corretagem + B3 + slippage
+                cost = COST_PER_TRADE_PCT
+                if partial_taken or partial_taken_2:
+                    cost *= 0.7  # partial takes already paid some friction
+                net_ret = gross_ret - cost
+                # IR: 15% sobre lucro (swing trade, isenção mensal ignorada por conservadorismo)
+                if net_ret > 0:
+                    net_ret = net_ret * (1.0 - IR_SWING_PCT)
+                ret = net_ret
                 equity *= (1.0 + ret)
                 trade_rets.append(ret)
                 if stop_hit and ret < 0:
@@ -1027,28 +1044,26 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
     if mean_ret < 0.0:
         underperf_penalty += abs(mean_ret) * 30.0
 
-    # -- Win-rate bonus (v5: single mechanism, no double-counting) ----------
-    # Removed direct 1.5*mean + 1.1*median from fitness formula.
-    # All win rate influence flows through this tiered bonus only.
+    # -- Win-rate bonus (v6: assertive, penalize mediocre) ----------
     win_rate_bonus = 0.0
-    # Sub-50% hard penalty
-    if mean_win_rate < 0.50:
-        win_rate_bonus -= (0.50 - mean_win_rate) * 12.0
-    # Base: linear from 50% upward
-    if mean_win_rate > 0.50:
-        win_rate_bonus += (mean_win_rate - 0.50) * 5.0
-    # Tiered bonuses (cumulative)
+    # Sub-55% hard penalty (com custos reais, WR < 55% não é lucrativo)
+    if mean_win_rate < 0.55:
+        win_rate_bonus -= (0.55 - mean_win_rate) * 15.0
+    # Base: linear from 55% upward
     if mean_win_rate > 0.55:
-        win_rate_bonus += (mean_win_rate - 0.55) * 4.0
+        win_rate_bonus += (mean_win_rate - 0.55) * 6.0
+    # Tiered bonuses (cumulative, higher rewards for high WR)
     if mean_win_rate > 0.60:
-        win_rate_bonus += (mean_win_rate - 0.60) * 6.0
+        win_rate_bonus += (mean_win_rate - 0.60) * 8.0
     if mean_win_rate > 0.65:
-        win_rate_bonus += (mean_win_rate - 0.65) * 8.0
+        win_rate_bonus += (mean_win_rate - 0.65) * 12.0
+    if mean_win_rate > 0.70:
+        win_rate_bonus += (mean_win_rate - 0.70) * 15.0
     # Median win rate (consistency across tickers)
     if med_win_rate > 0.55:
-        win_rate_bonus += (med_win_rate - 0.55) * 3.0
+        win_rate_bonus += (med_win_rate - 0.55) * 4.0
     if med_win_rate > 0.62:
-        win_rate_bonus += (med_win_rate - 0.62) * 5.0
+        win_rate_bonus += (med_win_rate - 0.62) * 6.0
 
     # -- Consistency bonus: reward stable per-ticker performance -----------
     consistency_bonus = 0.0
@@ -1068,18 +1083,24 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
         calmar = mean_ret / abs(median_mdd)
         calmar_bonus = 0.8 * float(np.clip(calmar, 0.0, 5.0))
 
-    # -- Distribution quality bonus (v5) ------------------------------------
-    # Reward strategies where big wins >> big losses across tickers
+    # -- Distribution quality bonus (v6: reward high-gain precision) --------
+    # Reward strategies where big wins >> big losses + high gain rate
     mean_dist_qual = float(np.mean(dist_qual))
     mean_big_wins = float(np.mean(big_wins))
     mean_big_losses = float(np.mean(big_losses))
     dist_bonus = 0.0
     if mean_dist_qual > 0.55:
-        dist_bonus += (mean_dist_qual - 0.55) * 4.0   # reward good distribution
+        dist_bonus += (mean_dist_qual - 0.55) * 5.0
     if mean_dist_qual > 0.70:
-        dist_bonus += (mean_dist_qual - 0.70) * 6.0   # extra reward
-    if mean_big_losses > 0.15:
-        dist_bonus -= (mean_big_losses - 0.15) * 5.0  # penalize many big losses
+        dist_bonus += (mean_dist_qual - 0.70) * 8.0
+    if mean_big_losses > 0.12:
+        dist_bonus -= (mean_big_losses - 0.12) * 8.0  # stronger penalty for big losses
+    # v6: bonus for high % of trades with >10% gain (precision in high-gain trades)
+    mean_pct_gt10 = float(np.mean([s.get("pct_gt15", 0.0) + s.get("pct_10_15", 0.0) for s in per_ticker_stats]))
+    if mean_pct_gt10 > 0.10:
+        dist_bonus += (mean_pct_gt10 - 0.10) * 8.0  # reward more >10% trades
+    if mean_pct_gt10 > 0.20:
+        dist_bonus += (mean_pct_gt10 - 0.20) * 12.0  # strong reward
 
     # -- Main fitness (v5) -------------------------------------------------
     fitness = (
@@ -2704,17 +2725,40 @@ def run():
             strength = float(np.clip(abs(score_ev[i]) / score95, 0.0, 1.0))
             discount = global_params.entry_discount_atr_frac * (1.0 - global_params.score_strength_scaling * strength)
 
-            # ── ENTRADA: preco com desconto ATR + suporte recente ──
-            atr_discount = discount * atr_val
-            # Suporte: minima dos ultimos 5 dias como piso
-            recent_lows = payload["low"][max(0, i-4):i+1]
-            _finite_lows = recent_lows[np.isfinite(recent_lows)]
+            # ── ENTRADA: preco otimizado para ordem limite no dia seguinte ──
+            # Estrategia: estimar a minima do proximo dia e comprar ligeiramente acima
+
+            # Historico de intraday ranges: (low - close_anterior) / close_anterior
+            _hist_lows = payload["low"][max(0, i-59):i+1]
+            _hist_closes = c[max(0, i-60):i]
+            if len(_hist_closes) >= 10 and len(_hist_lows) >= 10:
+                _intraday_dips = (_hist_lows[-len(_hist_closes):] - _hist_closes) / np.maximum(_hist_closes, ATR_EPS)
+                _finite_dips = _intraday_dips[np.isfinite(_intraday_dips)]
+                if len(_finite_dips) >= 5:
+                    # Percentil 30 das dips (conservador: 70% chance de ser preenchido)
+                    _typical_dip = float(np.percentile(_finite_dips, 30))
+                else:
+                    _typical_dip = -0.005  # fallback -0.5%
+            else:
+                _typical_dip = -0.005
+
+            # Entrada = close + dip tipica (negativo = abaixo do close)
+            # Garantir: dip >= -3% (nao tentar pegar crash) e dip <= -0.5% (minimo desconto)
+            _typical_dip = float(np.clip(_typical_dip, -0.03, -0.005))
+            next_day_entry = close_val * (1.0 + _typical_dip)
+
+            # Suporte 20d como piso absoluto
+            recent_lows_20 = payload["low"][max(0, i-19):i+1]
+            _finite_lows = recent_lows_20[np.isfinite(recent_lows_20)]
             recent_low = float(np.min(_finite_lows)) if len(_finite_lows) > 0 else close_val
-            # Entrada = max(close - desconto ATR, suporte recente)
-            # Nao comprar abaixo do suporte (limita desconto excessivo)
-            best_buy = round(max(close_val - atr_discount, recent_low * 0.995), 4)
-            # Stop/alvo SEMPRE calculados a partir da entrada (best_buy)
-            # entry_ref = best_buy para todos os sinais (consistencia)
+
+            # Resistencia 20d para alvo
+            recent_highs_20 = payload["high"][max(0, i-19):i+1]
+            _finite_highs = recent_highs_20[np.isfinite(recent_highs_20)]
+            recent_high = float(np.max(_finite_highs)) if len(_finite_highs) > 0 else close_val
+
+            best_buy = round(max(next_day_entry, recent_low), 4)
+            best_buy = min(best_buy, round(close_val * 0.995, 4))  # min 0.5% desconto
             entry_ref = best_buy
 
             # ── STOP: ATR-based com minimo % ──
@@ -2725,17 +2769,37 @@ def run():
             stop_risk = entry_ref * effective_stop_pct
             stop_loss = round(entry_ref - stop_risk, 4)
 
-            # ── ALVO: potencial estatistico + ATR floor ──
-            potential = _potential_cache.get(i)
-            # ATR-based floor: alvo minimo = R:R * stop
+            # ── ALVO: resistencia + potencial + custos reais ──
+            statistical_potential = _potential_cache.get(i)
             min_target_pct = effective_stop_pct * MIN_RR_RATIO
-            if potential is None or potential < min_target_pct:
-                potential = min_target_pct
-            # Cap target: max 25% (evita alvos irrealistas como CRO-USD 35%)
-            MAX_TARGET_PCT = 0.25
-            potential = min(potential, MAX_TARGET_PCT)
 
-            take_profit = round(entry_ref * (1.0 + potential), 4)
+            # Resistencia como alvo natural (preco ja atingido recentemente)
+            resistance_pct = (recent_high - entry_ref) / max(entry_ref, ATR_EPS)
+
+            # Para alvo ser viavel, deve cobrir custos + gerar lucro liquido
+            # Custo total round-trip: ~0.55% + IR 15% sobre lucro
+            # Para lucro liquido de X%, bruto precisa ser X/0.85 + 0.55%
+            min_profitable_pct = COST_PER_TRADE_PCT / (1.0 - IR_SWING_PCT) + 0.005
+
+            # Escolher alvo: resistencia se viavel, senao potencial estatistico
+            if resistance_pct > max(min_target_pct, min_profitable_pct):
+                potential = resistance_pct
+            elif statistical_potential is not None and statistical_potential > max(min_target_pct, min_profitable_pct):
+                potential = statistical_potential
+            else:
+                potential = max(min_target_pct, min_profitable_pct)
+
+            # Cap: max 25%
+            potential = min(potential, 0.25)
+
+            # Alvo de venda: usar resistencia como referencia mas com margem
+            # Vender ligeiramente ABAIXO da resistencia (mais realista)
+            if resistance_pct > min_target_pct and potential >= resistance_pct * 0.9:
+                # Alvo = 98% da resistencia (garantir execucao)
+                take_profit = round(entry_ref + (recent_high - entry_ref) * 0.98, 4)
+            else:
+                take_profit = round(entry_ref * (1.0 + potential), 4)
+
             take_reward = take_profit - entry_ref
 
             # ── R:R calculation ──
@@ -2900,42 +2964,57 @@ def run():
                 0.05 * q_stop * 100           # qualidade do stop
             , 1)
 
+            # ── CLASSIFICACAO DE POTENCIAL ──
+            _net_pct = (take_reward / max(entry_ref, ATR_EPS) - COST_PER_TRADE_PCT) * (1.0 - IR_SWING_PCT)
+            if sig == "buy" and _net_pct >= 0.10 and bt_win_rate >= 0.60:
+                potencial = "alto"
+            elif sig == "buy" and _net_pct >= 0.05:
+                potencial = "medio"
+            elif sig == "buy":
+                potencial = "baixo"
+            else:
+                potencial = "-"
+
+            # ── SAIDA: melhor preco de venda no dia seguinte ──
+            # Estima a maxima do proximo dia usando historico de intraday highs
+            _hist_highs = payload["high"][max(0, i-59):i+1]
+            _hist_closes_h = c[max(0, i-60):i]
+            if len(_hist_closes_h) >= 10 and len(_hist_highs) >= 10:
+                _intraday_peaks = (_hist_highs[-len(_hist_closes_h):] - _hist_closes_h) / np.maximum(_hist_closes_h, ATR_EPS)
+                _finite_peaks = _intraday_peaks[np.isfinite(_intraday_peaks)]
+                if len(_finite_peaks) >= 5:
+                    _typical_peak = float(np.percentile(_finite_peaks, 70))  # P70: 70% chance de atingir
+                else:
+                    _typical_peak = 0.005
+            else:
+                _typical_peak = 0.005
+            _typical_peak = float(np.clip(_typical_peak, 0.003, 0.03))
+            best_sell = round(close_val * (1.0 + _typical_peak), 4)
+            # Saida nao pode ser acima do alvo (senao ignora o take profit)
+            best_sell = min(best_sell, take_profit)
+
             results_apply.append({
-                # -- Decisao --
                 "Date": pd.to_datetime(dates[i]).strftime("%Y-%m-%d"),
                 "ticker": tkr,
                 "signal": sig,
-                "rank_score": rank_score,
+                "potencial": potencial,
+                "rank": rank_score,
                 "confidence": round(confidence, 1),
-                "upside_score": round(upside_score, 1),
-                # -- Compra --
                 "close": round(close_val, 4),
                 "entrada": best_buy,
-                # -- Venda (stop e alvo) --
+                "saida": best_sell,
                 "stop": stop_loss,
                 "alvo": take_profit,
                 "RR": rr_display,
-                # -- Risco --
                 "stop_pct": stop_pct_val,
                 "alvo_pct": alvo_pct_val,
-                "queda_max": round(queda_max_esperada * 100, 1),
-                "piso": queda_max_preco,
-                # -- Qualidade --
                 "win_rate": round(bt_win_rate * 100, 1),
-                "wr_tier": wr_tier,
-                "dist_quality": round(bt_dist_quality * 100, 1),
+                "queda_max": round(queda_max_esperada * 100, 1),
                 "regime": (
                     "favoravel" if regime_val >= 0.6
                     else "neutro" if regime_val >= 0.3
                     else "desfavoravel"
                 ),
-                # -- Detalhes upside --
-                "s_suporte": round(s_support * 100, 1),
-                "s_momentum": round(s_momentum * 100, 1),
-                "s_alvo_vol": round(s_target * 100, 1),
-                "s_tendencia": round(s_trend * 100, 1),
-                "s_assimetria": round(s_asymmetry * 100, 1),
-                "exit_rules": exit_rules,
             })
 
         results_summary.append({
@@ -2960,7 +3039,7 @@ def run():
         # Keep only the most recent date per ticker
         df_app = df_app.sort_values("Date", ascending=False).drop_duplicates(subset=["ticker"], keep="first")
         df_app["_is_buy"] = (df_app["signal"] == "buy").astype(int)
-        df_app = df_app.sort_values(["_is_buy", "rank_score"], ascending=[False, False]).drop(columns=["_is_buy"]).reset_index(drop=True)
+        df_app = df_app.sort_values(["_is_buy", "rank"], ascending=[False, False]).drop(columns=["_is_buy"]).reset_index(drop=True)
 
     if not df_sum.empty:
         df_sum = df_sum.sort_values("test_sharpe", ascending=False)
