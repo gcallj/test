@@ -277,13 +277,12 @@ if FAST_MODE:
     GA_MAX_WINDOWS     = 4   # 4 uniformly-sampled windows: covers crisis periods
     GA_MAX_WINDOWS_STAGE2 = 5
 else:
-    # FULL production mode v4: larger population for better exploration
-    # ~50% more exploration vs v3 (30->50 pop, 20->30 gen stage1)
-    GA_STAGE1_POP_SIZE = 50    # was 30 — more diverse initial exploration
-    GA_STAGE1_NGEN     = 30    # was 20 — more generations for convergence
-    GA_STAGE2_POP_SIZE = 80    # was 60 — larger refinement pool
-    GA_STAGE2_NGEN     = 25    # was 15 — more refinement steps
-    GA_MAX_WINDOWS     = 10    # was 8 — better crisis coverage
+    # FULL production mode v6: larger population + more generations for deeper optimization
+    GA_STAGE1_POP_SIZE = 60    # balanced: enough diversity without OOM
+    GA_STAGE1_NGEN     = 50    # more generations for deeper convergence
+    GA_STAGE2_POP_SIZE = 80
+    GA_STAGE2_NGEN     = 25
+    GA_MAX_WINDOWS     = 10
     GA_MAX_WINDOWS_STAGE2 = 10
 
 # ==============================================================================
