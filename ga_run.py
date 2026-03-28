@@ -1047,28 +1047,26 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
     if mean_ret < 0.0:
         underperf_penalty += abs(mean_ret) * 30.0
 
-    # -- Win-rate bonus (v5: single mechanism, no double-counting) ----------
-    # Removed direct 1.5*mean + 1.1*median from fitness formula.
-    # All win rate influence flows through this tiered bonus only.
+    # -- Win-rate bonus (v6: assertive, penalize mediocre) ----------
     win_rate_bonus = 0.0
-    # Sub-50% hard penalty
-    if mean_win_rate < 0.50:
-        win_rate_bonus -= (0.50 - mean_win_rate) * 12.0
-    # Base: linear from 50% upward
-    if mean_win_rate > 0.50:
-        win_rate_bonus += (mean_win_rate - 0.50) * 5.0
-    # Tiered bonuses (cumulative)
+    # Sub-55% hard penalty (com custos reais, WR < 55% não é lucrativo)
+    if mean_win_rate < 0.55:
+        win_rate_bonus -= (0.55 - mean_win_rate) * 15.0
+    # Base: linear from 55% upward
     if mean_win_rate > 0.55:
-        win_rate_bonus += (mean_win_rate - 0.55) * 4.0
+        win_rate_bonus += (mean_win_rate - 0.55) * 6.0
+    # Tiered bonuses (cumulative, higher rewards for high WR)
     if mean_win_rate > 0.60:
-        win_rate_bonus += (mean_win_rate - 0.60) * 6.0
+        win_rate_bonus += (mean_win_rate - 0.60) * 8.0
     if mean_win_rate > 0.65:
-        win_rate_bonus += (mean_win_rate - 0.65) * 8.0
+        win_rate_bonus += (mean_win_rate - 0.65) * 12.0
+    if mean_win_rate > 0.70:
+        win_rate_bonus += (mean_win_rate - 0.70) * 15.0
     # Median win rate (consistency across tickers)
     if med_win_rate > 0.55:
-        win_rate_bonus += (med_win_rate - 0.55) * 3.0
+        win_rate_bonus += (med_win_rate - 0.55) * 4.0
     if med_win_rate > 0.62:
-        win_rate_bonus += (med_win_rate - 0.62) * 5.0
+        win_rate_bonus += (med_win_rate - 0.62) * 6.0
 
     # -- Consistency bonus: reward stable per-ticker performance -----------
     consistency_bonus = 0.0
@@ -1088,18 +1086,24 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
         calmar = mean_ret / abs(median_mdd)
         calmar_bonus = 0.8 * float(np.clip(calmar, 0.0, 5.0))
 
-    # -- Distribution quality bonus (v5) ------------------------------------
-    # Reward strategies where big wins >> big losses across tickers
+    # -- Distribution quality bonus (v6: reward high-gain precision) --------
+    # Reward strategies where big wins >> big losses + high gain rate
     mean_dist_qual = float(np.mean(dist_qual))
     mean_big_wins = float(np.mean(big_wins))
     mean_big_losses = float(np.mean(big_losses))
     dist_bonus = 0.0
     if mean_dist_qual > 0.55:
-        dist_bonus += (mean_dist_qual - 0.55) * 4.0   # reward good distribution
+        dist_bonus += (mean_dist_qual - 0.55) * 5.0
     if mean_dist_qual > 0.70:
-        dist_bonus += (mean_dist_qual - 0.70) * 6.0   # extra reward
-    if mean_big_losses > 0.15:
-        dist_bonus -= (mean_big_losses - 0.15) * 5.0  # penalize many big losses
+        dist_bonus += (mean_dist_qual - 0.70) * 8.0
+    if mean_big_losses > 0.12:
+        dist_bonus -= (mean_big_losses - 0.12) * 8.0  # stronger penalty for big losses
+    # v6: bonus for high % of trades with >10% gain (precision in high-gain trades)
+    mean_pct_gt10 = float(np.mean([s.get("pct_gt15", 0.0) + s.get("pct_10_15", 0.0) for s in per_ticker_stats]))
+    if mean_pct_gt10 > 0.10:
+        dist_bonus += (mean_pct_gt10 - 0.10) * 8.0  # reward more >10% trades
+    if mean_pct_gt10 > 0.20:
+        dist_bonus += (mean_pct_gt10 - 0.20) * 12.0  # strong reward
 
     # -- Main fitness (v5) -------------------------------------------------
     fitness = (
@@ -2963,10 +2967,22 @@ def run():
                 0.05 * q_stop * 100           # qualidade do stop
             , 1)
 
+            # ── CLASSIFICACAO DE POTENCIAL ──
+            _net_pct = (take_reward / max(entry_ref, ATR_EPS) - COST_PER_TRADE_PCT) * (1.0 - IR_SWING_PCT)
+            if sig == "buy" and _net_pct >= 0.10 and bt_win_rate >= 0.60:
+                potencial = "alto"
+            elif sig == "buy" and _net_pct >= 0.05:
+                potencial = "medio"
+            elif sig == "buy":
+                potencial = "baixo"
+            else:
+                potencial = "-"
+
             results_apply.append({
                 "Date": pd.to_datetime(dates[i]).strftime("%Y-%m-%d"),
                 "ticker": tkr,
                 "signal": sig,
+                "potencial": potencial,
                 "rank": rank_score,
                 "confidence": round(confidence, 1),
                 "close": round(close_val, 4),
@@ -2978,7 +2994,7 @@ def run():
                 "alvo_pct": alvo_pct_val,
                 "win_rate": round(bt_win_rate * 100, 1),
                 "custo_pct": round(COST_PER_TRADE_PCT * 100, 2),
-                "lucro_liq_pct": round((take_reward / max(entry_ref, ATR_EPS) - COST_PER_TRADE_PCT) * (1.0 - IR_SWING_PCT) * 100, 1),
+                "lucro_liq_pct": round(_net_pct * 100, 1),
                 "queda_max": round(queda_max_esperada * 100, 1),
                 "regime": (
                     "favoravel" if regime_val >= 0.6
