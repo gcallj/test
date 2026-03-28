@@ -2935,6 +2935,7 @@ def run():
                 "ticker": tkr,
                 "signal": sig,
                 "rank": rank_score,
+                "confidence": round(confidence, 1),
                 "close": round(close_val, 4),
                 "entrada": best_buy,
                 "stop": stop_loss,
