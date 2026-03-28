@@ -136,10 +136,22 @@ MIN_STOP_PCT = 0.02       # 2% minimum stop (avoids unrealistic tight stops)
 MIN_RR_RATIO = 1.5        # Minimum risk-reward ratio
 MIN_BUY_CONFIDENCE = 50.0 # Minimum confidence to emit buy signal (assertive trades only)
 
-# Friction
-COST_BPS     = 12.0
-SLIPPAGE_BPS = 12.0
-COST_PER_TRADE_PCT = 0.0020  # fixed round-trip friction per completed trade
+# Friction — custos realistas Brasil
+# Corretagem: R$7.00 por ordem (compra + venda = R$14 round-trip)
+BROKERAGE_PER_ORDER = 7.00     # R$ por ordem
+DEFAULT_POSITION_SIZE = 5000.0 # R$ posicao tipica para calculo de custo %
+# B3 fees: emolumentos + liquidacao ≈ 0.0325% por operacao (compra+venda)
+B3_FEES_PCT = 0.000325 * 2    # 0.065% round-trip
+# Slippage estimado
+SLIPPAGE_BPS = 10.0           # 0.10% por lado
+# IR: 15% sobre lucro liquido (swing trade), 20% day trade
+IR_SWING_PCT = 0.15
+# Custo total por trade (round-trip):
+#   corretagem: 2*7/5000 = 0.28%
+#   B3: 0.065%
+#   slippage: 0.20%
+#   total: ~0.55% (sem IR)
+COST_PER_TRADE_PCT = (2 * BROKERAGE_PER_ORDER / DEFAULT_POSITION_SIZE) + B3_FEES_PCT + (2 * SLIPPAGE_BPS / 10000)
 
 MIN_PRICE     = 0.01
 CAP_DAILY_RET = 0.30
@@ -715,7 +727,7 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
             hard_loss = abs(o[i] / max(entry_px, ATR_EPS) - 1.0)
 
             if hard_loss > gp.max_loss_per_trade_pct:
-                ret = (o[i] / entry_px - 1.0) * pos - 0.0005
+                ret = (o[i] / entry_px - 1.0) * pos - COST_PER_TRADE_PCT
                 equity *= (1.0 + ret)
                 trade_rets.append(ret)
                 consec_stops += 1 if ret < 0 else 0
@@ -777,8 +789,16 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
                     else:
                         exit_px = min(ideal_exit, o[i]) if o[i] < ideal_exit else ideal_exit
                 
-                cost = 0.0003 if (partial_taken or partial_taken_2) else 0.0005
-                ret = (exit_px / entry_px - 1.0) * pos - cost
+                gross_ret = (exit_px / entry_px - 1.0) * pos
+                # Custos: corretagem + B3 + slippage
+                cost = COST_PER_TRADE_PCT
+                if partial_taken or partial_taken_2:
+                    cost *= 0.7  # partial takes already paid some friction
+                net_ret = gross_ret - cost
+                # IR: 15% sobre lucro (swing trade, isenção mensal ignorada por conservadorismo)
+                if net_ret > 0:
+                    net_ret = net_ret * (1.0 - IR_SWING_PCT)
+                ret = net_ret
                 equity *= (1.0 + ret)
                 trade_rets.append(ret)
                 if stop_hit and ret < 0:
@@ -2704,35 +2724,40 @@ def run():
             strength = float(np.clip(abs(score_ev[i]) / score95, 0.0, 1.0))
             discount = global_params.entry_discount_atr_frac * (1.0 - global_params.score_strength_scaling * strength)
 
-            # ── ENTRADA: preco otimizado para compra no dia seguinte ──
-            # Objetivo: melhor preco possivel que seja ACIMA da minima esperada
-            atr_discount = discount * atr_val
+            # ── ENTRADA: preco otimizado para ordem limite no dia seguinte ──
+            # Estrategia: estimar a minima do proximo dia e comprar ligeiramente acima
 
-            # Suporte: minima dos ultimos 20 dias
-            recent_lows = payload["low"][max(0, i-19):i+1]
-            _finite_lows = recent_lows[np.isfinite(recent_lows)]
+            # Historico de intraday ranges: (low - close_anterior) / close_anterior
+            _hist_lows = payload["low"][max(0, i-59):i+1]
+            _hist_closes = c[max(0, i-60):i]
+            if len(_hist_closes) >= 10 and len(_hist_lows) >= 10:
+                _intraday_dips = (_hist_lows[-len(_hist_closes):] - _hist_closes) / np.maximum(_hist_closes, ATR_EPS)
+                _finite_dips = _intraday_dips[np.isfinite(_intraday_dips)]
+                if len(_finite_dips) >= 5:
+                    # Percentil 30 das dips (conservador: 70% chance de ser preenchido)
+                    _typical_dip = float(np.percentile(_finite_dips, 30))
+                else:
+                    _typical_dip = -0.005  # fallback -0.5%
+            else:
+                _typical_dip = -0.005
+
+            # Entrada = close + dip tipica (negativo = abaixo do close)
+            # Garantir: dip >= -3% (nao tentar pegar crash) e dip <= -0.5% (minimo desconto)
+            _typical_dip = float(np.clip(_typical_dip, -0.03, -0.005))
+            next_day_entry = close_val * (1.0 + _typical_dip)
+
+            # Suporte 20d como piso absoluto
+            recent_lows_20 = payload["low"][max(0, i-19):i+1]
+            _finite_lows = recent_lows_20[np.isfinite(recent_lows_20)]
             recent_low = float(np.min(_finite_lows)) if len(_finite_lows) > 0 else close_val
 
-            # Resistencia: maxima dos ultimos 20 dias
-            recent_highs = payload["high"][max(0, i-19):i+1]
-            _finite_highs = recent_highs[np.isfinite(recent_highs)]
+            # Resistencia 20d para alvo
+            recent_highs_20 = payload["high"][max(0, i-19):i+1]
+            _finite_highs = recent_highs_20[np.isfinite(recent_highs_20)]
             recent_high = float(np.max(_finite_highs)) if len(_finite_highs) > 0 else close_val
 
-            # Minima tipica do dia seguinte: estimada como close - frac*ATR
-            # Historicamente, a minima intraday fica ~0.3-0.7 ATR abaixo do close
-            intraday_dip = 0.5 * atr_val  # estimativa conservadora da dip intraday
-            next_day_low_est = close_val - intraday_dip
-
-            # Entrada = melhor preco entre:
-            #   - close com desconto ATR (limite agressivo)
-            #   - dip intraday estimada (mais realista)
-            # Piso: nunca abaixo da minima recente (suporte forte)
-            raw_entry = min(close_val - atr_discount, next_day_low_est)
-            best_buy = round(max(raw_entry, recent_low), 4)
-
-            # Garantir desconto minimo de 0.5% (ordem limite deve ter vantagem)
-            max_entry = round(close_val * 0.995, 4)
-            best_buy = min(best_buy, max_entry)
+            best_buy = round(max(next_day_entry, recent_low), 4)
+            best_buy = min(best_buy, round(close_val * 0.995, 4))  # min 0.5% desconto
             entry_ref = best_buy
 
             # ── STOP: ATR-based com minimo % ──
@@ -2743,30 +2768,37 @@ def run():
             stop_risk = entry_ref * effective_stop_pct
             stop_loss = round(entry_ref - stop_risk, 4)
 
-            # ── ALVO: baseado em resistencia + potencial estatistico ──
-            potential = _potential_cache.get(i)
+            # ── ALVO: resistencia + potencial + custos reais ──
+            statistical_potential = _potential_cache.get(i)
             min_target_pct = effective_stop_pct * MIN_RR_RATIO
 
-            # Resistencia como alvo natural (maxima recente)
+            # Resistencia como alvo natural (preco ja atingido recentemente)
             resistance_pct = (recent_high - entry_ref) / max(entry_ref, ATR_EPS)
 
-            # Escolher o melhor alvo entre:
-            #   - resistencia (preco ja atingiu esse nivel recentemente)
-            #   - potencial estatistico (retorno forward historico)
-            #   - minimo R:R (floor)
-            if resistance_pct > min_target_pct:
-                # Resistencia viavel — usar como alvo primario
+            # Para alvo ser viavel, deve cobrir custos + gerar lucro liquido
+            # Custo total round-trip: ~0.55% + IR 15% sobre lucro
+            # Para lucro liquido de X%, bruto precisa ser X/0.85 + 0.55%
+            min_profitable_pct = COST_PER_TRADE_PCT / (1.0 - IR_SWING_PCT) + 0.005
+
+            # Escolher alvo: resistencia se viavel, senao potencial estatistico
+            if resistance_pct > max(min_target_pct, min_profitable_pct):
                 potential = resistance_pct
-            elif potential is not None and potential > min_target_pct:
-                # Potencial estatistico bom — usar
-                pass
+            elif statistical_potential is not None and statistical_potential > max(min_target_pct, min_profitable_pct):
+                potential = statistical_potential
             else:
-                potential = min_target_pct
+                potential = max(min_target_pct, min_profitable_pct)
 
             # Cap: max 25%
             potential = min(potential, 0.25)
 
-            take_profit = round(entry_ref * (1.0 + potential), 4)
+            # Alvo de venda: usar resistencia como referencia mas com margem
+            # Vender ligeiramente ABAIXO da resistencia (mais realista)
+            if resistance_pct > min_target_pct and potential >= resistance_pct * 0.9:
+                # Alvo = 98% da resistencia (garantir execucao)
+                take_profit = round(entry_ref + (recent_high - entry_ref) * 0.98, 4)
+            else:
+                take_profit = round(entry_ref * (1.0 + potential), 4)
+
             take_reward = take_profit - entry_ref
 
             # ── R:R calculation ──
@@ -2945,6 +2977,8 @@ def run():
                 "stop_pct": stop_pct_val,
                 "alvo_pct": alvo_pct_val,
                 "win_rate": round(bt_win_rate * 100, 1),
+                "custo_pct": round(COST_PER_TRADE_PCT * 100, 2),
+                "lucro_liq_pct": round((take_reward / max(entry_ref, ATR_EPS) - COST_PER_TRADE_PCT) * (1.0 - IR_SWING_PCT) * 100, 1),
                 "queda_max": round(queda_max_esperada * 100, 1),
                 "regime": (
                     "favoravel" if regime_val >= 0.6
