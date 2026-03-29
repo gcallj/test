@@ -279,9 +279,9 @@ if FAST_MODE:
 else:
     # FULL production mode v6 — tuned for GitHub Actions (2 cores, 7GB RAM, 6h timeout)
     # FULL production mode — try larger config, falls back if OOM
-    GA_STAGE1_POP_SIZE = 50
-    GA_STAGE1_NGEN     = 20    # fewer gens per run (can re-run from checkpoint)
-    GA_STAGE2_POP_SIZE = 50
+    GA_STAGE1_POP_SIZE = 30
+    GA_STAGE1_NGEN     = 25
+    GA_STAGE2_POP_SIZE = 40
     GA_STAGE2_NGEN     = 15
     GA_MAX_WINDOWS     = 8     # more windows = better generalization
     GA_MAX_WINDOWS_STAGE2 = 6
