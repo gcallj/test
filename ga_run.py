@@ -277,13 +277,13 @@ if FAST_MODE:
     GA_MAX_WINDOWS     = 4   # 4 uniformly-sampled windows: covers crisis periods
     GA_MAX_WINDOWS_STAGE2 = 5
 else:
-    # FULL production mode v6: larger population + more generations for deeper optimization
-    GA_STAGE1_POP_SIZE = 50    # balanced for 16GB RAM
-    GA_STAGE1_NGEN     = 40    # deep convergence
-    GA_STAGE2_POP_SIZE = 80
-    GA_STAGE2_NGEN     = 25
-    GA_MAX_WINDOWS     = 10
-    GA_MAX_WINDOWS_STAGE2 = 10
+    # FULL production mode v6 — tuned for GitHub Actions (2 cores, 7GB RAM, 6h timeout)
+    GA_STAGE1_POP_SIZE = 40    # smaller pop for 2-core Actions runner
+    GA_STAGE1_NGEN     = 30    # 30 gens × ~3min = ~90min
+    GA_STAGE2_POP_SIZE = 50
+    GA_STAGE2_NGEN     = 15
+    GA_MAX_WINDOWS     = 6     # fewer windows = faster eval (was 10)
+    GA_MAX_WINDOWS_STAGE2 = 6
 
 # ==============================================================================
 # 1) DEAP SETUP
