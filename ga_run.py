@@ -278,11 +278,12 @@ if FAST_MODE:
     GA_MAX_WINDOWS_STAGE2 = 5
 else:
     # FULL production mode v6 — tuned for GitHub Actions (2 cores, 7GB RAM, 6h timeout)
-    GA_STAGE1_POP_SIZE = 30    # smaller pop to fit in 16GB with 1 worker
-    GA_STAGE1_NGEN     = 30
+    # FULL production mode — try larger config, falls back if OOM
+    GA_STAGE1_POP_SIZE = 30
+    GA_STAGE1_NGEN     = 30    # proven stable config
     GA_STAGE2_POP_SIZE = 40
     GA_STAGE2_NGEN     = 15
-    GA_MAX_WINDOWS     = 4     # fewer windows = less memory per eval
+    GA_MAX_WINDOWS     = 4     # max stable on 16GB
     GA_MAX_WINDOWS_STAGE2 = 4
 
 # ==============================================================================
