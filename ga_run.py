@@ -278,12 +278,12 @@ if FAST_MODE:
     GA_MAX_WINDOWS_STAGE2 = 5
 else:
     # FULL production mode v6 — tuned for GitHub Actions (2 cores, 7GB RAM, 6h timeout)
-    GA_STAGE1_POP_SIZE = 40    # smaller pop for 2-core Actions runner
-    GA_STAGE1_NGEN     = 30    # 30 gens × ~3min = ~90min
-    GA_STAGE2_POP_SIZE = 50
+    GA_STAGE1_POP_SIZE = 30    # smaller pop to fit in 16GB with 1 worker
+    GA_STAGE1_NGEN     = 30
+    GA_STAGE2_POP_SIZE = 40
     GA_STAGE2_NGEN     = 15
-    GA_MAX_WINDOWS     = 6     # fewer windows = faster eval (was 10)
-    GA_MAX_WINDOWS_STAGE2 = 6
+    GA_MAX_WINDOWS     = 4     # fewer windows = less memory per eval
+    GA_MAX_WINDOWS_STAGE2 = 4
 
 # ==============================================================================
 # 1) DEAP SETUP
