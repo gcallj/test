@@ -280,7 +280,7 @@ else:
     # FULL production mode v6 — tuned for GitHub Actions (2 cores, 7GB RAM, 6h timeout)
     # FULL production mode — try larger config, falls back if OOM
     GA_STAGE1_POP_SIZE = 30
-    GA_STAGE1_NGEN     = 30    # proven stable config
+    GA_STAGE1_NGEN     = 10    # run in stages of 10 to avoid OOM (re-run from checkpoint)
     GA_STAGE2_POP_SIZE = 40
     GA_STAGE2_NGEN     = 15
     GA_MAX_WINDOWS     = 4     # max stable on 16GB
