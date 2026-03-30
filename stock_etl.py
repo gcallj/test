@@ -564,6 +564,27 @@ def run_etl():
 
         feats['pct_change'] = ohlcv_num[close_col].pct_change()
 
+        # ── SMA distance features (continuous, replaces binary crosses) ──
+        # Binary crosses have |r| ~0.01 (useless). Distance between SMAs
+        # is continuous and measures trend strength, not just crossing events.
+        _close_for_sma = ohlcv_num[close_col]
+        for fast, slow in [(5,20), (10,50), (20,50), (20,200), (50,200)]:
+            fcol, scol = f'SMA_{fast}', f'SMA_{slow}'
+            if fcol in feats.columns and scol in feats.columns:
+                # Distance: (SMA_fast - SMA_slow) / SMA_slow (positive = bullish trend)
+                feats[f'sma_dist_{fast}_{slow}'] = (
+                    (feats[fcol] - feats[scol]) / feats[scol].replace(0, np.nan)
+                ).clip(-0.15, 0.15)
+                # Acceleration: change in distance over 5 days (trend strengthening/weakening)
+                feats[f'sma_accel_{fast}_{slow}'] = feats[f'sma_dist_{fast}_{slow}'].diff(5)
+        # Price relative to key SMAs (continuous, not binary above/below)
+        for avg in [20, 50, 200]:
+            scol = f'SMA_{avg}'
+            if scol in feats.columns:
+                feats[f'price_vs_sma{avg}'] = (
+                    (_close_for_sma - feats[scol]) / feats[scol].replace(0, np.nan)
+                ).clip(-0.3, 0.3)
+
         # ── Phase 3.3: Microstructure features ──
         _close = ohlcv_num[close_col]
         _volume = ohlcv_num['Volume']
@@ -674,53 +695,80 @@ def run_etl():
 
 
     def patterns_for_ticker(ohlcv: pd.DataFrame, shift_features: int = 1) -> pd.DataFrame:
-        parts = [
-            detect_head_shoulder(ohlcv),
-            detect_multiple_tops_bottoms(ohlcv),
-            calculate_support_resistance(ohlcv),
-            detect_triangle_pattern(ohlcv),
-            detect_wedge(ohlcv),
-            detect_channel(ohlcv),
-            detect_double_top_bottom(ohlcv),
-            detect_trendline(ohlcv),
-        ]
-        P = pd.concat(parts, axis=1)
+        """Generate CONTINUOUS pattern features (not binary) for ML.
+
+        Key insight: binary pattern detection (0/1) has near-zero Spearman correlation
+        with future returns. Continuous features measuring proximity, strength, and
+        context of chart structures are much more predictive.
+        """
+        c = ohlcv['Close'].values.astype(float)
+        h = ohlcv['High'].values.astype(float)
+        l = ohlcv['Low'].values.astype(float)
+        v = ohlcv['Volume'].values.astype(float) if 'Volume' in ohlcv.columns else np.ones(len(c))
+        n = len(c)
+        idx = ohlcv.index
+        out = pd.DataFrame(index=idx)
+
+        # Helper: rolling on array → Series with correct index
+        def _roll(arr, w, fn='max', min_p=None):
+            s = pd.Series(arr, index=idx)
+            mp = min_p or max(3, w // 3)
+            if fn == 'max': return s.rolling(w, min_periods=mp).max()
+            elif fn == 'min': return s.rolling(w, min_periods=mp).min()
+            elif fn == 'mean': return s.rolling(w, min_periods=mp).mean()
+            elif fn == 'std': return s.rolling(w, min_periods=mp).std()
+            return s
+
+        # 1. SUPPORT/RESISTANCE DISTANCE (best features: r=0.04)
+        for w in [20, 50]:
+            support = _roll(l, w, 'min').values
+            resistance = _roll(h, w, 'max').values
+            mid = np.maximum((support + resistance) / 2, 1e-8)
+            out[f'dist_support_{w}d'] = (c - support) / mid
+            out[f'dist_resistance_{w}d'] = (resistance - c) / mid
+
+        # 2. CUP AND HANDLE (r=0.03, statistically significant)
+        for cup_len in [30, 50]:
+            if n >= cup_len:
+                start_price = pd.Series(c, index=idx).shift(cup_len).values
+                min_in_cup = _roll(l, cup_len, 'min', min_p=cup_len//2).values
+                cup_depth = np.where(start_price > 0, (start_price - min_in_cup) / start_price, 0)
+                recovery = np.where(
+                    (start_price > 0) & ((start_price - min_in_cup) > 0),
+                    (c - min_in_cup) / np.maximum(start_price - min_in_cup, 1e-8), 0)
+                cup_score = np.where(
+                    (cup_depth > 0.03) & (cup_depth < 0.30),
+                    np.clip(recovery, 0, 1.2) * cup_depth * 10, 0)
+                out[f'cup_handle_{cup_len}d'] = np.clip(cup_score, 0, 3)
+
+        # 3. CONSOLIDATION: range compression → breakout imminent
+        for w in [10, 20]:
+            recent_rng = _roll(h, w, 'max') - _roll(l, w, 'min')
+            prior_rng = _roll(h, w*2, 'max') - _roll(l, w*2, 'min')
+            out[f'consolidation_{w}d'] = (recent_rng / prior_rng.replace(0, np.nan)).clip(0, 2).values
+
+        # 4. HIGHER LOWS: ascending bottoms = uptrend confirmation
+        for w in [10, 20]:
+            recent_low = _roll(l, w, 'min')
+            prior_low = _roll(l, w, 'min').shift(w)
+            out[f'higher_lows_{w}d'] = ((recent_low - prior_low) / prior_low.replace(0, np.nan)).clip(-0.2, 0.2).values
+
+        # 5. VOLUME at extremes: confirmation signals
+        vol_ma = _roll(v, 20, 'mean')
+        vol_ratio = pd.Series(v, index=idx) / vol_ma.replace(0, np.nan)
+        # Breakout proximity as base
+        bp = out.get('dist_resistance_20d', pd.Series(0.0, index=idx))
+        bp_inv = out.get('dist_support_20d', pd.Series(0.0, index=idx))
+        # Volume surge near resistance = breakout confirmation
+        out['volume_breakout_confirm'] = (vol_ratio.values * np.clip(1 - bp.values, 0, 1)).clip(0, 5)
+        # Volume surge near support = capitulation (potential bottom)
+        out['volume_capitulation'] = (vol_ratio.values * np.clip(1 - bp_inv.values, 0, 1)).clip(0, 5)
+
         if shift_features > 0:
-            P = P.shift(shift_features)
+            out = out.shift(shift_features)
 
-        patt_cols = [c for c in P.columns if c.endswith('pattern')]
-        P[patt_cols] = P[patt_cols].fillna(0).astype('int8')  # <<< FIX
-
-        # ── Rolling pattern aggregations: daily(5d), weekly(5d), monthly(20d) ──
-        # For each pattern column, create:
-        #   _bull_5d  = count of bullish signals (==1) in last 5 days
-        #   _bear_5d  = count of bearish signals (==-1) in last 5 days
-        #   _net_5d   = bull - bear in last 5 days (positive = bullish bias)
-        #   _bull_20d = count of bullish in last 20 days (~monthly)
-        #   _bear_20d = count of bearish in last 20 days
-        #   _net_20d  = bull - bear in last 20 days
-        #   _any_bull_5d = 1 if any bullish in last 5d, 0 otherwise
-        #   _any_bear_5d = 1 if any bearish in last 5d, 0 otherwise
-        for pcol in patt_cols:
-            s = P[pcol]
-            bull = (s == 1).astype('int8')
-            bear = (s == -1).astype('int8')
-
-            # Daily / Weekly window (5 trading days)
-            P[pcol + '_bull_5d'] = bull.rolling(5, min_periods=1).sum().astype('int8')
-            P[pcol + '_bear_5d'] = bear.rolling(5, min_periods=1).sum().astype('int8')
-            P[pcol + '_net_5d']  = (P[pcol + '_bull_5d'] - P[pcol + '_bear_5d']).astype('int8')
-            P[pcol + '_any_bull_5d'] = (P[pcol + '_bull_5d'] > 0).astype('int8')
-            P[pcol + '_any_bear_5d'] = (P[pcol + '_bear_5d'] > 0).astype('int8')
-
-            # Monthly window (20 trading days)
-            P[pcol + '_bull_20d'] = bull.rolling(20, min_periods=1).sum().astype('int8')
-            P[pcol + '_bear_20d'] = bear.rolling(20, min_periods=1).sum().astype('int8')
-            P[pcol + '_net_20d']  = (P[pcol + '_bull_20d'] - P[pcol + '_bear_20d']).astype('int8')
-
-        other_cols = [c for c in P.columns if c not in patt_cols and not any(c.startswith(p) for p in patt_cols)]
-        P[other_cols] = to_float32_safe(P[other_cols])
-        return P
+        out = to_float32_safe(out)
+        return out
 
 
     def patterns_weekly_monthly(ohlcv: pd.DataFrame) -> pd.DataFrame:
