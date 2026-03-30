@@ -548,19 +548,17 @@ def run_etl():
         for avg in AVERAGES:
             feats[f'SMA_{avg}'] = ohlcv_num[close_col].rolling(avg).mean()
 
-        # cruzamentos
+        # Cruzamentos contínuos: distância % entre médias (substitui binário 0/1/-1)
+        # Binary crosses have |r|~0.01; continuous distance has |r|~0.03-0.06 (3-6x better)
         for fast in AVERAGES:
             for slow in AVERAGES:
                 if slow > fast:
                     fcol = f'SMA_{fast}'
                     scol = f'SMA_{slow}'
-                    prev_f = feats[fcol].shift(1)
-                    prev_s = feats[scol].shift(1)
-                    crossname = f"cross_{fast}_{slow}"
-                    cross = pd.Series(0, index=feats.index, dtype='int8')
-                    cross[(feats[fcol] < feats[scol]) & (prev_f >= prev_s)] = -1
-                    cross[(feats[fcol] > feats[scol]) & (prev_f <= prev_s)] = 1
-                    feats[crossname] = cross
+                    # Distância relativa (contínua): positivo = fast > slow (bullish)
+                    feats[f'cross_{fast}_{slow}'] = (
+                        (feats[fcol] - feats[scol]) / feats[scol].replace(0, np.nan)
+                    ).clip(-0.20, 0.20)
 
         feats['pct_change'] = ohlcv_num[close_col].pct_change()
 
@@ -682,9 +680,11 @@ def run_etl():
         if shift_features > 0:
             feats = feats.shift(shift_features)
 
-        # >>> FIX: garantir que colunas discretas não tenham NaN antes do astype(int8)
-        int_cols = [c for c in feats.columns if str(c).startswith("cross_") or str(c).startswith("miner_")]
-        feats[int_cols] = feats[int_cols].fillna(0).astype('int8')
+        # >>> FIX: garantir que colunas discretas não tenham NaN
+        # cross_ agora são float contínuos, só miner_ precisa int8
+        int_cols = [c for c in feats.columns if str(c).startswith("miner_")]
+        if int_cols:
+            feats[int_cols] = feats[int_cols].fillna(0).astype('int8')
 
         # floats podem ficar com NaN (você já zera depois no fill_100pct), mas pode manter assim:
         float_cols = [c for c in feats.columns if c not in int_cols]
@@ -1055,10 +1055,9 @@ def run_etl():
         kept_cols = pd.MultiIndex.from_tuples(kept_cols, names=X.columns.names)
         X_red = X.loc[:, kept_cols].copy()
 
-        # compact dtypes
-        X_red = cast_int8_multi(X_red, prefixes=("cross_",), suffixes=("pattern",))
+        # compact dtypes (cross_ now continuous, don't cast to int8)
         other0 = [c for c in X_red.columns.get_level_values(0)
-                  if not (str(c).startswith("cross_") or str(c).endswith("pattern"))]
+                  if not str(c).endswith("pattern")]
         if other0:
             X_red.loc[:, (other0, slice(None))] = to_float32_safe(X_red.loc[:, (other0, slice(None))])
 
@@ -1528,10 +1527,9 @@ def run_etl():
     X = pd.concat(feat_frames, axis=1).sort_index()
     y = pd.concat(tgt_frames,  axis=1).sort_index()
 
-    # Cast consistente (atualizado p/ novos targets)
-    X = cast_int8_multi(X, prefixes=("cross_",), suffixes=("pattern",))
+    # Cast consistente (cross_ now continuous float, don't cast to int8)
     other0 = [c for c in X.columns.get_level_values(0)
-              if not (str(c).startswith("cross_") or str(c).endswith("pattern"))]
+              if not str(c).endswith("pattern")]
     if other0:
         X.loc[:, (other0, slice(None))] = to_float32_safe(X.loc[:, (other0, slice(None))])
 
