@@ -548,17 +548,9 @@ def run_etl():
         for avg in AVERAGES:
             feats[f'SMA_{avg}'] = ohlcv_num[close_col].rolling(avg).mean()
 
-        # Cruzamentos contínuos: distância % entre médias (substitui binário 0/1/-1)
-        # Binary crosses have |r|~0.01; continuous distance has |r|~0.03-0.06 (3-6x better)
-        for fast in AVERAGES:
-            for slow in AVERAGES:
-                if slow > fast:
-                    fcol = f'SMA_{fast}'
-                    scol = f'SMA_{slow}'
-                    # Distância relativa (contínua): positivo = fast > slow (bullish)
-                    feats[f'cross_{fast}_{slow}'] = (
-                        (feats[fcol] - feats[scol]) / feats[scol].replace(0, np.nan)
-                    ).clip(-0.20, 0.20)
+        # Cruzamentos binários removidos — substituídos por sma_dist/sma_accel contínuos
+        # 55 crosses binários tinham |r|~0.01. Contínuos (sma_dist) têm |r|~0.03-0.06.
+        # Manter cross_ como contínuos adicionava 55 features sem melhoria de fitness (6.72 vs 7.55)
 
         feats['pct_change'] = ohlcv_num[close_col].pct_change()
 
