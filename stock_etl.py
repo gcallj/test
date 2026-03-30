@@ -548,9 +548,16 @@ def run_etl():
         for avg in AVERAGES:
             feats[f'SMA_{avg}'] = ohlcv_num[close_col].rolling(avg).mean()
 
-        # Cruzamentos binários removidos — substituídos por sma_dist/sma_accel contínuos
-        # 55 crosses binários tinham |r|~0.01. Contínuos (sma_dist) têm |r|~0.03-0.06.
-        # Manter cross_ como contínuos adicionava 55 features sem melhoria de fitness (6.72 vs 7.55)
+        # Cruzamentos CONTÍNUOS: distância % entre médias (float32, não binário)
+        # Binários tinham |r|~0.01. Contínuos têm |r|~0.03 (3x melhor).
+        # Apenas os 10 pares mais informativos (economia de memória)
+        _KEY_CROSS_PAIRS = [(5,20),(5,50),(10,20),(10,50),(20,50),(20,100),(20,200),(50,100),(50,200),(100,200)]
+        for fast, slow in _KEY_CROSS_PAIRS:
+            fcol, scol = f'SMA_{fast}', f'SMA_{slow}'
+            if fcol in feats.columns and scol in feats.columns:
+                feats[f'cross_{fast}_{slow}'] = to_float32_safe(
+                    ((feats[fcol] - feats[scol]) / feats[scol].replace(0, np.nan)).clip(-0.20, 0.20)
+                )
 
         feats['pct_change'] = ohlcv_num[close_col].pct_change()
 
@@ -574,6 +581,46 @@ def run_etl():
                 feats[f'price_vs_sma{avg}'] = (
                     (_close_for_sma - feats[scol]) / feats[scol].replace(0, np.nan)
                 ).clip(-0.3, 0.3)
+
+        # ── STRATEGY 1: Vol-normalized features (boost existing by +10-20% |r|) ──
+        _cl = ohlcv_num[close_col]
+        _hi = ohlcv_num['High']
+        _lo = ohlcv_num['Low']
+        _vo = ohlcv_num['Volume']
+        _vol20 = _cl.pct_change().rolling(20, min_periods=5).std().replace(0, np.nan)
+        _atr_pct = ((_hi - _lo) / _cl.replace(0, np.nan)).rolling(14, min_periods=5).mean().replace(0, np.nan)
+
+        # Vol-adjusted momentum (ROC / volatility)
+        for period in [5, 10, 20]:
+            _roc = (_cl - _cl.shift(period)) / _cl.shift(period).replace(0, np.nan)
+            feats[f'roc_voladj_{period}'] = to_float32_safe((_roc / _vol20).clip(-5, 5))
+
+        # Vol-adjusted RSI
+        if 'momentum_rsi' in feats.columns:
+            feats['rsi_voladj'] = to_float32_safe(((feats['momentum_rsi'] - 50) / 50 / _vol20).clip(-5, 5))
+
+        # Vol-adjusted volume surge
+        _vol_ratio = _vo / _vo.rolling(20, min_periods=5).mean().replace(0, np.nan)
+        feats['volume_surge_voladj'] = to_float32_safe((_vol_ratio / _atr_pct).clip(0, 20))
+
+        # ── STRATEGY 2: Feature interactions (capture non-linearities) ──
+        # RSI oversold + high volume = capitulation bottom
+        if 'momentum_rsi' in feats.columns:
+            _rsi_oversold = ((50 - feats['momentum_rsi']).clip(0, 50) / 50)
+            feats['rsi_x_volume'] = to_float32_safe(_rsi_oversold * _vol_ratio.clip(0, 5))
+
+        # Momentum × trend alignment
+        for sma_p in [50, 200]:
+            scol = f'SMA_{sma_p}'
+            if scol in feats.columns:
+                _trend = ((_cl - feats[scol]) / feats[scol].replace(0, np.nan)).clip(-0.3, 0.3)
+                _mom = ((_cl - _cl.shift(10)) / _cl.shift(10).replace(0, np.nan)).clip(-0.2, 0.2)
+                feats[f'mom_x_trend{sma_p}'] = to_float32_safe(_trend * _mom * 10)
+
+        # Breakout × volume confirmation
+        _price_near_high = ((_cl - _lo.rolling(20).min()) /
+                           (_hi.rolling(20).max() - _lo.rolling(20).min()).replace(0, np.nan)).clip(0, 1)
+        feats['breakout_x_volume'] = to_float32_safe(_price_near_high * _vol_ratio.clip(0, 5))
 
         # ── Phase 3.3: Microstructure features ──
         _close = ohlcv_num[close_col]
@@ -1389,6 +1436,36 @@ def run_etl():
         _vix_pctl_252 = None
         print("[cross-features] WARNING: VIX not found, skipping VIX percentile")
 
+    # ── STRATEGY 3: Market regime features (cross-sectional) ──
+    # These measure overall market conditions, shared across all tickers
+    _sa_tickers = [t for t in valid_tickers if t.endswith('.SA') and not any(t.startswith(x) for x in ['^'])]
+    _market_breadth = None
+    _market_dispersion = None
+    if len(_sa_tickers) >= 10:
+        try:
+            # Collect closes for SA tickers
+            _closes_list = []
+            for _t in _sa_tickers[:60]:  # cap at 60 to save memory
+                try:
+                    _tc = data.xs(_t, level=1, axis=1)['Close']
+                    if _tc.notna().sum() > 200:
+                        _closes_list.append(_tc)
+                except (KeyError, ValueError):
+                    pass
+            if len(_closes_list) >= 10:
+                _closes_df = pd.concat(_closes_list, axis=1)
+                # Market breadth: % of stocks above their 200d SMA
+                _sma200s = _closes_df.rolling(200, min_periods=50).mean()
+                _above_200 = (_closes_df > _sma200s).sum(axis=1) / _closes_df.notna().sum(axis=1)
+                _market_breadth = _above_200.rolling(5, min_periods=1).mean()  # smooth
+                # Market dispersion: std of 20d returns across stocks (high = risk-off)
+                _rets_20d = _closes_df.pct_change(20)
+                _market_dispersion = _rets_20d.std(axis=1).rolling(10, min_periods=3).mean()
+                del _closes_df, _sma200s, _above_200, _rets_20d  # free memory
+                print(f"[cross-features] Market regime: breadth + dispersion ({len(_closes_list)} tickers)")
+        except Exception as _e:
+            print(f"[cross-features] Market regime failed: {_e}")
+
     def compute_cross_ticker_features(tk, ohlcv, ibov_ret, vix_pctl, shift_features=1):
         """Compute cross-ticker features: rolling beta, relative strength, VIX percentile."""
         close_col = 'Adj Close' if 'Adj Close' in ohlcv.columns else 'Close'
@@ -1418,6 +1495,12 @@ def run_etl():
         # VIX percentile (252d)
         if vix_pctl is not None:
             cross_feats['vix_percentile_252d'] = vix_pctl.reindex(ohlcv.index)
+
+        # Market regime features (cross-sectional, same for all tickers)
+        if _market_breadth is not None:
+            cross_feats['market_breadth'] = _market_breadth.reindex(ohlcv.index)
+        if _market_dispersion is not None:
+            cross_feats['market_dispersion'] = _market_dispersion.reindex(ohlcv.index)
 
         if shift_features > 0:
             cross_feats = cross_feats.shift(shift_features)
