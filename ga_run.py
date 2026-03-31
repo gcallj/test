@@ -129,7 +129,7 @@ ATR_MULT_RANGE = (1.5, 3.5)
 RR_MULT_RANGE  = (1.5, 4.0)  # wider RR to pursue larger trend-following payoffs
 
 # Volume / liquidity filter (v5)
-MIN_VOL_FIN_DAILY = 50_000  # R$50k/dia minimum median financial volume
+MIN_VOL_FIN_DAILY = 200_000  # R$200k/dia — focus on liquid tickers to save memory during GA
 
 # Apply output constraints
 MIN_STOP_PCT = 0.02       # 2% minimum stop (avoids unrealistic tight stops)
