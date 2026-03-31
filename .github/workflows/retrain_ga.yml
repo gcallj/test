@@ -1,21 +1,25 @@
-name: Retrain GA (Strategy C)
+name: Full Retrain GA (Staged)
 
 on:
   workflow_dispatch:
     inputs:
-      ngen:
-        description: 'Number of GA generations'
-        default: '40'
+      stages:
+        description: 'Number of stages (each runs 10 gens)'
+        default: '4'
         type: string
       pop_size:
         description: 'Population size'
-        default: '50'
+        default: '40'
+        type: string
+      windows:
+        description: 'Walk-forward windows'
+        default: '6'
         type: string
 
 jobs:
   retrain:
     runs-on: ubuntu-latest
-    timeout-minutes: 360    # 6 hours max
+    timeout-minutes: 360
 
     env:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -49,22 +53,45 @@ jobs:
       - name: Show current checkpoint
         run: |
           echo "Before retrain:"
-          python3 -c "import json; d=json.load(open('global_ga_checkpoint.json')); print(f'  fitness={d[\"fitness\"]:.4f}  genome_len={len(d[\"genome\"])}')"
+          python3 -c "import json; d=json.load(open('global_ga_checkpoint.json')); print(f'  fitness={d[\"fitness\"]:.4f}')"
+          echo "Config: pop=${{ inputs.pop_size }}, stages=${{ inputs.stages }}, windows=${{ inputs.windows }}"
 
-      - name: Run ETL (fresh data)
-        run: python -u run_pipeline.py --steps 1
+      - name: Run ETL + Step 4 (fresh data + history)
+        run: |
+          python -u run_pipeline.py --steps 1
+          python -u run_pipeline.py --steps 4
 
-      - name: Retrain GA (full mode)
-        run: python -u run_pipeline.py --steps 5
-        env:
-          GA_RUN_MODE: "train"
+      - name: Retrain GA (staged)
+        run: |
+          python3 -u -c "
+          import os, json, time
+          os.environ['GA_RUN_MODE'] = 'train'
+          os.environ['GA_FAST_MODE'] = 'false'
+          os.environ['GA_EVAL_WORKERS'] = '2'
+
+          import ga_run
+          ga_run.GA_STAGE1_POP_SIZE = int('${{ inputs.pop_size }}')
+          ga_run.GA_STAGE1_NGEN = 10
+          ga_run.GA_MAX_WINDOWS = int('${{ inputs.windows }}')
+          ga_run.GA_MAX_WINDOWS_STAGE2 = min(int('${{ inputs.windows }}'), 6)
+          ga_run.GA_EVAL_WORKERS = 2
+
+          stages = int('${{ inputs.stages }}')
+          for s in range(1, stages + 1):
+              print(f'=== STAGE {s}/{stages} ===')
+              ck = json.load(open('global_ga_checkpoint.json'))
+              print(f'Starting fitness: {ck[\"fitness\"]:.4f}')
+              t0 = time.time()
+              ga_run.run()
+              ck = json.load(open('global_ga_checkpoint.json'))
+              print(f'Stage {s} done: fitness={ck[\"fitness\"]:.4f} ({time.time()-t0:.0f}s)')
+          "
 
       - name: Show results
         if: always()
         run: |
           echo "After retrain:"
           python3 -c "import json; d=json.load(open('global_ga_checkpoint.json')); print(f'  fitness={d[\"fitness\"]:.4f}')"
-          echo "=== Output files ==="
           ls -lh summary_latest.xlsx apply_last_*d__H*.csv 2>/dev/null
 
       - name: Commit retrained checkpoint
@@ -73,7 +100,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add global_ga_checkpoint.json apply_last_5d__H5.csv summary_latest.xlsx
-          git commit -m "Retrain GA: fitness=$(python3 -c 'import json; print(f\"{json.load(open(\"global_ga_checkpoint.json\"))[\"fitness\"]:.4f}\")')" || echo "No changes"
+          FITNESS=$(python3 -c "import json; print(f'{json.load(open(\"global_ga_checkpoint.json\"))[\"fitness\"]:.4f}')")
+          git commit -m "Retrain GA staged: fitness=${FITNESS}" || echo "No changes"
           git push
 
       - name: Upload artifacts
