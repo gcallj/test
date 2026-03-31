@@ -711,7 +711,7 @@ def run_final_output():
     # ============================================================
     # MAIN (CHUNKED)
     # ============================================================
-    ensure_exists(HIST_REG_WIDE_PATH, "HIST_REG_WIDE_PATH")
+    # REG file may not exist (LFS pointer or not yet generated) — handled by REG_AVAILABLE fallback below
 
     # ENS pode estar corrompido ou desatualizado — lidar graciosamente
     ens_ds = None
