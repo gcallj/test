@@ -706,6 +706,44 @@ def run_etl():
             feats['miner_within_25pct_high']
         ).astype('int8')
 
+        # ── VCP (Volatility Contraction Pattern) — Minervini timing ──
+        # VCP measures if volatility is CONTRACTING (each dip smaller than last)
+        # This is the key timing signal: enter when VCP is tight + Stage 2
+        for vcp_w in [20, 40]:
+            # Range contraction: recent range vs prior range
+            _rng_recent = _high.rolling(vcp_w//2, min_periods=3).max() - _low.rolling(vcp_w//2, min_periods=3).min()
+            _rng_prior = _high.shift(vcp_w//2).rolling(vcp_w//2, min_periods=3).max() - _low.shift(vcp_w//2).rolling(vcp_w//2, min_periods=3).min()
+            _contraction = (_rng_recent / _rng_prior.replace(0, np.nan)).clip(0.1, 2.0)
+            feats[f'vcp_contraction_{vcp_w}d'] = to_float32_safe(_contraction)
+
+            # Number of contracting dips (each low higher than previous low)
+            _dip_size = (_close - _low.rolling(5, min_periods=2).min()) / _close.replace(0, np.nan)
+            _prev_dip = _dip_size.shift(vcp_w//4)
+            _contracting = (_dip_size < _prev_dip).rolling(vcp_w//4, min_periods=2).mean()
+            feats[f'vcp_dip_contracting_{vcp_w}d'] = to_float32_safe(_contracting)
+
+        # ── Minervini Stage Detection (continuous, 0-4) ──
+        # Stage 2 (markup) is the buying zone: all MAs aligned + trending
+        _stage = pd.Series(0.0, index=_close.index)
+        # Stage 2 indicators (higher = more Stage 2 like)
+        _s2_score = (
+            (_close > sma50).astype(float) * 0.15 +
+            (_close > sma150).astype(float) * 0.15 +
+            (_close > sma200).astype(float) * 0.15 +
+            (sma50 > sma150).astype(float) * 0.15 +
+            (sma150 > sma200).astype(float) * 0.15 +
+            (sma200 > sma200.shift(20)).astype(float) * 0.10 +  # MA200 trending up
+            (pct_from_high <= 0.25).astype(float) * 0.15       # within 25% of high
+        )
+        feats['miner_stage2_score'] = to_float32_safe(_s2_score)
+
+        # ── TIMING: VCP + Stage 2 = optimal entry ──
+        # Interaction: contraction happening IN Stage 2 = Minervini buy signal
+        feats['vcp_x_stage2'] = to_float32_safe(
+            (1.0 - feats.get('vcp_contraction_20d', pd.Series(1.0, index=_close.index)).clip(0.3, 1.0))
+            * _s2_score * 3.0
+        )
+
         # Additional useful derived features
         # Distance from 52w high (0 = at high, negative = below)
         feats['dist_52w_high_pct'] = to_float32_safe((_close - high_52w) / high_52w.replace(0, np.nan))
@@ -792,7 +830,54 @@ def run_etl():
             prior_low = _roll(l, w, 'min').shift(w)
             out[f'higher_lows_{w}d'] = ((recent_low - prior_low) / prior_low.replace(0, np.nan)).clip(-0.2, 0.2).values
 
-        # 5. VOLUME at extremes: confirmation signals
+        # 5. PIVOT POINTS: classic floor pivots + distance features
+        #    Pivot = (High_prev + Low_prev + Close_prev) / 3
+        #    The GA learns: "buy when price > pivot" via positive dist_pivot
+        #    Multiple timeframes: daily (previous day), weekly (previous 5d)
+        for pivot_w, label in [(1, 'daily'), (5, 'weekly')]:
+            if pivot_w == 1:
+                _prev_h = pd.Series(h, index=idx).shift(1).values
+                _prev_l = pd.Series(l, index=idx).shift(1).values
+            else:
+                _prev_h = _roll(h, pivot_w, 'max').shift(1).values
+                _prev_l = _roll(l, pivot_w, 'min').shift(1).values
+            _prev_c = pd.Series(c, index=idx).shift(1).values
+            _pivot = (_prev_h + _prev_l + _prev_c) / 3.0
+            _range = _prev_h - _prev_l
+
+            # Distance from pivot (positive = above pivot = bullish)
+            _mid = np.maximum(_pivot, 1e-8)
+            out[f'dist_pivot_{label}'] = ((c - _pivot) / _mid).clip(-0.10, 0.10)
+
+            # Classic support/resistance levels from pivot
+            _r1 = 2 * _pivot - _prev_l  # Resistance 1
+            _s1 = 2 * _pivot - _prev_h  # Support 1
+            _r2 = _pivot + _range       # Resistance 2
+            _s2 = _pivot - _range       # Support 2
+
+            # Position relative to pivot zones (0 = at S2, 0.5 = at pivot, 1 = at R2)
+            _full_range = np.maximum(_r2 - _s2, 1e-8)
+            out[f'pivot_zone_{label}'] = ((c - _s2) / _full_range).clip(0, 1)
+
+            # Breakout above R1 (strong bullish signal)
+            out[f'above_r1_{label}'] = ((c - _r1) / _mid).clip(-0.05, 0.10)
+
+            # Breakdown below S1 (bearish)
+            out[f'below_s1_{label}'] = ((_s1 - c) / _mid).clip(-0.05, 0.10)
+
+        # 6. FIBONACCI RETRACEMENT: position within recent swing
+        for fib_w in [20, 50]:
+            _swing_h = _roll(h, fib_w, 'max').values
+            _swing_l = _roll(l, fib_w, 'min').values
+            _swing_range = np.maximum(_swing_h - _swing_l, 1e-8)
+            # Retracement level: 0 = at low, 0.382 = fib level, 0.618 = fib level, 1 = at high
+            _retrace = (c - _swing_l) / _swing_range
+            out[f'fib_retrace_{fib_w}d'] = np.clip(_retrace, 0, 1)
+            # Distance from key fib levels (0.382 and 0.618)
+            out[f'dist_fib382_{fib_w}d'] = (_retrace - 0.382).clip(-0.5, 0.5)
+            out[f'dist_fib618_{fib_w}d'] = (_retrace - 0.618).clip(-0.5, 0.5)
+
+        # 7. VOLUME at extremes: confirmation signals
         vol_ma = _roll(v, 20, 'mean')
         vol_ratio = pd.Series(v, index=idx) / vol_ma.replace(0, np.nan)
         # Breakout proximity as base
