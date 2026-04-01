@@ -3064,20 +3064,31 @@ def run():
             if sig == "buy":
                 if timing == "no time":
                     if _above_r1:
-                        condicao = f"COMPRAR: momentum forte, acima de R1 ({r1:.2f})"
+                        # Ja acima de R1: momentum forte, tentar desconto intraday
+                        condicao = f"COMPRAR a {best_buy:.2f} (desconto intraday). Momentum forte, acima de R1 ({r1:.2f})"
                     elif _above_pivot:
-                        condicao = f"COMPRAR: acima do Pivot ({pivot:.2f}), limite em {best_buy:.2f}"
+                        # Acima do pivot: confirma compra, tentar desconto mas nao abaixo do pivot
+                        _entry_pivot = round(max(best_buy, pivot * 1.001), 4)  # nunca abaixo do pivot
+                        condicao = f"COMPRAR a {_entry_pivot:.2f} (acima do Pivot {pivot:.2f}). Stop em {stop_loss:.2f}"
+                        best_buy = _entry_pivot
                     else:
-                        condicao = f"COMPRAR no rompimento de {pivot:.2f}, limite em {best_buy:.2f}"
+                        # Abaixo do pivot: comprar QUANDO romper o pivot (nao antes)
+                        _entry_breakout = round(pivot * 1.002, 4)  # ligeiramente acima do pivot
+                        condicao = f"COMPRAR a {_entry_breakout:.2f} se romper Pivot ({pivot:.2f}). Stop em {stop_loss:.2f}"
+                        best_buy = _entry_breakout
                 elif timing == "cedo":
                     if _above_pivot:
-                        condicao = f"COMPRAR com cautela: cedo mas acima do Pivot ({pivot:.2f})"
+                        condicao = f"COMPRAR com cautela a {best_buy:.2f}. Cedo mas acima do Pivot ({pivot:.2f})"
                     else:
-                        condicao = f"AGUARDAR: cedo, comprar apenas se romper {pivot:.2f}"
+                        _entry_breakout = round(pivot * 1.002, 4)
+                        condicao = f"AGUARDAR: comprar a {_entry_breakout:.2f} apenas se romper Pivot ({pivot:.2f})"
+                        best_buy = _entry_breakout
                 elif timing == "atrasado":
-                    condicao = f"CAUTELA: atrasado, considerar parcial. Pivot em {pivot:.2f}"
+                    condicao = f"CAUTELA a {best_buy:.2f}: atrasado, considerar posicao parcial"
                 else:
-                    condicao = f"COMPRAR: limite em {best_buy:.2f}, stop em {stop_loss:.2f}"
+                    condicao = f"COMPRAR a {best_buy:.2f}. Stop em {stop_loss:.2f}"
+                # Recalculate entry_ref and dependent values after best_buy adjustment
+                entry_ref = best_buy
             else:  # hold
                 if timing == "muito cedo":
                     condicao = f"HOLD: muito cedo, base em formacao. Suporte em S1 ({s1:.2f})"
