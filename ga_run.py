@@ -3009,52 +3009,66 @@ def run():
             s1 = round(2 * pivot - _prev_h, 4)
             r2 = round(pivot + (_prev_h - _prev_l), 4)
 
-            # ── TIMING: cedo / no time / atrasado (Minervini Stage) ──
+            # ── TIMING + CONDICAO: integrados e coerentes ──
             _ma50_val = ma50_apply[i] if i < len(ma50_apply) and np.isfinite(ma50_apply[i]) else np.nan
             _ma200_val = ma200_apply[i] if i < len(ma200_apply) and np.isfinite(ma200_apply[i]) else np.nan
-            # VCP contraction (from ETL features via score_matrix proxy)
+
+            # VCP contraction
             _vcp_score = 0.0
             if i >= 20:
                 _rng_10 = float(np.max(payload["high"][max(0,i-9):i+1]) - np.min(payload["low"][max(0,i-9):i+1]))
                 _rng_20 = float(np.max(payload["high"][max(0,i-19):i+1]) - np.min(payload["low"][max(0,i-19):i+1]))
-                _vcp_score = 1.0 - min(_rng_10 / max(_rng_20, ATR_EPS), 1.0)  # 0=no contraction, 1=max contraction
+                _vcp_score = 1.0 - min(_rng_10 / max(_rng_20, ATR_EPS), 1.0)
 
+            # Determine timing from MAs (Minervini Stage)
             if np.isfinite(_ma50_val) and np.isfinite(_ma200_val):
                 _above_50 = close_val > _ma50_val
                 _above_200 = close_val > _ma200_val
                 _ma_aligned = _ma50_val > _ma200_val
-                _near_high = (recent_high - close_val) / max(close_val, ATR_EPS) < 0.10
 
-                if _above_200 and _above_50 and _ma_aligned and _vcp_score > 0.3:
-                    timing = "no time"  # Stage 2 + VCP = ideal entry
-                elif _above_200 and _above_50 and _ma_aligned:
-                    timing = "no time" if _near_high else "cedo"  # Stage 2 but no VCP
+                if _above_200 and _above_50 and _ma_aligned:
+                    timing = "no time"
                 elif _above_200 and not _above_50:
-                    timing = "cedo"  # Recovering, not yet Stage 2
-                elif not _above_200 and not _above_50:
-                    timing = "muito cedo"  # Stage 1 (base)
-                elif _above_50 and _above_200 and not _ma_aligned:
-                    timing = "atrasado"  # MAs not aligned, possible Stage 3
+                    timing = "cedo"
+                elif not _above_200:
+                    timing = "muito cedo"
                 else:
-                    timing = "neutro"
+                    timing = "atrasado"
             else:
                 timing = "neutro"
 
-            # Condicao de entrada: combina pivot + timing
+            # Determine condicao: integra timing + pivot + signal
+            _above_pivot = close_val > pivot
+            _above_r1 = close_val > r1
+
             if sig == "buy":
-                if close_val > r1:
-                    condicao = f"Comprar: acima de R1 ({r1:.2f}), momentum forte"
-                elif close_val > pivot:
-                    condicao = f"Comprar se abrir > Pivot ({pivot:.2f})"
+                if timing == "no time":
+                    if _above_r1:
+                        condicao = f"COMPRAR: momentum forte, acima de R1 ({r1:.2f})"
+                    elif _above_pivot:
+                        condicao = f"COMPRAR: acima do Pivot ({pivot:.2f}), limite em {best_buy:.2f}"
+                    else:
+                        condicao = f"COMPRAR no rompimento de {pivot:.2f}, limite em {best_buy:.2f}"
+                elif timing == "cedo":
+                    if _above_pivot:
+                        condicao = f"COMPRAR com cautela: cedo mas acima do Pivot ({pivot:.2f})"
+                    else:
+                        condicao = f"AGUARDAR: cedo, comprar apenas se romper {pivot:.2f}"
+                elif timing == "atrasado":
+                    condicao = f"CAUTELA: atrasado, considerar parcial. Pivot em {pivot:.2f}"
                 else:
-                    condicao = f"Aguardar rompimento do Pivot ({pivot:.2f})"
-            else:
-                if close_val < s1:
-                    condicao = f"Pressao vendedora, abaixo de S1 ({s1:.2f})"
-                elif close_val < pivot:
-                    condicao = f"Abaixo do Pivot ({pivot:.2f})"
+                    condicao = f"COMPRAR: limite em {best_buy:.2f}, stop em {stop_loss:.2f}"
+            else:  # hold
+                if timing == "muito cedo":
+                    condicao = f"HOLD: muito cedo, base em formacao. Suporte em S1 ({s1:.2f})"
+                elif timing == "cedo":
+                    condicao = f"HOLD: cedo, aguardar Stage 2. Monitorar Pivot ({pivot:.2f})"
+                elif timing == "atrasado":
+                    condicao = f"HOLD: atrasado, evitar. Resistencia em R1 ({r1:.2f})"
+                elif _above_pivot:
+                    condicao = f"HOLD: acima do Pivot ({pivot:.2f}) mas sem sinal"
                 else:
-                    condicao = f"Aguardar confirmacao acima de {pivot:.2f}"
+                    condicao = f"HOLD: abaixo do Pivot ({pivot:.2f})"
 
             results_apply.append({
                 "Date": pd.to_datetime(dates[i]).strftime("%Y-%m-%d"),
