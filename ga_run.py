@@ -1323,7 +1323,7 @@ def run_global_ga_20params(
     # When num_cpus == 1 (enforced on Windows to avoid spawn-mode deadlocks)
     # use a simple single-threaded executor (no pickle, no pipe). On
     # Linux/Mac with fork-based multiprocessing, use ProcessPoolExecutor.
-    _use_multiproc = (num_cpus > 1)
+    _use_multiproc = (num_cpus > 1) and (GA_EVAL_WORKERS > 1)  # respect GA_EVAL_WORKERS=1
     _payload_tmp_path = None
 
     if _use_multiproc:
@@ -2512,13 +2512,18 @@ def run():
         # Extract volume data if available
         vol = g["volume"].to_numpy(np.float64) if "volume" in g.columns else np.full(len(c), np.nan)
 
+        # Convert to float32 to save memory (half of float64)
         ticker_payloads[str(tkr)] = {
-            "open": o, "high": h, "low": l, "close": c, "atr": atr,
-            "volume": vol, "ret_fwd": ret_fwd_temp,
-            "score_matrix": directed_cols, "dates": dates, "ma": ma,
+            "open": o.astype(np.float32), "high": h.astype(np.float32),
+            "low": l.astype(np.float32), "close": c.astype(np.float32),
+            "atr": atr.astype(np.float32),
+            "volume": vol.astype(np.float32), "ret_fwd": ret_fwd_temp.astype(np.float32),
+            "score_matrix": directed_cols.astype(np.float32),
+            "dates": dates, "ma": ma.astype(np.float32),
             "feat_cols": feat_cols, "valid_mask": valid_mask,
-            "long_votes": long_votes, "short_votes": short_votes,
-            "feat_corr": _sel_corrs,  # list of (col, abs_spearman_r) for selected (deduped) features
+            "long_votes": long_votes.astype(np.float32),
+            "short_votes": short_votes.astype(np.float32),
+            "feat_corr": _sel_corrs,
         }
         if (ix_tkr % max(1, PRINT_EVERY)) == 0 or ix_tkr == len(tickers):
             dt = time.perf_counter() - prep_t0
