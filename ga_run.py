@@ -2863,17 +2863,36 @@ def run():
             # q_dist (v5): trade return distribution quality — big wins vs big losses
             q_dist = float(np.clip(bt_dist_quality, 0.0, 1.0))
 
-            # -- Quality penalty factors (applied before final score) --
+            # -- Pre-compute timing/pivot for use in confidence --
+            _ma50_pre = ma50_apply[i] if i < len(ma50_apply) and np.isfinite(ma50_apply[i]) else np.nan
+            _ma200_pre = ma200_apply[i] if i < len(ma200_apply) and np.isfinite(ma200_apply[i]) else np.nan
+            if np.isfinite(_ma50_pre) and np.isfinite(_ma200_pre):
+                _a50 = close_val > _ma50_pre
+                _a200 = close_val > _ma200_pre
+                _aligned = _ma50_pre > _ma200_pre
+                q_timing_pre = 1.0 if (_a200 and _a50 and _aligned) else (0.5 if _a200 else 0.2)
+            else:
+                q_timing_pre = 0.5
+
+            # Pivot pre-compute for confidence
+            _prev_h_pre = float(payload["high"][i]) if i < len(payload["high"]) else close_val
+            _prev_l_pre = float(payload["low"][i]) if i < len(payload["low"]) else close_val
+            _pivot_pre = (_prev_h_pre + _prev_l_pre + close_val) / 3.0
+            q_pivot_pre = 0.8 if close_val > _pivot_pre else 0.3
+
+            # -- Quality penalty factors --
             penalty = 1.0
             if sig == "buy" and wr_tier_num <= 1 and bt_n_trades >= min_trades_for_tier:
-                penalty *= 0.6  # penalize low win rate
+                penalty *= 0.6
             if sig == "buy" and rr_ratio < 1.5:
-                penalty *= 0.7  # penalize poor R:R
+                penalty *= 0.7
 
-            # Confidence (0-100): 8 fatores (v6) with quality penalties
+            # Confidence (0-100): 10 fatores including timing + pivot
             confidence = float(np.clip(
-                (0.10 * q_bt + 0.10 * q_sig + 0.20 * q_wr + 0.15 * q_dist +
-                 0.10 * q_agree + 0.10 * q_regime + 0.10 * q_ml + 0.15 * q_viability)
+                (0.08 * q_bt + 0.08 * q_sig + 0.15 * q_wr + 0.10 * q_dist +
+                 0.08 * q_agree + 0.08 * q_regime + 0.08 * q_ml + 0.10 * q_viability +
+                 0.15 * q_timing_pre +     # timing (Minervini stage)
+                 0.10 * q_pivot_pre)       # posicao vs pivot
                 * penalty * 100.0,
                 0.0, 100.0
             ))
@@ -2959,14 +2978,15 @@ def run():
                 f"HardStop: {hard_stop_pct:.0f}% gap"
             )
 
-            # ── RANKING SCORE: combina todos os fatores para ranking final ──
-            # Pondera: qualidade historica + timing atual + risco
+            # ── RANKING SCORE: usa q_timing_pre e q_pivot_pre (ja calculados) ──
             rank_score = round(
-                0.30 * confidence +          # qualidade do backtest
-                0.30 * upside_score +         # timing/momentum atual
-                0.15 * min(rr_ratio / 3.0, 1.0) * 100 +  # risco-retorno (cap 3:1)
+                0.20 * confidence +          # qualidade do backtest (ja inclui timing+pivot)
+                0.20 * upside_score +         # momentum atual
+                0.15 * q_timing_pre * 100 +   # timing (Minervini stage)
+                0.15 * q_pivot_pre * 100 +    # posicao vs pivot
+                0.10 * min(rr_ratio / 3.0, 1.0) * 100 +  # risco-retorno
                 0.10 * bt_win_rate * 100 +    # win rate direto
-                0.10 * regime_val * 100 +     # regime de mercado
+                0.05 * regime_val * 100 +     # regime de mercado
                 0.05 * q_stop * 100           # qualidade do stop
             , 1)
 
