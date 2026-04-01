@@ -2999,6 +2999,63 @@ def run():
             # Saida nao pode ser acima do alvo (senao ignora o take profit)
             best_sell = min(best_sell, take_profit)
 
+            # ── NIVEIS DE PIVOT (operacionais) ──
+            # Pivot diario: baseado no OHLC do dia anterior
+            _prev_h = float(payload["high"][i]) if i < len(payload["high"]) else close_val
+            _prev_l = float(payload["low"][i]) if i < len(payload["low"]) else close_val
+            _prev_c = close_val
+            pivot = round((_prev_h + _prev_l + _prev_c) / 3.0, 4)
+            r1 = round(2 * pivot - _prev_l, 4)
+            s1 = round(2 * pivot - _prev_h, 4)
+            r2 = round(pivot + (_prev_h - _prev_l), 4)
+
+            # ── TIMING: cedo / no time / atrasado (Minervini Stage) ──
+            _ma50_val = ma50_apply[i] if i < len(ma50_apply) and np.isfinite(ma50_apply[i]) else np.nan
+            _ma200_val = ma200_apply[i] if i < len(ma200_apply) and np.isfinite(ma200_apply[i]) else np.nan
+            # VCP contraction (from ETL features via score_matrix proxy)
+            _vcp_score = 0.0
+            if i >= 20:
+                _rng_10 = float(np.max(payload["high"][max(0,i-9):i+1]) - np.min(payload["low"][max(0,i-9):i+1]))
+                _rng_20 = float(np.max(payload["high"][max(0,i-19):i+1]) - np.min(payload["low"][max(0,i-19):i+1]))
+                _vcp_score = 1.0 - min(_rng_10 / max(_rng_20, ATR_EPS), 1.0)  # 0=no contraction, 1=max contraction
+
+            if np.isfinite(_ma50_val) and np.isfinite(_ma200_val):
+                _above_50 = close_val > _ma50_val
+                _above_200 = close_val > _ma200_val
+                _ma_aligned = _ma50_val > _ma200_val
+                _near_high = (recent_high - close_val) / max(close_val, ATR_EPS) < 0.10
+
+                if _above_200 and _above_50 and _ma_aligned and _vcp_score > 0.3:
+                    timing = "no time"  # Stage 2 + VCP = ideal entry
+                elif _above_200 and _above_50 and _ma_aligned:
+                    timing = "no time" if _near_high else "cedo"  # Stage 2 but no VCP
+                elif _above_200 and not _above_50:
+                    timing = "cedo"  # Recovering, not yet Stage 2
+                elif not _above_200 and not _above_50:
+                    timing = "muito cedo"  # Stage 1 (base)
+                elif _above_50 and _above_200 and not _ma_aligned:
+                    timing = "atrasado"  # MAs not aligned, possible Stage 3
+                else:
+                    timing = "neutro"
+            else:
+                timing = "neutro"
+
+            # Condicao de entrada: combina pivot + timing
+            if sig == "buy":
+                if close_val > r1:
+                    condicao = f"Comprar: acima de R1 ({r1:.2f}), momentum forte"
+                elif close_val > pivot:
+                    condicao = f"Comprar se abrir > Pivot ({pivot:.2f})"
+                else:
+                    condicao = f"Aguardar rompimento do Pivot ({pivot:.2f})"
+            else:
+                if close_val < s1:
+                    condicao = f"Pressao vendedora, abaixo de S1 ({s1:.2f})"
+                elif close_val < pivot:
+                    condicao = f"Abaixo do Pivot ({pivot:.2f})"
+                else:
+                    condicao = f"Aguardar confirmacao acima de {pivot:.2f}"
+
             results_apply.append({
                 "Date": pd.to_datetime(dates[i]).strftime("%Y-%m-%d"),
                 "ticker": tkr,
@@ -3014,6 +3071,11 @@ def run():
                 "RR": rr_display,
                 "stop_pct": stop_pct_val,
                 "alvo_pct": alvo_pct_val,
+                "pivot": pivot,
+                "r1": r1,
+                "s1": s1,
+                "timing": timing,
+                "condicao": condicao,
                 "win_rate": round(bt_win_rate * 100, 1),
                 "queda_max": round(queda_max_esperada * 100, 1),
                 "regime": (
