@@ -65,9 +65,15 @@ import numpy as np
 import pandas as pd
 import os
 import json
+import gc
 import multiprocessing
 from concurrent.futures import ProcessPoolExecutor
 import matplotlib.pyplot as plt
+
+# --- Modular GA pipeline imports ---
+from payload_store import PayloadStore, build_window_plans
+from ga_run_modular_final import run_global_ga_two_stage
+from auto_tune import AutoTuner
 
 from deap import base, creator, tools, algorithms
 
@@ -285,6 +291,13 @@ else:
     GA_STAGE2_NGEN     = 15
     GA_MAX_WINDOWS     = 4     # max stable on 16GB
     GA_MAX_WINDOWS_STAGE2 = 4
+
+# --- Modular pipeline config ---
+GA_AUTO_TUNE = int(os.environ.get("GA_AUTO_TUNE", "1"))
+GA_TIME_BUDGET_HOURS = float(os.environ.get("GA_TIME_BUDGET_HOURS", "6.0"))
+GA_RAM_RESERVE_GB = float(os.environ.get("GA_RAM_RESERVE_GB", "2.0"))
+GA_MEMMAP_DIR = os.environ.get("GA_MEMMAP_DIR", "./output/ga_memmap")
+GA_WORKERS_OVERRIDE = os.environ.get("GA_WORKERS_OVERRIDE", None)
 
 # ==============================================================================
 # 1) DEAP SETUP
@@ -2538,10 +2551,19 @@ def run():
         print("Nenhum ticker preparado.")
         return
 
-    # FASE 2: GA global (uma vez) com checkpoint
-    # -- Always load the previous best genome for warm-starting ---------
-    # (works even if features or model architecture changed, since the
-    #  genome encodes only trading strategy parameters, not feature weights)
+    # --- Build PayloadStore (memmap) to eliminate per-window duplication ---
+    store = PayloadStore.build_from_ticker_payloads(
+        ticker_payloads, base_feat_cols, GA_MEMMAP_DIR
+    )
+    # Keep only Phase-3-exclusive fields in ticker_payloads to free memory
+    phase3_fields = {"feat_cols", "long_votes", "short_votes", "feat_corr"}
+    for tkr in list(ticker_payloads):
+        ticker_payloads[tkr] = {k: v for k, v in ticker_payloads[tkr].items() if k in phase3_fields}
+    del df
+    gc.collect()
+    print(f"[STORE] built memmap store at {store.store_path}, freed DataFrames")
+
+    # FASE 2: GA global (two-stage) with memmap PayloadStore
     run_mode = str(RUN_MODE).strip().lower()
     global_params = None
     global_genome = None
@@ -2554,7 +2576,6 @@ def run():
             prev_genome = ck.get("genome", None)
             n_specs = len(GLOBAL_PARAM_SPECS)
             if prev_genome:
-                # Handle genome length mismatch: pad with defaults for new genes
                 if len(prev_genome) < n_specs:
                     for idx in range(len(prev_genome), n_specs):
                         _, lo, hi, step, is_int = GLOBAL_PARAM_SPECS[idx]
@@ -2563,43 +2584,65 @@ def run():
                         if is_int:
                             default_val = int(round(default_val))
                         prev_genome.append(default_val)
-                    print(f"[GLOBAL_GA] padded checkpoint genome from {len(ck.get('genome',[]))} to {n_specs} genes (new genes added)")
+                    print(f"[GLOBAL_GA] padded checkpoint genome from {len(ck.get('genome',[]))} to {n_specs} genes")
                 elif len(prev_genome) > n_specs:
                     prev_genome = prev_genome[:n_specs]
-                    print(f"[GLOBAL_GA] truncated checkpoint genome to {n_specs} genes")
                 if len(prev_genome) == n_specs:
-                    prev_genome_for_seed = prev_genome
                     prev_fit = float(ck.get("fitness", float("nan")))
+                    prev_genome_for_seed = prev_genome
                     if run_mode == "load":
                         global_genome = prev_genome
                         global_params = decode_global_params(global_genome)
                         global_fit = prev_fit
                         print(f"[GLOBAL_GA] loaded from checkpoint (load mode) fit={global_fit:.4f}")
                     else:
-                        print(f"[GLOBAL_GA] checkpoint found (fit={prev_fit:.4f}) — will warm-start GA from it")
+                        print(f"[GLOBAL_GA] checkpoint found (fit={prev_fit:.4f}) — will warm-start GA")
         except Exception as e:
             print(f"[WARN] global checkpoint load failed: {e}")
 
     if global_params is None and run_mode == "load":
-        print("[FATAL] load mode but no valid checkpoint found! Cannot generate signals.")
-        print(f"  Checkpoint path: {out_global_ckpt} (exists={os.path.exists(out_global_ckpt)})")
+        print("[FATAL] load mode but no valid checkpoint found!")
+        store.cleanup()
         raise SystemExit(1)
 
     if global_params is None:
-        dmin = pd.to_datetime(df[DATE_COL].min())
-        dmax = pd.to_datetime(df[DATE_COL].max())
+        dmin = store.min_date
+        dmax = store.max_date
         windows = build_temporal_windows(dmin, dmax, train_years=3, test_months=6, step_months=6)
         if not windows:
             windows = [(dmin, dmax - pd.Timedelta(days=180), dmax - pd.Timedelta(days=179), dmax)]
+
+        window_plans = build_window_plans(store, windows)
         mode_label = "FAST" if FAST_MODE else "FULL"
-        print(f"[GLOBAL_GA] start ({mode_label} mode, windows={len(windows)}, tickers={len(ticker_payloads)})")
-        global_params, global_genome, global_fit = run_global_ga_20params(
-            ticker_payloads=ticker_payloads,
-            windows=windows,
-            pop_size=GA_STAGE1_POP_SIZE,
-            ngen=GA_STAGE1_NGEN,
-            ga_max_windows=GA_MAX_WINDOWS,
-            seed_genome=prev_genome_for_seed,  # warm-start from previous run
+        print(f"[GLOBAL_GA] start ({mode_label} mode, windows={len(window_plans)}, tickers={len(store.tickers)})")
+
+        # Auto-tune or manual config
+        workers_override = int(GA_WORKERS_OVERRIDE) if GA_WORKERS_OVERRIDE is not None else None
+        if GA_AUTO_TUNE:
+            tuner = AutoTuner(store, window_plans, GA_TIME_BUDGET_HOURS, GA_RAM_RESERVE_GB, workers_override)
+            tune_result = tuner.compute()
+        else:
+            tune_result = AutoTuner.manual_config(
+                n_workers=GA_EVAL_WORKERS,
+                stage1_pop=GA_STAGE1_POP_SIZE,
+                stage1_ngen=GA_STAGE1_NGEN,
+                stage1_windows=min(GA_MAX_WINDOWS, len(window_plans)),
+                stage2_pop=GA_STAGE2_POP_SIZE if GA_TWO_STAGE else 0,
+                stage2_ngen=GA_STAGE2_NGEN if GA_TWO_STAGE else 0,
+                stage2_windows=min(GA_MAX_WINDOWS_STAGE2, len(window_plans)) if GA_TWO_STAGE else 0,
+                time_budget_hours=GA_TIME_BUDGET_HOURS,
+                ram_reserve_gb=GA_RAM_RESERVE_GB,
+            )
+
+        checkpoint_dir = os.path.join(OUTPUT_DIR, f"ga_checkpoints_H{FWD_H}")
+        global_params, global_genome, global_fit = run_global_ga_two_stage(
+            store_path=store.store_path,
+            window_plans=window_plans,
+            feature_cols=base_feat_cols,
+            tune_result=tune_result,
+            checkpoint_dir=checkpoint_dir,
+            run_mode=run_mode,
+            seed_genome=prev_genome_for_seed,
         )
         try:
             with open(out_global_ckpt, "w", encoding="utf-8") as f:
@@ -2609,11 +2652,27 @@ def run():
             print(f"[WARN] global checkpoint save failed: {e}")
         print(f"[GLOBAL_GA] done fit={global_fit:.4f} mode={mode_label}")
 
-    # FASE 3: apply rÃ¡pido sem GA por ticker
+    # FASE 3: apply rápido sem GA por ticker
     results_summary: List[Dict[str, Any]] = []
     results_apply: List[Dict[str, Any]] = []
 
-    for ix_tkr, (tkr, payload) in enumerate(ticker_payloads.items(), 1):
+    n_tickers_phase3 = len(store.tickers)
+    for ix_tkr, tkr in enumerate(store.tickers, 1):
+        arrays = store.get_ticker_arrays(tkr)
+        p3 = ticker_payloads.get(tkr, {})
+        payload = {**arrays, **p3}
+        # Cast memmap arrays to float64 for backtest/signal computation
+        for _k in ("open", "high", "low", "close", "atr", "volume"):
+            if _k in payload and payload[_k] is not None:
+                payload[_k] = np.asarray(payload[_k], dtype=np.float64)
+        if "score_matrix" in payload:
+            payload["score_matrix"] = np.asarray(payload["score_matrix"], dtype=np.float64)
+        # Convert int64 nanosecond dates back to datetime
+        if "dates" in payload:
+            _dates_raw = payload["dates"]
+            payload["dates"] = pd.to_datetime(np.asarray(_dates_raw, dtype=np.int64), unit="ns")
+        if "valid_mask" in payload:
+            payload["valid_mask"] = np.asarray(payload["valid_mask"], dtype=bool)
         c = payload["close"]
         dates = payload["dates"]
         n = len(c)
@@ -3151,8 +3210,50 @@ def run():
     if not df_app.empty:
         # Keep only the most recent date per ticker
         df_app = df_app.sort_values("Date", ascending=False).drop_duplicates(subset=["ticker"], keep="first")
+
+        # -- Promote hold → sell for clearly unfavorable conditions -----------
+        # This is DISPLAY ONLY (planilha) — does NOT affect GA training or
+        # backtest metrics. Conditions for sell signal:
+        #   1. regime desfavoravel + timing muito cedo (bear trend, no base)
+        #   2. regime desfavoravel + abaixo do pivot + confidence < 35
+        #   3. timing atrasado + regime desfavoravel (overextended in bear)
+        _sell_mask = pd.Series(False, index=df_app.index)
+        _is_hold = df_app["signal"] == "hold"
+        _regime_desf = df_app["regime"] == "desfavoravel"
+        _timing_mc = df_app["timing"] == "muito cedo"
+        _timing_atr = df_app["timing"] == "atrasado"
+        _below_pivot = df_app["close"] < df_app["pivot"]
+        _low_conf = df_app["confidence"] < 35.0
+
+        # Regra 1: bear trend + sem base formada
+        _sell_mask |= (_is_hold & _regime_desf & _timing_mc)
+        # Regra 2: bear trend + abaixo do pivot + confiança baixa
+        _sell_mask |= (_is_hold & _regime_desf & _below_pivot & _low_conf)
+        # Regra 3: atrasado em bear (overextended, risco de reversão)
+        _sell_mask |= (_is_hold & _regime_desf & _timing_atr)
+
+        # Apply sell signal and update condicao
+        df_app.loc[_sell_mask, "signal"] = "sell"
+        df_app.loc[_sell_mask & _timing_mc, "condicao"] = df_app.loc[_sell_mask & _timing_mc, "condicao"].str.replace(
+            "HOLD: muito cedo", "SELL: tendencia de baixa", regex=False
+        )
+        df_app.loc[_sell_mask & _timing_atr, "condicao"] = df_app.loc[_sell_mask & _timing_atr, "condicao"].str.replace(
+            "HOLD: atrasado, evitar", "SELL: atrasado em bear, evitar", regex=False
+        )
+        df_app.loc[_sell_mask & ~_timing_mc & ~_timing_atr, "condicao"] = (
+            "SELL: regime desfavoravel, abaixo do Pivot, confianca baixa"
+        )
+
+        _n_sells = int(_sell_mask.sum())
+        if _n_sells > 0:
+            print(f"[APPLY] {_n_sells} holds reclassificados como sell (display only)")
+
         df_app["_is_buy"] = (df_app["signal"] == "buy").astype(int)
-        df_app = df_app.sort_values(["_is_buy", "rank"], ascending=[False, False]).drop(columns=["_is_buy"]).reset_index(drop=True)
+        df_app["_is_sell"] = (df_app["signal"] == "sell").astype(int)
+        df_app = df_app.sort_values(
+            ["_is_buy", "_is_sell", "rank"],
+            ascending=[False, True, False]
+        ).drop(columns=["_is_buy", "_is_sell"]).reset_index(drop=True)
 
     if not df_sum.empty:
         df_sum = df_sum.sort_values("test_sharpe", ascending=False)
@@ -3202,9 +3303,11 @@ def run():
         #   mean_abs_zscore  – mean |directed z-score| across all history (signal magnitude)
         #   pct_days_active  – % days where |z| > 0.35 (feature fires a vote)
         _feat_imp_rows: List[Dict] = []
-        for _tkr, _pl in ticker_payloads.items():
+        for _tkr in store.tickers:
+            _pl = ticker_payloads.get(_tkr, {})
             _corrs: List[tuple] = _pl.get("feat_corr", [])   # (col, abs_r) sorted desc
-            _sm: np.ndarray = _pl["score_matrix"]             # (N_days, K_selected)
+            _arr = store.get_ticker_arrays(_tkr)
+            _sm: np.ndarray = np.asarray(_arr.get("score_matrix", np.empty((0,0))), dtype=np.float64)
             for _rank0, (_feat, _abs_r) in enumerate(_corrs[:MAX_FEATURES]):
                 _col_z = _sm[:, _rank0]
                 _valid_z = _col_z[np.isfinite(_col_z)]
@@ -3346,6 +3449,9 @@ def run():
                 print(f"[WARN] xlsx save failed (file open in Excel?): {e2} -- CSV already saved.")
 
     print(f"Saved: {out_xlsx} | {out_apply_csv}")
+
+    # Cleanup memmap store
+    store.cleanup()
 
     # -- Send to Telegram --------------------------------------------------
     if os.path.exists(out_xlsx):
