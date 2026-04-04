@@ -12,6 +12,9 @@ __pycache__/
 *.pyo
 *.pyd
 
+# Virtual environments
+.venv*/
+
 # Jupyter
 .ipynb_checkpoints/
 *.ipynb.bak*
@@ -24,3 +27,17 @@ _*.txt
 feature_importance*.csv
 feature_importance*.png
 summary_latest_bkup.xlsx
+
+# AI workflow
+.env
+ai_workflow_log.jsonl
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+Thumbs.db
+.DS_Store
+
+# Claude worktrees
+.claude/worktrees/

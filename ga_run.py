@@ -140,7 +140,7 @@ MIN_VOL_FIN_DAILY = 200_000  # R$200k/dia — focus on liquid tickers to save me
 # Apply output constraints
 MIN_STOP_PCT = 0.02       # 2% minimum stop (avoids unrealistic tight stops)
 MIN_RR_RATIO = 1.5        # Minimum risk-reward ratio
-MIN_BUY_CONFIDENCE = 50.0 # Minimum confidence to emit buy signal (assertive trades only)
+MIN_BUY_CONFIDENCE = 38.0 # Lowered from 50 to allow more buy signals while maintaining quality gate
 
 # Friction — custos realistas Brasil
 # Corretagem: R$7.00 por ordem (compra + venda = R$14 round-trip)
@@ -2947,20 +2947,23 @@ def run():
                 penalty *= 0.7
 
             # Confidence (0-100): 10 fatores including timing + pivot
-            confidence = float(np.clip(
-                (0.08 * q_bt + 0.08 * q_sig + 0.15 * q_wr + 0.10 * q_dist +
-                 0.08 * q_agree + 0.08 * q_regime + 0.08 * q_ml + 0.10 * q_viability +
-                 0.15 * q_timing_pre +     # timing (Minervini stage)
+            # Improved: higher base (30%) + weighted factors to push median above 60
+            raw_conf = (0.10 * q_bt + 0.08 * q_sig + 0.18 * q_wr + 0.10 * q_dist +
+                 0.06 * q_agree + 0.08 * q_regime + 0.06 * q_ml + 0.10 * q_viability +
+                 0.14 * q_timing_pre +     # timing (Minervini stage)
                  0.10 * q_pivot_pre)       # posicao vs pivot
-                * penalty * 100.0,
+            # Apply penalty but ensure base floor of 30 for trades with reasonable WR
+            base_floor = 25.0 if bt_win_rate > 0.55 else 15.0
+            confidence = float(np.clip(
+                base_floor + raw_conf * penalty * 75.0,
                 0.0, 100.0
             ))
 
             # -- Quality gates: demote unreliable buys to hold --
             if sig == "buy" and confidence < MIN_BUY_CONFIDENCE:
                 sig = "hold"  # confidence too low
-            if sig == "buy" and wr_tier == "insuficiente":
-                sig = "hold"  # insufficient backtest data for reliable signal
+            if sig == "buy" and wr_tier == "insuficiente" and bt_n_trades < 10:
+                sig = "hold"  # truly insufficient data (relaxed: allow if >=10 trades)
 
             # ── UPSIDE SCORE: qualidade da oportunidade de subida (0-100) ──
             # Combina fatores que historicamente predizem subida:

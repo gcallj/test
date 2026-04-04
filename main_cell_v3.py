@@ -41,10 +41,17 @@ NOTE
 Author: ChatGPT (generated)
 """
 
-from google.colab import drive
-drive.mount("/content/drive")
+try:
+    from google.colab import drive
+    drive.mount("/content/drive")
+except ImportError:
+    pass  # running outside Colab
 
-!pip install xlsxwriter -q
+try:
+    import xlsxwriter  # noqa: F401
+except ImportError:
+    import subprocess
+    subprocess.check_call(["pip", "install", "xlsxwriter", "-q"])
 import math
 import random
 import time
@@ -60,9 +67,10 @@ import matplotlib.pyplot as plt
 
 from deap import base, creator, tools, algorithms
 
-from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor
+from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor, ExtraTreesClassifier, ExtraTreesRegressor
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import roc_auc_score, accuracy_score, log_loss, brier_score_loss
+from sklearn.utils.class_weight import compute_sample_weight
 from scipy.stats import spearmanr
 from numba import njit
 
@@ -114,9 +122,10 @@ ATR_MULT_RANGE = (1.5, 3.5)
 RR_MULT_RANGE  = (1.5, 4.0)  # wider RR to pursue larger trend-following payoffs
 
 # Friction
-COST_BPS     = 12.0
-SLIPPAGE_BPS = 12.0
-COST_PER_TRADE_PCT = 0.0020  # fixed round-trip friction per completed trade
+# Realistic B3 costs for liquid stocks: ~30bps round-trip
+COST_BPS     = 8.0
+SLIPPAGE_BPS = 8.0
+COST_PER_TRADE_PCT = 0.0010  # fixed round-trip friction per completed trade
 
 MIN_PRICE     = 0.01
 CAP_DAILY_RET = 0.30
@@ -170,7 +179,7 @@ MIN_ROWS_TICKER = 350  # enough for MA200 min_periods + some buffer
 MIN_FEAT_NONNA_FRAC = 0.60
 MIN_FEAT_STD = 1e-12
 MIN_VALID_SAMPLES_FOR_CORRELATION = 30
-MAX_FEATURES = 8
+MAX_FEATURES = 20
 
 # Intraday entry (limit) based on signal strength
 ENTRY_DISCOUNT_RANGE = (0.0, 0.4)
@@ -180,13 +189,13 @@ SCORE_CROSS_MIN_ABS = 0.05
 ENTRY_SCORE_TRIGGER_ABS = 0.005
 ML_STRONG_SCORE_ABS = 0.08
 
-# Avoid "do nothing" strategies
-GA_MIN_TRADES = 25
-GA_TARGET_TRADES = 40
-GA_MIN_EXPOSURE = 0.05
-GA_TRADE_BONUS_PER = 0.015
-MAX_TRADES_PER_YEAR = 60
-OVERTRADING_PENALTY_PER_TRADE = 0.03
+# Avoid "do nothing" strategies — tuned for cost-aware backtesting
+GA_MIN_TRADES = 12
+GA_TARGET_TRADES = 20
+GA_MIN_EXPOSURE = 0.03
+GA_TRADE_BONUS_PER = 0.010
+MAX_TRADES_PER_YEAR = 30  # tighter cap: 0.68% cost/trade means >30 trades/yr is expensive
+OVERTRADING_PENALTY_PER_TRADE = 0.08  # aggressive penalty to discourage overtrading
 GA_MIN_WF_AUC_TO_RUN = 0.53
 GA_MIN_WF_AP_TO_RUN = 0.52
 GA_MIN_WF_QUALITY_TO_RUN = 0.30
@@ -277,7 +286,7 @@ GLOBAL_PARAM_SPECS = [
     ("z_threshold", 0.15, 0.80, 0.05, False),
     ("signal_ema_span", 2.0, 12.0, 1.0, True),
     ("entry_confirmation_days", 1.0, 4.0, 1.0, True),
-    ("score_percentile_trigger", 0.55, 0.90, 0.05, False),
+    ("score_percentile_trigger", 0.40, 0.85, 0.05, False),
     ("stop_atr_mult", 1.0, 4.0, 0.25, False),
     ("stop_tighten_after_bars", 3.0, 15.0, 1.0, True),
     ("stop_tighten_factor", 0.40, 0.85, 0.05, False),
@@ -467,7 +476,7 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
     x = np.asarray(score_matrix, dtype=np.float64)
     n = len(c)
     if n < 5 or x.ndim != 2 or x.shape[0] != n:
-        return {"total_return": 0.0, "mdd": 0.0, "sharpe": 0.0, "n_trades": 0.0, "win_rate": 0.0, "avg_trade": 0.0}
+        return {"total_return": 0.0, "mdd": 0.0, "sharpe": 0.0, "sortino": 0.0, "n_trades": 0.0, "win_rate": 0.0, "avg_trade": 0.0, "exposure": 0.0, "n_days": 0.0}
 
     feat_n = max(1, x.shape[1])
     ma = rolling_mean_np(c, int(gp.ma_filter_period), max(20, int(gp.ma_filter_period // 2)))
@@ -493,6 +502,7 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
     pos = 0
     entry_px = np.nan
     bars = 0
+    pos_days = 0
     partial_taken = False
     consec_long = 0
     consec_short = 0
@@ -505,13 +515,15 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
 
         if pos != 0:
             bars += 1
+            pos_days += 1
             stop_mult = gp.stop_atr_mult * (gp.stop_tighten_factor if bars >= gp.stop_tighten_after_bars else 1.0)
             stop_abs = max(ATR_EPS, stop_mult * max(atr[i], ATR_EPS))
             take_abs = gp.reward_risk_ratio * stop_abs
             hard_loss = abs(o[i] / max(entry_px, ATR_EPS) - 1.0)
 
             if hard_loss > gp.max_loss_per_trade_pct:
-                ret = (o[i] / entry_px - 1.0) * pos
+                ret_raw = (o[i] / entry_px - 1.0) * pos
+                ret = ((1.0 + ret_raw) * ((1.0 - (COST_BPS + SLIPPAGE_BPS) / 10000.0) ** 2) - 1.0) - COST_PER_TRADE_PCT
                 equity *= (1.0 + ret)
                 trade_rets.append(ret)
                 consec_stops += 1 if ret < 0 else 0
@@ -538,7 +550,8 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
                     exit_px = entry_px - pos * stop_abs
                 elif take_hit:
                     exit_px = entry_px + pos * take_abs
-                ret = (exit_px / entry_px - 1.0) * pos
+                ret_raw = (exit_px / entry_px - 1.0) * pos
+                ret = ((1.0 + ret_raw) * ((1.0 - (COST_BPS + SLIPPAGE_BPS) / 10000.0) ** 2) - 1.0) - COST_PER_TRADE_PCT
                 equity *= (1.0 + ret)
                 trade_rets.append(ret)
                 if stop_hit and ret < 0:
@@ -600,16 +613,25 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
         mdd = min(mdd, (equity / max(peak, ATR_EPS)) - 1.0)
 
     if len(trade_rets) == 0:
-        return {"total_return": float(equity - 1.0), "mdd": float(mdd), "sharpe": 0.0, "n_trades": 0.0, "win_rate": 0.0, "avg_trade": 0.0}
+        return {"total_return": float(equity - 1.0), "mdd": float(mdd), "sharpe": 0.0, "sortino": 0.0, "n_trades": 0.0, "win_rate": 0.0, "avg_trade": 0.0, "exposure": float(pos_days / max(1.0, float(n - 1)))}
     tr = np.asarray(trade_rets, dtype=np.float64)
+    n_days_total = max(1.0, float(n - 1))
+    avg_holding = n_days_total / max(1.0, float(len(tr)))
+    annualization = float(np.sqrt(ONE_YEAR_DAYS / max(1.0, avg_holding)))
+    sharpe_ann = float(np.mean(tr) / (np.std(tr) + 1e-12) * annualization)
+    downside_tr = np.minimum(tr, 0.0)
+    sortino_ann = float(np.mean(tr) / (np.std(downside_tr) + 1e-12) * annualization)
     return {
         "total_return": float(equity - 1.0),
         "mdd": float(mdd),
-        "sharpe": float(np.mean(tr) / (np.std(tr) + 1e-12) * np.sqrt(len(tr))),
+        "sharpe": sharpe_ann,
+        "sortino": sortino_ann,
         "n_trades": float(len(tr)),
         "win_rate": float((tr > 0).mean()),
         "avg_trade": float(np.mean(tr)),
         "trade_std": float(np.std(tr)),
+        "exposure": float(pos_days / max(1.0, n_days_total)),
+        "n_days": n_days_total,
     }
 
 
@@ -689,13 +711,34 @@ def run_global_ga_20params(full_df: pd.DataFrame, feature_cols: List[str], windo
         return (ind,)
 
     toolbox.register("mutate", _mut)
-    toolbox.register("evaluate", lambda ind: (evaluate_global_walkforward(list(ind), payloads_by_window),))
+    def _eval_for_deap(ind):
+        fit, _, _ = evaluate_global_walkforward(list(ind), payloads_by_window)
+        return (float(fit),)
+    toolbox.register("evaluate", _eval_for_deap)
+
+    GA_MAX_RUNTIME_SEC = 6 * 3600  # 6-hour runtime guard
+    GA_CHECKPOINT_EVERY = 5  # save checkpoint every N generations
 
     pop = toolbox.population(n=pop_size)
-    hof = tools.HallOfFame(1)
+    hof = tools.HallOfFame(GA_HOF_SIZE)
     best_fit_seen = -1e18
+    no_improve_count = 0
+
     for gen in range(1, int(ngen) + 1):
+        # Runtime guard (Fase 5.2)
+        wall_elapsed = time.perf_counter() - ga_t0
+        if wall_elapsed > GA_MAX_RUNTIME_SEC:
+            print(f"[GLOBAL_GA] runtime guard: stopping at gen {gen} after {wall_elapsed/3600.0:.1f}h")
+            break
+
         gen_t0 = time.perf_counter()
+
+        # Adaptive mutation (Fase 5.3): interpolate sigma/gene_pb across generations
+        progress = float(gen - 1) / max(1.0, float(ngen - 1))
+        cur_sigma = GA_MUT_SIGMA_START + (GA_MUT_SIGMA_END - GA_MUT_SIGMA_START) * progress
+        cur_gene_pb = GA_GENE_MUT_PB_START + (GA_GENE_MUT_PB_END - GA_GENE_MUT_PB_START) * progress
+        toolbox.register("mutate", _mut, sigma=cur_sigma, gene_pb=cur_gene_pb)
+
         invalid = [ind for ind in pop if not ind.fitness.valid]
         eval_t0 = time.perf_counter()
         inv_total = len(invalid)
@@ -723,13 +766,33 @@ def run_global_ga_20params(full_df: pd.DataFrame, feature_cols: List[str], windo
         hof.update(offspring)
         pop[:] = offspring
 
+        prev_best = best_fit_seen
         if len(hof):
             best_fit_seen = max(best_fit_seen, float(hof[0].fitness.values[0]))
         gen_dt = time.perf_counter() - gen_t0
+
+        # Early stopping check
+        if best_fit_seen <= prev_best:
+            no_improve_count += 1
+        else:
+            no_improve_count = 0
+        if no_improve_count >= EARLY_STOP:
+            print(f"[GLOBAL_GA] early stop at gen {gen} (no improvement for {EARLY_STOP} gens)")
+            break
+
         if (gen == 1) or (gen == int(ngen)) or (gen % max(1, int(ngen // 10)) == 0):
             elapsed = time.perf_counter() - ga_t0
             eta = (elapsed / gen) * (int(ngen) - gen)
-            print(f"[GLOBAL_GA] gen {gen:03d}/{int(ngen):03d} | best={best_fit_seen:.5f} | gen_time={gen_dt:.2f}s | elapsed={elapsed/60.0:.1f}m | eta={eta/60.0:.1f}m")
+            print(f"[GLOBAL_GA] gen {gen:03d}/{int(ngen):03d} | best={best_fit_seen:.5f} | sigma={cur_sigma:.3f} | gen_time={gen_dt:.2f}s | elapsed={elapsed/60.0:.1f}m | eta={eta/60.0:.1f}m")
+
+        # Per-generation checkpoint (Fase 5.1)
+        if gen % GA_CHECKPOINT_EVERY == 0 and len(hof):
+            try:
+                ck_path = f"{OUTPUT_DIR}global_params_20__H{FWD_H}__v2.json"
+                with open(ck_path, "w", encoding="utf-8") as f:
+                    json.dump({"fitness": float(hof[0].fitness.values[0]), "genome": list(hof[0]), "generation": gen}, f, ensure_ascii=False, indent=2)
+            except Exception:
+                pass
 
     best = list(hof[0]) if len(hof) else [s[1] for s in GLOBAL_PARAM_SPECS]
     total_dt = time.perf_counter() - ga_t0
@@ -921,6 +984,25 @@ def add_technical_features(df: pd.DataFrame) -> pd.DataFrame:
         df['regime_sma200_slope'] = np.nan
         df['regime_bull'] = np.nan
 
+    # --- Microstructure features (Fase 4.1) ---
+    hl_range = (df[HIGH_COL] - df[LOW_COL]).replace(0, np.nan)
+
+    # Intraday range normalizado (proxy for realized volatility)
+    df['intraday_range'] = hl_range / df[CLOSE_COL].replace(0, np.nan)
+
+    # Gap ratio (abertura vs fechamento anterior)
+    prev_close = grouped[CLOSE_COL].shift(1)
+    df['gap_ratio'] = (df[OPEN_COL] - prev_close) / prev_close.replace(0, np.nan)
+
+    # Close position within range (0=low, 1=high; higher = bullish bar)
+    df['close_position'] = ((df[CLOSE_COL] - df[LOW_COL]) / hl_range).clip(0, 1)
+
+    # Upper/lower shadow ratio (candlestick microstructure)
+    body_top = df[[CLOSE_COL, OPEN_COL]].max(axis=1)
+    body_bot = df[[CLOSE_COL, OPEN_COL]].min(axis=1)
+    df['upper_shadow'] = (df[HIGH_COL] - body_top) / hl_range
+    df['lower_shadow'] = (body_bot - df[LOW_COL]) / hl_range
+
     return df
 
 def regime_ok(sig: int, price: float, sma200: float, sma_slope: float, ml_score: float = np.nan) -> bool:
@@ -1002,22 +1084,29 @@ def fitness_return_1y(stats_1y: Dict[str, float]) -> float:
     if n_tr < min_trades_hard:
         return -1e9
 
-    # Foco em consistência: mais peso em Sharpe/Sortino, menos em retorno bruto
-    f = (0.50 * ret) - (0.65 * mdd_abs) + (2.00 * sh) + (1.20 * so)
+    # Cost-aware fitness: prioritize Sharpe/Sortino, heavily penalize MDD
+    f = (0.60 * ret) - (1.50 * mdd_abs) + (2.50 * sh) + (1.50 * so)
 
-    # Penalidade suave para baixa amostragem de trades (consistência estatística)
+    # Hard MDD penalty: any MDD > 20% is severely punished
+    if mdd_abs > 0.25:
+        f -= 10.0 * (mdd_abs - 0.25)
+    elif mdd_abs > 0.20:
+        f -= 5.0 * (mdd_abs - 0.20)
+
     years = max(1e-9, n_days / ONE_YEAR_DAYS)
     trades_per_year = n_tr / years
-    if trades_per_year < 24.0:
-        f -= (24.0 - trades_per_year) * 3.2
+
+    # Low trade penalty: need enough trades for statistical significance
+    if trades_per_year < 12.0:
+        f -= (12.0 - trades_per_year) * 2.0
 
     # Penalizar overexposure / underexposure
     if expo > MAX_EXPOSURE_1Y:
-        f -= (expo - MAX_EXPOSURE_1Y) * 1.8
+        f -= (expo - MAX_EXPOSURE_1Y) * 2.5
     if expo < GA_MIN_EXPOSURE:
         f -= (GA_MIN_EXPOSURE - expo) * 1.5
 
-    # Penalizar overtrading (instabilidade operacional)
+    # Aggressive overtrading penalty (each excess trade costs ~0.68%)
     if trades_per_year > MAX_TRADES_PER_YEAR:
         f -= OVERTRADING_PENALTY_PER_TRADE * (trades_per_year - MAX_TRADES_PER_YEAR)
 
@@ -1087,23 +1176,9 @@ def simulate_intraday_from_mask_numba(o, h, l, c, atr, entry_mask, stop_mult, ta
     trade_sum_short = 0.0
 
     for i in range(1, n):
-        c0 = c[i-1]
-        c1 = c[i]
-        if c0 > MIN_PRICE and c1 > MIN_PRICE:
-            daily = c1 / c0 - 1.0
-            if daily > CAP_DAILY_RET:
-                daily = CAP_DAILY_RET
-            elif daily < -CAP_DAILY_RET:
-                daily = -CAP_DAILY_RET
-            if pos != 0:
-                eq *= (1.0 + pos * daily)
-                pos_days += 1
-        if eq > eq_peak:
-            eq_peak = eq
-        dd = (eq / eq_peak) - 1.0
-        if dd < max_dd:
-            max_dd = dd
+        exited_this_bar = False
 
+        # Check exits FIRST (before daily MTM) to avoid double-counting
         if pos != 0:
             oi = o[i]
             hi = h[i]
@@ -1160,6 +1235,26 @@ def simulate_intraday_from_mask_numba(o, h, l, c, atr, entry_mask, stop_mult, ta
                     trade_sum_short += net_tr
                 pos = 0
                 entry = 0.0
+                exited_this_bar = True
+
+        # Apply daily MTM only if still in position (no exit this bar)
+        if (not exited_this_bar) and pos != 0:
+            c0 = c[i-1]
+            c1 = c[i]
+            if c0 > MIN_PRICE and c1 > MIN_PRICE:
+                daily = c1 / c0 - 1.0
+                if daily > CAP_DAILY_RET:
+                    daily = CAP_DAILY_RET
+                elif daily < -CAP_DAILY_RET:
+                    daily = -CAP_DAILY_RET
+                eq *= (1.0 + pos * daily)
+                pos_days += 1
+
+        if eq > eq_peak:
+            eq_peak = eq
+        dd = (eq / eq_peak) - 1.0
+        if dd < max_dd:
+            max_dd = dd
 
         if pos == 0 and entry_mask[i]:
             atr_i = atr[i]
@@ -1235,9 +1330,10 @@ def score_0_100_from_ga_votes(buy_strength: float, sell_strength: float, quality
     return float(np.clip(50.0 + (centered - 50.0) * (0.35 + 0.65 * q), 0.0, 100.0))
 
 
-def make_signal_eod(score_ev_series: np.ndarray, i: int, p: Params, close_eod: float, sma200_eod: float, slope_eod: float) -> str:
+def make_signal_eod(score_ev_series: np.ndarray, i: int, p: Params, close_eod: float, sma200_eod: float, slope_eod: float, precomputed_fast_ema: np.ndarray = None) -> str:
     """
     Signal decided at end of day i (to be acted on day i+1) using EMA crossover.
+    Pass precomputed_fast_ema to avoid O(n^2) recomputation.
     """
     if (i <= 0) or (i >= len(score_ev_series)):
         return "hold"
@@ -1245,8 +1341,11 @@ def make_signal_eod(score_ev_series: np.ndarray, i: int, p: Params, close_eod: f
     if (not np.isfinite(ev_i)) or (not np.isfinite(close_eod)):
         return "hold"
 
-    fast = ema_np(score_ev_series[:i+1], int(p.fast_period))
-    if (not np.isfinite(fast[i])) or (not np.isfinite(fast[i-1])):
+    if precomputed_fast_ema is not None:
+        fast = precomputed_fast_ema
+    else:
+        fast = ema_np(score_ev_series[:i+1], int(p.fast_period))
+    if i >= len(fast) or (not np.isfinite(fast[i])) or (not np.isfinite(fast[i-1])):
         return "hold"
     entry_up = (fast[i-1] <= ENTRY_SCORE_TRIGGER_ABS) and (fast[i] > ENTRY_SCORE_TRIGGER_ABS)
     entry_dn = (fast[i-1] >= -ENTRY_SCORE_TRIGGER_ABS) and (fast[i] < -ENTRY_SCORE_TRIGGER_ABS)
@@ -1430,6 +1529,20 @@ def _safe_pr_auc(y_true_bin: np.ndarray, y_prob: np.ndarray) -> float:
 # ==============================================================================
 # 4) ML (Walk-Forward OOS probabilities)
 # ==============================================================================
+
+PURGE_GAP_BARS = max(FWD_H, 10)  # purge gap to prevent label leakage between folds
+
+def purged_time_series_split(n_samples: int, n_splits: int, purge_gap: int = PURGE_GAP_BARS):
+    """Time-series split with purge gap between train and test to prevent label leakage."""
+    fold_size = n_samples // (n_splits + 1)
+    for i in range(n_splits):
+        train_end = (i + 1) * fold_size
+        test_start = train_end + purge_gap
+        test_end = test_start + fold_size
+        if test_end > n_samples:
+            break
+        yield np.arange(train_end), np.arange(test_start, test_end)
+
 def get_clean_walk_forward_predictions(
     X: np.ndarray,
     y_bin: np.ndarray,
@@ -1439,7 +1552,6 @@ def get_clean_walk_forward_predictions(
     ticker: str,
     n_splits: int = WF_SPLITS
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, Dict[str, float]]:
-    tscv = TimeSeriesSplit(n_splits=n_splits)
 
     oos_prob = np.full(len(y_bin), np.nan, dtype=np.float64)
     oos_mag = np.full(len(y_bin), np.nan, dtype=np.float64)
@@ -1447,13 +1559,18 @@ def get_clean_walk_forward_predictions(
     aucs, accs, briers, loglosses, ap_scores = [], [], [], [], []
     fold_ranges = []
 
-    for fold_i, (train_idx, test_idx) in enumerate(tscv.split(X), start=1):
+    for fold_i, (train_idx, test_idx) in enumerate(purged_time_series_split(len(X), n_splits, PURGE_GAP_BARS), start=1):
         X_tr, y_tr = X[train_idx], y_bin[train_idx]
         X_te, y_te = X[test_idx], y_bin[test_idx]
         mag_tr = y_mag[train_idx]
         w_tr = w[train_idx] if w is not None else None
 
-        clf = HistGradientBoostingClassifier(
+        # Class weight balancing (Fase 4.3) — upweight minority class
+        cw = compute_sample_weight("balanced", y_tr)
+        sw_tr = (w_tr * cw) if w_tr is not None else cw
+
+        # Model 1: HistGradientBoosting (primary)
+        clf_hgb = HistGradientBoostingClassifier(
             learning_rate=0.03,
             max_iter=400,
             max_depth=4,
@@ -1464,6 +1581,15 @@ def get_clean_walk_forward_predictions(
             validation_fraction=0.15,
             n_iter_no_change=15,
             random_state=RANDOM_SEED,
+        )
+        # Model 2: ExtraTrees (diversity, Fase 4.2)
+        clf_et = ExtraTreesClassifier(
+            n_estimators=200,
+            max_depth=6,
+            min_samples_leaf=20,
+            max_features="sqrt",
+            random_state=RANDOM_SEED,
+            n_jobs=1,
         )
         reg = HistGradientBoostingRegressor(
             learning_rate=0.03,
@@ -1477,10 +1603,14 @@ def get_clean_walk_forward_predictions(
             n_iter_no_change=15,
             random_state=RANDOM_SEED,
         )
-        clf.fit(X_tr, y_tr, sample_weight=w_tr)
+        clf_hgb.fit(X_tr, y_tr, sample_weight=sw_tr)
+        clf_et.fit(X_tr, y_tr, sample_weight=sw_tr)
         reg.fit(X_tr, mag_tr, sample_weight=w_tr)
 
-        p_te = clf.predict_proba(X_te)[:, 1].astype(np.float64)
+        # Ensemble blend: 60% HGB + 40% ExtraTrees
+        p_hgb = clf_hgb.predict_proba(X_te)[:, 1].astype(np.float64)
+        p_et = clf_et.predict_proba(X_te)[:, 1].astype(np.float64)
+        p_te = 0.60 * p_hgb + 0.40 * p_et
         m_te = np.clip(reg.predict(X_te).astype(np.float64), 0.0, None)
         oos_prob[test_idx] = p_te
         oos_mag[test_idx] = m_te
@@ -1543,15 +1673,25 @@ def predict_tail_rows(
     if PRINT_TAIL_DETAILS:
         print(f"  [{ticker}] Final model: training on {len(X_train)} rows, predicting {n_tail} tail rows")
 
-    clf = HistGradientBoostingClassifier(
+    cw = compute_sample_weight("balanced", y_bin_train)
+    sw = (w_train * cw) if w_train is not None else cw
+
+    clf_hgb = HistGradientBoostingClassifier(
         learning_rate=0.03, max_iter=400, max_depth=4,
         min_samples_leaf=25, max_leaf_nodes=31,
         l2_regularization=2.0, early_stopping=True,
         validation_fraction=0.15, n_iter_no_change=15,
         random_state=RANDOM_SEED,
     )
-    clf.fit(X_train, y_bin_train, sample_weight=w_train)
-    p_tail = clf.predict_proba(X_tail)[:, 1].astype(np.float64)
+    clf_et = ExtraTreesClassifier(
+        n_estimators=200, max_depth=6, min_samples_leaf=20,
+        max_features="sqrt", random_state=RANDOM_SEED, n_jobs=1,
+    )
+    clf_hgb.fit(X_train, y_bin_train, sample_weight=sw)
+    clf_et.fit(X_train, y_bin_train, sample_weight=sw)
+    p_hgb = clf_hgb.predict_proba(X_tail)[:, 1].astype(np.float64)
+    p_et = clf_et.predict_proba(X_tail)[:, 1].astype(np.float64)
+    p_tail = 0.60 * p_hgb + 0.40 * p_et
 
     reg = HistGradientBoostingRegressor(
         learning_rate=0.03, max_iter=400, max_depth=4,
@@ -1601,11 +1741,12 @@ def backtest_stats_only_intraday(
             np.asarray(c, dtype=np.float64), np.asarray(atr, dtype=np.float64), entry_mask,
             float(p.atr_mult), float(p.rr_mult), bool(LONG_ONLY)
         )
+        # Sharpe from Numba returns: use return/mdd as proxy since we don't have per-trade details
         sharpe = float(ret / (abs(mdd) + 1e-9))
         base = {
-            "total_return": float(ret), "mdd": float(mdd), "sharpe": sharpe,
+            "total_return": float(ret), "mdd": float(mdd), "sharpe": sharpe, "sortino": 0.0,
             "n_trades": float(n_trades), "n_longs": float(n_longs), "n_shorts": float(n_shorts), "win_rate": float(wr), "avg_trade": float(avg_tr), "ret_long": float(ret_long), "ret_short": float(ret_short), "exposure": float(expo),
-            "max_fav_pct": float("nan"), "dd_duration": float("nan"), "regime_filtered_pct": 0.0
+            "max_fav_pct": float("nan"), "dd_duration": float("nan"), "regime_filtered_pct": 0.0, "n_days": float(n),
         }
         if return_trades:
             base["trades"] = []
@@ -2611,7 +2752,7 @@ def calibrate_ev_with_realized_feedback(
     y_cal = y_atr_norm[calib_mask]
 
     try:
-        ic = float(np.corrcoef(ev_cal, y_cal)[0, 1])
+        ic = float(spearmanr(ev_cal, y_cal).statistic)
     except Exception:
         ic = float("nan")
     if np.isfinite(ic):
@@ -2681,11 +2822,12 @@ def build_direct_feature_signal(frame: pd.DataFrame, feat_cols: List[str]) -> Tu
     z = (feat - roll_mean) / roll_std
     z = z.replace([np.inf, -np.inf], np.nan).clip(-4.0, 4.0)
 
-    bearish_tokens = ("risk", "down", "dd", "sell", "err_buy", "pe", "price_to_book")
+    bearish_tokens = {"risk", "down", "dd", "sell", "err_buy", "pe", "price_to_book"}
     signs = []
     for c in feat_cols:
-        lc = str(c).lower()
-        sign = -1.0 if any(tok in lc for tok in bearish_tokens) else 1.0
+        # Use word-boundary matching to avoid false positives (e.g., "speed" matching "pe")
+        parts = set(str(c).lower().replace("-", "_").split("_"))
+        sign = -1.0 if bool(parts & bearish_tokens) else 1.0
         signs.append(sign)
     sign_arr = np.asarray(signs, dtype=np.float64)
 
@@ -2698,9 +2840,15 @@ def build_direct_feature_signal(frame: pd.DataFrame, feat_cols: List[str]) -> Tu
     short_votes = np.where(valid_counts > 0, short_votes, np.nan)
     return directed.astype(np.float64), long_votes.astype(np.float64), short_votes.astype(np.float64)
 def load_full_history_all_cols(path: str) -> pd.DataFrame:
-    df = pd.read_csv(path, dtype={TICKER_COL:"string"}, low_memory=False)
-    df[TICKER_COL] = df[TICKER_COL].astype("string").str.strip()
-    df[DATE_COL] = _parse_dates_smart(df[DATE_COL])
+    # Auto-detect format: Parquet is 5-10x faster than CSV
+    if path.endswith(".parquet") or path.endswith(".pq"):
+        df = pd.read_parquet(path)
+        df[TICKER_COL] = df[TICKER_COL].astype("string").str.strip()
+        df[DATE_COL] = pd.to_datetime(df[DATE_COL], errors="coerce")
+    else:
+        df = pd.read_csv(path, dtype={TICKER_COL:"string"}, low_memory=False)
+        df[TICKER_COL] = df[TICKER_COL].astype("string").str.strip()
+        df[DATE_COL] = _parse_dates_smart(df[DATE_COL])
 
     for col in [OPEN_COL, HIGH_COL, LOW_COL, CLOSE_COL]:
         df[col] = pd.to_numeric(df[col], errors="coerce")
@@ -2835,7 +2983,26 @@ def run():
             reasons["short_len"] = reasons.get("short_len", 0) + 1
             continue
 
-        # seleção de features por correlação Spearman
+        # Compute train/test split FIRST to avoid look-ahead bias in feature selection
+        directed_cols_tmp, _, _ = build_direct_feature_signal(g, base_feat_cols) if len(base_feat_cols) > 0 else (np.zeros((len(g), 0)), np.zeros(len(g)), np.zeros(len(g)))
+        dates = pd.to_datetime(g[DATE_COL], errors="coerce").to_numpy()
+        o = g[OPEN_COL].to_numpy(np.float64)
+        h = g[HIGH_COL].to_numpy(np.float64)
+        l_arr = g[LOW_COL].to_numpy(np.float64)
+        c = g[CLOSE_COL].to_numpy(np.float64)
+        atr = g["atr"].to_numpy(np.float64)
+        ma = g["sma200"].to_numpy(np.float64)
+        valid_cols_check = np.isfinite(directed_cols_tmp).any(axis=1) if directed_cols_tmp.shape[1] > 0 else np.ones(len(g), dtype=bool)
+        valid_mask = np.isfinite(o) & np.isfinite(h) & np.isfinite(l_arr) & np.isfinite(c) & np.isfinite(atr) & valid_cols_check
+        has_oos_idx = np.where(valid_mask)[0]
+        if len(has_oos_idx) < 40:
+            reasons["few_valid"] = reasons.get("few_valid", 0) + 1
+            continue
+        split_point = int(len(has_oos_idx) * 0.80)
+        train_mask = np.zeros(len(g), dtype=bool)
+        train_mask[has_oos_idx[:split_point]] = True
+
+        # Feature selection using ONLY training data (prevents look-ahead bias)
         c_temp = g[CLOSE_COL].to_numpy(np.float64)
         atr_temp = g["atr"].to_numpy(np.float64)
         ret_fwd_temp = (np.roll(c_temp, -FWD_H) - c_temp) / np.maximum(c_temp, 1e-12)
@@ -2854,9 +3021,11 @@ def run():
             if float(s_col.std(skipna=True)) <= MIN_FEAT_STD:
                 continue
             try:
-                valid_idx_temp = np.isfinite(s_col.to_numpy()) & np.isfinite(y_event_temp)
+                s_vals = s_col.to_numpy()
+                # Use only training data for feature selection
+                valid_idx_temp = train_mask & np.isfinite(s_vals) & np.isfinite(y_event_temp)
                 if valid_idx_temp.sum() > MIN_VALID_SAMPLES_FOR_CORRELATION:
-                    corr, _ = spearmanr(s_col.to_numpy()[valid_idx_temp], y_event_temp[valid_idx_temp])
+                    corr, _ = spearmanr(s_vals[valid_idx_temp], y_event_temp[valid_idx_temp])
                     if np.isfinite(corr):
                         feat_correlations.append((ccol, abs(corr)))
             except ValueError:
@@ -2869,14 +3038,9 @@ def run():
             continue
 
         directed_cols, long_votes, short_votes = build_direct_feature_signal(g, feat_cols)
-        dates = pd.to_datetime(g[DATE_COL], errors="coerce").to_numpy()
-        o = g[OPEN_COL].to_numpy(np.float64)
-        h = g[HIGH_COL].to_numpy(np.float64)
-        l = g[LOW_COL].to_numpy(np.float64)
-        c = g[CLOSE_COL].to_numpy(np.float64)
-        atr = g["atr"].to_numpy(np.float64)
-        ma = g["sma200"].to_numpy(np.float64)
+        l = l_arr  # rename for consistency with rest of code
 
+        # Recompute valid_mask with final directed_cols (selected features only)
         valid_cols = np.isfinite(directed_cols).any(axis=1)
         valid_mask = np.isfinite(o) & np.isfinite(h) & np.isfinite(l) & np.isfinite(c) & np.isfinite(atr) & valid_cols
         if valid_mask.sum() < ML_MIN_TRAIN:
@@ -2927,8 +3091,8 @@ def run():
             full_df=df,
             feature_cols=base_feat_cols,
             windows=windows,
-            pop_size=200,
-            ngen=60,
+            pop_size=GA_POP_SIZE,
+            ngen=GA_NGEN,
         )
         try:
             with open(out_global_ckpt, "w", encoding="utf-8") as f:
