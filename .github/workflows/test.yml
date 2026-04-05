@@ -20,6 +20,9 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install test dependencies
+        run: pip install pandas pyarrow
+
       - name: Baixar history_consolidated.csv (opcional)
         if: env.HISTORY_CSV_URL != ''
         run: |
