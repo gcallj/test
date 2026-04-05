@@ -11,28 +11,38 @@ Sistema de geracao de sinais de compra/venda para ~119 ativos brasileiros (acoes
 
 ## Fluxo do Pipeline
 
+### Operacional (diario) — ETL + GA direto
+
+```
++-----------+                                        +--------------+
+|  ETL      |--------------------------------------->|  GA          |
+|stock_etl  |   48 features causais (OHLCV-derived)  | ga_run.py    |
+|  .py      |   27 internas + 21 ETL                 |  (load mode) |
++-----------+                                        +--------------+
+  ~30 min                                              ~10 min
+
+Output: summary_latest.xlsx + apply_last_5d__H5.csv -> Telegram
+```
+
+O GA usa **apenas features causais** derivadas de OHLCV. Steps BIN/REG/FINAL sao
+desnecessarios no fluxo diario porque seus outputs (p_up20, EV_buy, buy_trust, etc.)
+sao **bloqueados pela auditoria causal**.
+
+### Pesquisa (completo) — inclui BIN/REG/FINAL
+
 ```
  STEP 1          STEP 2            STEP 3          STEP 4            STEP 5
 +-----------+   +--------------+   +-----------+   +--------------+   +--------------+
 |  ETL      |-->|  BIN Models  |-->| Regressao |-->| Final Output |-->|  GA          |
-|           |   |              |   |           |   |              |   |              |
 |stock_etl  |   |stock_bin_    |   |stock_reg_ |   |stock_final_  |   | ga_run.py    |
 |  .py      |   |models.py     |   |models.py  |   |output.py     |   |              |
 +-----------+   +--------------+   +-----------+   +--------------+   +--------------+
   ~30 min          ~2.5 h            ~10 min          ~5 min            ~4-8h (train)
-                                                                        ~10 min (load)
 ```
 
-**Dados entre steps:**
-
-```
-expanded_stock_reduced.parquet  -->  ensemble_signals_history.parquet
-                                         -->  forecast_history_wide.parquet
-                                                   -->  history_consolidated.parquet
-                                                              -->  summary_latest.xlsx
-                                                                   apply_last_5d__H5.csv
-                                                                   global_ga_checkpoint.json
-```
+Usar `python predict_daily.py --full` ou `python run_pipeline.py` para rodar completo.
+BIN/REG geram probabilidades e previsoes de preco que ficam em `history_consolidated.parquet`
+para analise futura, mas **nao alimentam** a operacao diaria.
 
 ---
 
@@ -141,25 +151,19 @@ python run_pipeline.py
 python ga_run.py
 ```
 
-### Atualizacao diaria (sem retreinar)
+### Atualizacao diaria (~40 min)
 
 ```bash
-# Opcao 1: pipeline diario completo
-python predict_daily.py                   # ETL + BIN refresh + REG + FINAL + GA load
-
-# Opcao 2: ETL + GA direto (mais rapido, ~15 min)
-python run_pipeline.py --steps 1          # ETL (download dados frescos)
-GA_RUN_MODE=load python ga_run.py         # GA load (gera sinais)
-
+python predict_daily.py                   # ETL + GA load (default, rapido)
 # Resultado: summary_latest.xlsx enviado ao Telegram
 ```
 
-### Modos do pipeline
+### Pipeline de pesquisa (~3.5h, inclui BIN/REG)
 
 ```bash
-python run_pipeline.py --mode full        # Treina tudo (default)
-python run_pipeline.py --mode data-only   # Reutiliza artefatos BIN/REG
-python run_pipeline.py --ga-only          # ETL + rebuild history + GA
+python predict_daily.py --full            # ETL + BIN + REG + FINAL + GA
+python run_pipeline.py                    # Alternativa: Steps 1-4 + GA
+python run_pipeline.py --mode full        # Treina tudo
 python run_pipeline.py --steps 1,4        # Steps especificos
 ```
 
@@ -238,7 +242,7 @@ Fallback hardcoded no codigo para uso sem env vars.
 Workflow: `.github/workflows/daily_pipeline.yml`
 
 - **Schedule:** Dias uteis, 18:30 BRT (21:30 UTC)
-- **Modo:** `predict_daily.py` (ETL + BIN refresh + REG + FINAL + GA load)
+- **Modo:** `predict_daily.py` (ETL + GA load — BIN/REG pulados)
 - **Outputs:** summary_latest.xlsx -> Telegram + GitHub Artifacts (30 dias)
 - **Retrain:** `.github/workflows/retrain_ga.yml` (manual, staged)
 

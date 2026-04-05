@@ -46,8 +46,8 @@ jobs:
           ls -1 output/data/models/*.json output/data/models/*.cbm 2>/dev/null | head -5
           echo "  total files: $(ls output/data/models/ | wc -l)"
 
-      - name: Run ETL + GA (download data + generate signals)
-        run: python -u run_pipeline.py --ga-only
+      - name: Run daily pipeline (ETL + GA causal — skips BIN/REG)
+        run: python -u predict_daily.py
 
       - name: Verify outputs before upload
         if: always()

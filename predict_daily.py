@@ -1,30 +1,34 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Daily Predict Pipeline
-======================
-1. Run ETL to download fresh market data
-2. Refresh BIN predictions from saved artifacts (no label forward-fill)
-3. Rebuild REG forecasts from the fresh ETL history
-4. Run FINAL to consolidate
-5. Run GA in load mode (signals + Telegram)
+Daily Predict Pipeline (fast mode)
+===================================
+1. Run ETL to download fresh market data from yfinance
+2. Run GA in load mode (causal features only -> signals + Telegram)
+
+BIN/REG/FINAL steps are SKIPPED in daily mode because the GA uses only
+causal OHLCV-derived features (48 allowed, 48 model outputs blocked).
+For research with BIN/REG, use: python run_pipeline.py --mode full
 
 Usage:
-    python predict_daily.py
+    python predict_daily.py              # ETL + GA (default, ~40 min)
+    python predict_daily.py --full       # ETL + BIN + REG + FINAL + GA (~3.5 h)
 """
 
+import argparse
 import os
 import time
 
 
-OUTPUT_BASE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
+REPO_DIR = os.path.dirname(os.path.abspath(__file__))
+OUTPUT_BASE = os.path.join(REPO_DIR, "output")
 OUTPUT_DATA = os.path.join(OUTPUT_BASE, "data")
 
 for d in [OUTPUT_BASE, OUTPUT_DATA]:
     os.makedirs(d, exist_ok=True)
 
 
-def step1_etl():
+def step_etl():
     """Download fresh market data via ETL."""
     print("\n" + "=" * 60)
     print("STEP 1: ETL (download fresh data)")
@@ -35,19 +39,19 @@ def step1_etl():
     print(f"[OK] ETL done in {time.time() - t0:.0f}s")
 
 
-def step2_bin_refresh():
-    """Refresh BIN probabilities from saved artifacts when available."""
+def step_bin_refresh():
+    """Refresh BIN probabilities from saved artifacts (research only)."""
     print("\n" + "=" * 60)
     print("STEP 2: BIN refresh (load saved artifacts)")
     print("=" * 60)
     t0 = time.time()
     from stock_bin_models import run_bin_models
-    # auto = load artifacts if present, fallback to retrain only when necessary
     run_bin_models(mode="auto")
     print(f"[OK] BIN done in {time.time() - t0:.0f}s")
 
-def step3_reg_refresh():
-    """Rebuild REG forecasts from the fresh ETL history."""
+
+def step_reg_refresh():
+    """Rebuild REG forecasts (research only)."""
     print("\n" + "=" * 60)
     print("STEP 3: REG refresh (recompute forecasts)")
     print("=" * 60)
@@ -57,8 +61,8 @@ def step3_reg_refresh():
     print(f"[OK] REG done in {time.time() - t0:.0f}s")
 
 
-def step4_final():
-    """Run FINAL consolidation."""
+def step_final():
+    """Run FINAL consolidation (research only)."""
     print("\n" + "=" * 60)
     print("STEP 4: FINAL (consolidate all signals)")
     print("=" * 60)
@@ -68,32 +72,42 @@ def step4_final():
     print(f"[OK] FINAL done in {time.time() - t0:.0f}s")
 
 
-def step5_ga_load():
-    """Run GA in load mode."""
+def step_ga_load():
+    """Run GA in load mode — generates signals from causal features."""
     print("\n" + "=" * 60)
-    print("STEP 5: GA load (generate signals + Telegram)")
+    print("STEP GA: load mode (causal features -> signals + Telegram)")
     print("=" * 60)
     t0 = time.time()
-
-    # Force load mode
     os.environ["GA_RUN_MODE"] = "load"
-
     from ga_run import run
     run()
     print(f"[OK] GA done in {time.time() - t0:.0f}s")
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Daily Predict Pipeline")
+    parser.add_argument(
+        "--full", action="store_true",
+        help="Run full pipeline including BIN/REG/FINAL (research mode, ~3.5h)"
+    )
+    args = parser.parse_args()
+
     print("=" * 60)
-    print("DAILY PREDICT PIPELINE")
+    if args.full:
+        print("DAILY PIPELINE — FULL (ETL + BIN + REG + FINAL + GA)")
+    else:
+        print("DAILY PIPELINE — FAST (ETL + GA causal)")
     print("=" * 60)
     t_start = time.time()
 
-    step1_etl()
-    step2_bin_refresh()
-    step3_reg_refresh()
-    step4_final()
-    step5_ga_load()
+    step_etl()
+
+    if args.full:
+        step_bin_refresh()
+        step_reg_refresh()
+        step_final()
+
+    step_ga_load()
 
     elapsed = time.time() - t_start
     print(f"\n{'=' * 60}")
