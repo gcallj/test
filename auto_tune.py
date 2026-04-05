@@ -331,13 +331,13 @@ class AutoTuner:
         if not s1_windows_cands:
             s1_windows_cands = [min(n_available_windows, 4)]
         s1_pop_cands = [64, 96, 128]
-        s1_ngen_cands = [10, 14, 18]
+        s1_ngen_cands = [10, 15, 20, 25]
 
         s2_windows_cands = [w for w in [8, 10] if w <= n_available_windows]
         if not s2_windows_cands:
             s2_windows_cands = [min(n_available_windows, 8)]
-        s2_pop_cands = [24, 32, 48]
-        s2_ngen_cands = [8, 10, 12]
+        s2_pop_cands = [24, 32, 48, 64]
+        s2_ngen_cands = [12, 20, 30, 40]
 
         time_margin = 0.80  # 20% safety margin
         budget_effective = self.time_budget * time_margin
@@ -374,13 +374,13 @@ class AutoTuner:
                                     best_config = (s1w, s1p, s1n, s2w, s2p, s2n, est_seconds)
 
         if best_config is None:
-            # Fallback: smallest config
+            # Fallback: small pop but reasonable ngen for convergence
             best_config = (
-                s1_windows_cands[0], s1_pop_cands[0], s1_ngen_cands[0],
-                s2_windows_cands[0], s2_pop_cands[0], s2_ngen_cands[0],
+                s1_windows_cands[0], s1_pop_cands[0], s1_ngen_cands[-1],  # max ngen for S1
+                s2_windows_cands[0], s2_pop_cands[0], max(20, s2_ngen_cands[0]),  # at least 20 gen for S2
                 budget_effective,
             )
-            print("[AUTO_TUNE] no config fits budget, using smallest")
+            print("[AUTO_TUNE] no config fits budget, using small pop + extended ngen for convergence")
 
         s1w, s1p, s1n, s2w, s2p, s2n, est_sec = best_config
 
