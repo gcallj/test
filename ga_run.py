@@ -3192,45 +3192,59 @@ def run():
             _above_pivot = close_val > pivot
             _above_r1 = close_val > r1
 
+            # ── Entrada/Saida coerentes com pivot levels ──
+            # BUY: entrada perto de S1 (suporte), saida/alvo perto de R1 (resistencia)
             if sig == "buy":
-                if timing == "no time":
-                    if _above_r1:
-                        # Ja acima de R1: momentum forte, tentar desconto intraday
-                        condicao = f"COMPRAR a {best_buy:.2f} (desconto intraday). Momentum forte, acima de R1 ({r1:.2f})"
-                    elif _above_pivot:
-                        # Acima do pivot: confirma compra, tentar desconto mas nao abaixo do pivot
-                        _entry_pivot = round(max(best_buy, pivot * 1.001), 4)  # nunca abaixo do pivot
-                        condicao = f"COMPRAR a {_entry_pivot:.2f} (acima do Pivot {pivot:.2f}). Stop em {stop_loss:.2f}"
-                        best_buy = _entry_pivot
-                    else:
-                        # Abaixo do pivot: comprar QUANDO romper o pivot (nao antes)
-                        _entry_breakout = round(pivot * 1.002, 4)  # ligeiramente acima do pivot
-                        condicao = f"COMPRAR a {_entry_breakout:.2f} se romper Pivot ({pivot:.2f}). Stop em {stop_loss:.2f}"
-                        best_buy = _entry_breakout
-                elif timing == "cedo":
-                    if _above_pivot:
-                        condicao = f"COMPRAR com cautela a {best_buy:.2f}. Cedo mas acima do Pivot ({pivot:.2f})"
-                    else:
-                        _entry_breakout = round(pivot * 1.002, 4)
-                        condicao = f"AGUARDAR: comprar a {_entry_breakout:.2f} apenas se romper Pivot ({pivot:.2f})"
-                        best_buy = _entry_breakout
-                elif timing == "atrasado":
-                    condicao = f"CAUTELA a {best_buy:.2f}: atrasado, considerar posicao parcial"
-                else:
-                    condicao = f"COMPRAR a {best_buy:.2f}. Stop em {stop_loss:.2f}"
-                # Recalculate entry_ref and dependent values after best_buy adjustment
+                # Entrada: max(best_buy original, s1) — nao comprar abaixo do suporte
+                if best_buy < s1 and s1 < close_val:
+                    best_buy = round(s1 * 1.002, 4)  # ligeiramente acima de S1
+                elif not _above_pivot:
+                    best_buy = round(max(best_buy, pivot * 1.001), 4)  # esperar romper pivot
+
+                # Alvo: se R1 e viavel como alvo, usar R1
+                if r1 > best_buy and (r1 - best_buy) / max(best_buy, ATR_EPS) >= MIN_STOP_PCT * MIN_RR_RATIO:
+                    _r1_target = round(r1 * 0.998, 4)  # ligeiramente abaixo de R1
+                    if _r1_target > take_profit * 0.95:
+                        take_profit = _r1_target
+
+                # Stop: nunca acima de S1 (suporte deve segurar)
+                if stop_loss > s1 and s1 < best_buy:
+                    stop_loss = round(s1 * 0.998, 4)  # ligeiramente abaixo de S1
+
                 entry_ref = best_buy
-            else:  # hold
-                if timing == "muito cedo":
-                    condicao = f"HOLD: muito cedo, base em formacao. Suporte em S1 ({s1:.2f})"
+                # Recalc R:R after adjustments
+                stop_risk = entry_ref - stop_loss
+                take_reward = take_profit - entry_ref
+                if stop_risk > 0:
+                    rr_ratio = take_reward / stop_risk
+                    rr_display = round(rr_ratio, 1)
+
+            # Saida coerente com alvo
+            best_sell = round(min(take_profit * 0.99, close_val * 1.02), 4) if sig == "buy" else round(close_val, 4)
+
+            # ── Condicao unificada: timing + regime + acao ──
+            _regime_str = "favoravel" if regime_val >= 0.6 else ("neutro" if regime_val >= 0.3 else "desfavoravel")
+            if sig == "buy":
+                if timing == "no time" and _regime_str == "favoravel":
+                    if _above_r1:
+                        condicao = f"BUY {best_buy:.2f} | Forte: acima R1 | Regime OK | Stop {stop_loss:.2f} Alvo {take_profit:.2f}"
+                    elif _above_pivot:
+                        condicao = f"BUY {best_buy:.2f} | Acima Pivot | Regime OK | Stop {stop_loss:.2f} Alvo {take_profit:.2f}"
+                    else:
+                        condicao = f"BUY {best_buy:.2f} se romper Pivot {pivot:.2f} | Regime OK | Stop {stop_loss:.2f}"
                 elif timing == "cedo":
-                    condicao = f"HOLD: cedo, aguardar Stage 2. Monitorar Pivot ({pivot:.2f})"
+                    condicao = f"BUY cautela {best_buy:.2f} | Cedo ({_regime_str}) | Stop {stop_loss:.2f}"
+                elif timing == "muito cedo":
+                    condicao = f"AGUARDAR | Muito cedo ({_regime_str}) | Suporte S1 {s1:.2f}"
                 elif timing == "atrasado":
-                    condicao = f"HOLD: atrasado, evitar. Resistencia em R1 ({r1:.2f})"
-                elif _above_pivot:
-                    condicao = f"HOLD: acima do Pivot ({pivot:.2f}) mas sem sinal"
+                    condicao = f"BUY parcial {best_buy:.2f} | Atrasado ({_regime_str}) | Stop {stop_loss:.2f}"
                 else:
-                    condicao = f"HOLD: abaixo do Pivot ({pivot:.2f})"
+                    condicao = f"BUY {best_buy:.2f} | {timing} ({_regime_str}) | Stop {stop_loss:.2f} Alvo {take_profit:.2f}"
+            else:
+                if _above_pivot:
+                    condicao = f"HOLD | Acima Pivot {pivot:.2f} | {timing} ({_regime_str})"
+                else:
+                    condicao = f"HOLD | Abaixo Pivot {pivot:.2f} | {timing} ({_regime_str})"
 
             results_apply.append({
                 "Date": pd.to_datetime(dates[i]).strftime("%Y-%m-%d"),
@@ -3250,7 +3264,6 @@ def run():
                 "pivot": pivot,
                 "r1": r1,
                 "s1": s1,
-                "timing": timing,
                 "condicao": condicao,
                 "win_rate": round(bt_win_rate * 100, 1),
                 "queda_max": round(queda_max_esperada * 100, 1),
@@ -3308,10 +3321,12 @@ def run():
         _sell_mask = pd.Series(False, index=df_app.index)
         _is_hold = df_app["signal"] == "hold"
         _regime_desf = df_app["regime"] == "desfavoravel"
-        _timing_mc = df_app["timing"] == "muito cedo"
-        _timing_atr = df_app["timing"] == "atrasado"
         _below_pivot = df_app["close"] < df_app["pivot"]
         _low_conf = df_app["confidence"] < 35.0
+        # Detect timing from condicao field (timing is now embedded)
+        _cond_str = df_app["condicao"].fillna("").astype(str)
+        _timing_mc = _cond_str.str.contains("Muito cedo", case=False)
+        _timing_atr = _cond_str.str.contains("Atrasado", case=False)
 
         # Regra 1: bear trend + sem base formada
         _sell_mask |= (_is_hold & _regime_desf & _timing_mc)
@@ -3322,14 +3337,10 @@ def run():
 
         # Apply sell signal and update condicao
         df_app.loc[_sell_mask, "signal"] = "sell"
-        df_app.loc[_sell_mask & _timing_mc, "condicao"] = df_app.loc[_sell_mask & _timing_mc, "condicao"].str.replace(
-            "HOLD: muito cedo", "SELL: tendencia de baixa", regex=False
-        )
-        df_app.loc[_sell_mask & _timing_atr, "condicao"] = df_app.loc[_sell_mask & _timing_atr, "condicao"].str.replace(
-            "HOLD: atrasado, evitar", "SELL: atrasado em bear, evitar", regex=False
-        )
+        df_app.loc[_sell_mask & _timing_mc, "condicao"] = "SELL | Tendencia de baixa | Muito cedo (desfavoravel)"
+        df_app.loc[_sell_mask & _timing_atr, "condicao"] = "SELL | Atrasado em bear | Risco de reversao"
         df_app.loc[_sell_mask & ~_timing_mc & ~_timing_atr, "condicao"] = (
-            "SELL: regime desfavoravel, abaixo do Pivot, confianca baixa"
+            "SELL | Regime desfavoravel | Abaixo do Pivot | Confianca baixa"
         )
 
         _n_sells = int(_sell_mask.sum())

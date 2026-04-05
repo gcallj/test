@@ -1,120 +1,120 @@
-Date,ticker,signal,potencial,rank,confidence,close,entrada,saida,stop,alvo,RR,stop_pct,alvo_pct,pivot,r1,s1,timing,condicao,win_rate,queda_max,regime
-2026-03-20,PRIO3.SA,buy,alto,78.6,84.4,67.89,66.7386,69.9267,62.6609,75.1105,2.1,6.11,12.54,66.6333,69.1466,65.3766,no time,COMPRAR a 66.74 (acima do Pivot 66.63). Stop em 62.66,61.9,20.6,favoravel
-2026-03-20,SLCE3.SA,buy,baixo,74.9,82.3,18.21,18.1949,18.5329,17.3016,18.9875,1.5,3.75,5.63,18.1767,18.5134,17.8734,no time,COMPRAR a 18.19 (acima do Pivot 18.18). Stop em 17.30,64.9,19.2,favoravel
-2026-03-20,ODPV3.SA,buy,alto,73.4,70.2,13.0,13.0694,13.2186,12.1778,15.9611,5.4,4.63,25.0,13.0433,13.2066,12.8366,no time,COMPRAR a 13.07 se romper Pivot (13.04). Stop em 12.18,62.7,26.1,favoravel
-2026-03-20,CSMG3.SA,buy,alto,73.3,70.3,53.45,54.2583,54.8083,50.1911,59.1926,3.0,4.32,12.84,54.15,54.9,52.7,no time,COMPRAR a 54.26 se romper Pivot (54.15). Stop em 50.19,68.8,27.2,favoravel
-2026-03-20,HSML11.SA,buy,baixo,72.1,74.0,95.29,95.3285,95.9215,92.877,97.6157,1.5,2.0,3.0,95.2333,95.5566,94.9666,no time,COMPRAR a 95.33 (acima do Pivot 95.23). Stop em 92.88,69.1,4.5,favoravel
-2026-03-20,TIMS3.SA,buy,medio,71.5,69.4,26.13,26.3326,26.5811,24.7397,28.4539,2.9,3.75,10.7,26.28,26.55,25.86,no time,COMPRAR a 26.33 se romper Pivot (26.28). Stop em 24.74,63.2,26.7,favoravel
-2026-03-20,BRKM5.SA,buy,alto,70.1,73.8,10.2,10.8149,10.506,8.6074,12.3675,1.9,13.0,25.0,10.7933,11.4066,9.5866,no time,COMPRAR a 10.81 se romper Pivot (10.79). Stop em 8.61,63.1,36.3,favoravel
-2026-03-20,BBAS3.SA,buy,alto,69.7,66.1,23.27,22.9094,23.7338,21.8826,27.712,4.7,4.48,20.96,23.2467,23.4834,23.0334,cedo,COMPRAR com cautela a 22.91. Cedo mas acima do Pivot (23.25),61.9,29.5,neutro
-2026-03-20,NEOE3.SA,buy,medio,69.5,71.9,33.2,33.2731,33.2996,32.3733,35.6729,4.0,2.0,7.99,33.2067,33.2434,33.1634,no time,COMPRAR a 33.27 se romper Pivot (33.21). Stop em 32.37,61.5,10.2,favoravel
-2026-03-20,MXRF11.SA,buy,baixo,69.0,67.5,9.77,9.7631,9.8212,9.5268,10.0128,1.5,2.0,3.0,9.7533,9.8166,9.7066,no time,COMPRAR a 9.76 (acima do Pivot 9.75). Stop em 9.53,59.6,19.7,favoravel
-2026-03-20,VIVT3.SA,buy,medio,68.6,67.4,40.27,40.4474,41.0152,38.2342,43.3946,2.5,3.69,9.31,40.3667,40.6534,39.9834,no time,COMPRAR a 40.45 se romper Pivot (40.37). Stop em 38.23,60.7,26.0,favoravel
-2026-03-20,SBSP3.SA,buy,medio,68.2,70.9,148.5,149.4784,151.7034,139.6115,158.2405,2.0,4.23,8.55,149.18,151.24,146.44,no time,COMPRAR a 149.48 se romper Pivot (149.18). Stop em 139.61,65.3,19.0,favoravel
-2026-03-20,SMTO3.SA,buy,medio,67.3,77.1,18.78,18.8777,19.3434,17.1677,20.094,1.5,6.38,9.57,18.84,19.21,18.41,no time,COMPRAR a 18.88 se romper Pivot (18.84). Stop em 17.17,67.9,32.0,favoravel
-2026-03-20,UGPA3.SA,buy,medio,67.1,68.3,26.16,26.3426,26.7692,24.6201,27.9555,1.9,4.49,8.45,26.29,26.57,25.88,no time,COMPRAR a 26.34 se romper Pivot (26.29). Stop em 24.62,62.5,26.0,favoravel
-2026-03-20,XPML11.SA,buy,baixo,64.9,66.6,108.45,107.9077,109.0511,105.7495,112.1142,1.9,2.0,3.9,108.1967,109.3234,107.3234,atrasado,"CAUTELA a 107.91: atrasado, considerar posicao parcial",63.3,50.0,favoravel
-2026-03-20,PETR4.SA,buy,medio,64.8,70.7,45.67,46.0386,46.9432,43.1656,48.0685,1.6,4.19,6.69,45.9467,46.9734,44.6434,no time,COMPRAR a 46.04 se romper Pivot (45.95). Stop em 43.17,55.6,24.3,favoravel
-2026-03-20,RADL3.SA,buy,alto,63.5,62.8,22.48,22.7454,22.9455,21.2685,26.241,3.5,4.91,17.32,22.7,22.99,22.19,cedo,AGUARDAR: comprar a 22.75 apenas se romper Pivot (22.70),62.7,22.8,neutro
-2026-03-20,IGTI11.SA,buy,alto,63.4,65.0,25.82,26.2524,26.2629,24.4436,30.0412,3.5,4.86,16.93,26.2,26.58,25.44,cedo,AGUARDAR: comprar a 26.25 apenas se romper Pivot (26.20),66.7,19.9,neutro
-2026-03-20,BPAC11.SA,buy,alto,63.1,65.5,52.74,53.1528,53.9977,48.6843,62.4236,3.4,6.05,20.46,53.0467,54.2734,51.5134,cedo,AGUARDAR: comprar a 53.15 apenas se romper Pivot (53.05),66.9,29.9,neutro
-2026-03-20,GGRC11.SA,buy,baixo,63.0,63.6,10.14,10.1803,10.184,9.8875,10.4918,2.0,2.0,3.99,10.16,10.19,10.11,no time,COMPRAR a 10.18 se romper Pivot (10.16). Stop em 9.89,58.2,17.3,favoravel
-2026-03-20,CMIG4.SA,buy,baixo,62.9,69.9,12.24,12.3346,12.4472,11.638,12.7317,1.5,3.62,5.43,12.31,12.55,12.0,no time,COMPRAR a 12.33 se romper Pivot (12.31). Stop em 11.64,60.8,21.7,favoravel
-2026-03-20,WEGE3.SA,buy,alto,62.7,63.9,45.96,46.0687,46.6839,43.3721,52.2849,3.9,3.99,15.74,45.9767,46.5134,45.4234,cedo,AGUARDAR: comprar a 46.07 apenas se romper Pivot (45.98),69.5,18.8,neutro
-2026-03-20,MULT3.SA,buy,alto,62.6,61.6,29.92,30.1602,30.5475,28.2162,35.834,4.3,4.87,20.82,30.1,30.49,29.53,cedo,AGUARDAR: comprar a 30.16 apenas se romper Pivot (30.10),63.2,27.2,neutro
-2026-03-20,RENT3.SA,buy,alto,62.3,62.2,43.21,43.42,44.2943,39.3082,52.3932,3.4,6.98,23.98,43.3333,44.0766,42.4666,cedo,AGUARDAR: comprar a 43.42 apenas se romper Pivot (43.33),61.2,38.3,neutro
-2026-03-20,ABEV3.SA,buy,alto,62.3,63.8,14.47,14.5457,14.726,13.83,16.5938,4.5,3.49,15.8,14.5167,14.7034,14.2834,cedo,AGUARDAR: comprar a 14.55 apenas se romper Pivot (14.52),67.4,24.4,neutro
-2026-03-20,AXIA3.SA,buy,alto,61.8,62.8,55.65,56.3592,56.8259,52.362,62.9826,2.7,5.26,13.95,56.2467,57.2234,54.6734,cedo,AGUARDAR: comprar a 56.36 apenas se romper Pivot (56.25),66.7,26.8,neutro
-2026-03-20,ABCB4.SA,buy,alto,61.2,62.2,25.19,25.3038,25.5661,24.0343,28.106,3.4,3.75,12.56,25.2533,25.5366,24.9066,cedo,AGUARDAR: comprar a 25.30 apenas se romper Pivot (25.25),66.1,24.8,neutro
-2026-03-20,EGIE3.SA,buy,medio,61.0,62.3,31.31,31.5296,31.8118,29.87,34.5872,3.1,3.71,11.5,31.4667,31.9134,30.8634,cedo,AGUARDAR: comprar a 31.53 apenas se romper Pivot (31.47),64.0,27.3,neutro
-2026-03-20,AXIA6.SA,buy,medio,61.0,60.8,61.02,61.643,62.3268,57.138,68.6502,2.6,5.29,13.79,61.52,62.71,59.83,cedo,AGUARDAR: comprar a 61.64 apenas se romper Pivot (61.52),59.8,25.2,neutro
-2026-03-20,CPFE3.SA,buy,alto,60.8,61.4,45.66,46.3492,46.4245,43.6996,51.5256,3.5,3.81,13.41,46.2567,46.9934,44.9234,cedo,AGUARDAR: comprar a 46.35 apenas se romper Pivot (46.26),60.0,30.6,neutro
-2026-03-20,ITUB4.SA,buy,medio,60.5,58.6,41.55,41.7566,42.3402,39.5991,48.7362,4.7,3.89,18.29,41.6733,42.1466,41.0766,cedo,AGUARDAR: comprar a 41.76 apenas se romper Pivot (41.67),56.5,25.3,neutro
-2026-03-20,AGRO3.SA,buy,medio,59.0,68.4,21.0,21.3293,21.3368,19.7172,22.7086,2.1,4.65,9.81,21.2867,21.5734,20.7134,cedo,AGUARDAR: comprar a 21.33 apenas se romper Pivot (21.29),61.5,33.0,favoravel
-2026-03-20,EZTC3.SA,buy,medio,58.9,48.3,13.21,13.3233,13.528,12.2384,16.4506,4.2,6.22,26.06,13.2967,13.5434,12.9634,cedo,AGUARDAR: comprar a 13.32 apenas se romper Pivot (13.30),53.3,31.7,neutro
-2026-03-20,EQTL3.SA,buy,medio,57.0,62.0,39.98,40.4575,40.639,37.4836,42.8276,2.0,4.57,9.03,40.3767,40.8834,39.4734,cedo,AGUARDAR: comprar a 40.46 apenas se romper Pivot (40.38),66.7,27.5,favoravel
-2026-03-20,BRSR6.SA,buy,medio,55.3,39.6,16.73,16.9238,17.0837,15.9106,19.0999,3.3,4.42,14.74,16.89,17.08,16.54,cedo,AGUARDAR: comprar a 16.92 apenas se romper Pivot (16.89),42.1,22.3,neutro
-2026-03-20,FLRY3.SA,buy,alto,53.3,59.2,14.91,14.83,15.1872,14.1684,17.8288,4.5,4.46,20.22,15.04,15.25,14.7,muito cedo,COMPRAR a 14.83. Stop em 14.17,65.7,25.0,desfavoravel
-2026-03-20,TAEE11.SA,buy,medio,53.1,39.8,40.83,41.2591,41.5632,39.0095,45.9984,3.6,3.75,13.49,41.1767,41.8234,40.1834,cedo,AGUARDAR: comprar a 41.26 apenas se romper Pivot (41.18),33.3,29.8,neutro
-2026-03-20,CURY3.SA,buy,medio,52.6,53.4,33.06,32.52,34.0518,30.403,40.65,3.8,6.51,25.0,33.2267,33.9334,32.3534,muito cedo,COMPRAR a 32.52. Stop em 30.40,57.5,32.2,desfavoravel
-2026-03-20,KLBN11.SA,buy,alto,51.6,56.9,18.4,18.308,18.688,17.6946,20.9364,4.3,3.35,14.36,18.5133,18.6766,18.2366,muito cedo,COMPRAR a 18.31. Stop em 17.69,61.7,22.7,desfavoravel
-2026-03-20,PVBI11.SA,buy,baixo,49.4,61.1,79.45,79.7692,80.2735,77.1811,81.1189,1.5,2.0,3.0,79.61,80.03,79.03,cedo,AGUARDAR: comprar a 79.77 apenas se romper Pivot (79.61),62.7,13.7,favoravel
-2026-03-20,BBSE3.SA,buy,baixo,43.4,53.6,34.09,33.7022,34.555,32.7834,35.5424,2.0,2.73,5.46,34.24,34.52,33.81,muito cedo,COMPRAR a 33.70. Stop em 32.78,59.6,19.2,neutro
-2026-03-20,RBRX11.SA,hold,-,73.4,74.2,8.6,8.5174,8.6714,8.3471,8.8433,1.9,2.0,3.83,8.5833,8.6466,8.5366,no time,HOLD: acima do Pivot (8.58) mas sem sinal,72.2,5.6,favoravel
-2026-03-20,VISC11.SA,hold,-,70.8,70.0,109.88,109.276,110.4799,107.0905,113.4155,1.9,2.0,3.79,109.7867,110.2034,109.4634,no time,HOLD: acima do Pivot (109.79) mas sem sinal,58.2,14.3,favoravel
-2026-03-20,HGBS11.SA,hold,-,68.5,68.0,20.34,20.2383,20.4403,19.8335,20.8454,1.5,2.0,3.0,20.28,20.41,20.21,no time,HOLD: acima do Pivot (20.28) mas sem sinal,58.5,14.1,favoravel
-2026-03-20,HFOF11.SA,hold,-,67.4,67.8,6.85,6.7861,6.9007,6.6504,7.1035,2.3,2.0,4.68,6.85,6.89,6.81,no time,HOLD: abaixo do Pivot (6.85),64.9,5.9,favoravel
-2026-03-20,RAIL3.SA,hold,-,67.1,71.2,16.12,15.7998,16.4637,14.9444,17.368,1.8,5.41,9.93,16.09,16.33,15.88,atrasado,"HOLD: atrasado, evitar. Resistencia em R1 (16.33)",73.3,34.1,favoravel
-2026-03-20,BTLG11.SA,hold,-,63.1,71.0,103.17,102.6541,103.6007,100.601,105.7337,1.5,2.0,3.0,103.3733,103.7466,102.7966,no time,HOLD: abaixo do Pivot (103.37),63.1,8.9,favoravel
-2026-03-20,KNRI11.SA,hold,-,62.9,71.1,163.22,162.2564,164.8034,159.0113,168.4241,1.9,2.0,3.8,163.1367,165.0034,161.3534,cedo,"HOLD: cedo, aguardar Stage 2. Monitorar Pivot (163.14)",71.3,9.5,favoravel
-2026-03-20,SAPR11.SA,hold,-,61.8,36.6,42.67,41.8155,43.4873,40.028,47.8665,3.4,4.27,14.47,42.33,43.01,41.99,cedo,"HOLD: cedo, aguardar Stage 2. Monitorar Pivot (42.33)",48.0,28.9,neutro
-2026-03-20,HGPO11.SA,hold,-,61.4,59.4,150.52,149.5641,151.7331,146.5728,154.051,1.5,2.0,3.0,150.63,151.46,149.69,no time,HOLD: abaixo do Pivot (150.63),59.7,10.5,favoravel
-2026-03-20,XPLG11.SA,hold,-,61.0,68.8,101.75,101.2257,102.2906,99.2012,104.2625,1.5,2.0,3.0,101.6267,102.3034,101.0734,cedo,"HOLD: cedo, aguardar Stage 2. Monitorar Pivot (101.63)",69.5,4.4,favoravel
-2026-03-20,USIM5.SA,hold,-,60.1,62.8,6.31,6.1587,6.48,5.7989,7.1106,2.6,5.84,15.46,6.3233,6.3966,6.2366,cedo,"HOLD: cedo, aguardar Stage 2. Monitorar Pivot (6.32)",62.5,25.9,neutro
-2026-03-20,LVBI11.SA,hold,-,59.8,60.8,109.62,109.0065,110.1913,106.8264,112.3713,1.5,2.0,3.09,109.4833,110.1666,108.9366,cedo,"HOLD: cedo, aguardar Stage 2. Monitorar Pivot (109.48)",58.3,8.0,favoravel
-2026-03-20,BTC-USD,hold,-,59.7,67.7,70522.5859,68406.9084,71942.3923,65214.4996,75836.7686,2.3,4.67,10.86,70422.7552,71446.6276,69498.7135,muito cedo,"HOLD: muito cedo, base em formacao. Suporte em S1 (69498.71)",75.8,19.2,neutro
-2026-03-20,RCRB11.SA,hold,-,59.3,59.9,141.48,140.0275,143.5587,137.227,144.8809,1.7,2.0,3.47,141.3367,142.1634,140.6534,cedo,"HOLD: cedo, aguardar Stage 2. Monitorar Pivot (141.34)",56.6,10.7,favoravel
-2026-03-20,ETH-USD,hold,-,58.8,63.2,2146.4971,2082.1022,2205.9958,1952.1427,2378.4193,2.3,6.24,14.23,2146.4909,2175.7057,2117.2823,muito cedo,"HOLD: muito cedo, base em formacao. Suporte em S1 (2117.28)",68.8,19.0,neutro
-2026-03-20,KFOF11.SA,hold,-,58.1,64.7,81.72,81.3114,82.2978,79.6852,85.818,2.8,2.0,5.54,81.9233,82.1966,81.4466,cedo,"HOLD: cedo, aguardar Stage 2. Monitorar Pivot (81.92)",61.3,8.2,favoravel
-2026-03-20,CXSE3.SA,hold,-,57.7,64.2,17.35,17.21,17.6476,16.6662,18.6212,2.6,3.16,8.2,17.56,17.84,17.07,cedo,"HOLD: cedo, aguardar Stage 2. Monitorar Pivot (17.56)",61.8,20.2,favoravel
-2026-03-20,LEVE3.SA,hold,-,57.2,62.7,34.58,34.0078,35.0863,32.8373,36.901,2.5,3.44,8.51,34.59,34.84,34.33,cedo,"HOLD: cedo, aguardar Stage 2. Monitorar Pivot (34.59)",61.7,22.3,favoravel
-2026-03-20,BRCR11.SA,hold,-,56.5,63.0,47.0,46.5337,47.5358,45.603,48.9409,2.6,2.0,5.17,47.2333,47.9666,46.2666,cedo,"HOLD: cedo, aguardar Stage 2. Monitorar Pivot (47.23)",62.7,11.5,favoravel
-2026-03-20,ITSA4.SA,hold,-,56.3,35.3,13.1,12.99,13.3688,12.4489,14.9696,3.7,4.17,15.24,13.1367,13.2834,12.9534,cedo,"HOLD: cedo, aguardar Stage 2. Monitorar Pivot (13.14)",46.7,29.1,neutro
-2026-03-20,SOL-USD,hold,-,55.9,55.7,89.8536,87.158,92.5492,82.07,97.2125,2.0,5.84,11.54,89.4441,90.6463,88.6513,muito cedo,"HOLD: muito cedo, base em formacao. Suporte em S1 (88.65)",71.4,16.9,neutro
-2026-03-20,JHSF3.SA,hold,-,55.8,32.6,8.34,8.29,8.5289,7.8579,10.2402,4.5,5.21,23.52,8.46,8.63,8.17,cedo,"HOLD: cedo, aguardar Stage 2. Monitorar Pivot (8.46)",49.0,27.5,neutro
-2026-03-20,MLAS3.SA,hold,-,55.7,39.5,1.21,1.1737,1.245,1.105,1.4053,3.4,5.85,19.73,1.23,1.25,1.19,cedo,"HOLD: cedo, aguardar Stage 2. Monitorar Pivot (1.23)",38.5,17.1,favoravel
-2026-03-20,VALE3.SA,hold,-,55.4,33.6,75.55,74.155,76.9487,70.9113,90.0065,4.9,4.37,21.38,75.6533,76.5966,74.6066,cedo,"HOLD: cedo, aguardar Stage 2. Monitorar Pivot (75.65)",46.7,28.4,neutro
-2026-03-20,ENGI11.SA,hold,-,55.1,43.0,48.84,48.5958,49.817,46.3288,55.3227,3.0,4.67,13.84,49.4633,50.0866,48.2166,cedo,"HOLD: cedo, aguardar Stage 2. Monitorar Pivot (49.46)",42.2,44.9,neutro
-2026-03-20,BBDC4.SA,hold,-,54.9,43.2,18.33,18.07,18.6352,17.262,21.8234,4.6,4.47,20.77,18.3867,18.6534,18.0634,cedo,"HOLD: cedo, aguardar Stage 2. Monitorar Pivot (18.39)",44.4,27.5,neutro
-2026-03-20,LTC-USD,hold,-,54.7,53.0,56.1763,54.491,57.4658,52.3083,59.045,2.1,4.01,8.36,55.9505,56.6358,55.491,muito cedo,"HOLD: muito cedo, base em formacao. Suporte em S1 (55.49)",72.7,24.5,neutro
-2026-03-20,KNCR11.SA,hold,-,54.7,47.6,105.49,104.9625,105.9838,102.8633,108.1114,1.5,2.0,3.0,105.39,105.75,105.13,cedo,"HOLD: cedo, aguardar Stage 2. Monitorar Pivot (105.39)",50.0,13.3,favoravel
-2026-03-20,BRCO11.SA,hold,-,54.2,65.0,118.99,118.3318,119.8647,115.9652,123.8866,2.3,2.0,4.69,119.3833,120.2566,118.1166,cedo,"HOLD: cedo, aguardar Stage 2. Monitorar Pivot (119.38)",65.4,8.5,favoravel
-2026-03-20,ISAE4.SA,hold,-,53.7,31.8,27.24,27.1,27.6174,26.1848,30.187,3.4,3.38,11.39,27.4267,27.7534,26.9134,cedo,"HOLD: cedo, aguardar Stage 2. Monitorar Pivot (27.43)",50.0,25.0,favoravel
-2026-03-20,RANI3.SA,hold,-,53.2,47.1,8.97,8.9252,9.1193,8.5841,10.0961,3.4,3.82,13.12,9.04,9.13,8.88,cedo,"HOLD: cedo, aguardar Stage 2. Monitorar Pivot (9.04)",37.5,50.0,neutro
-2026-03-20,MDIA3.SA,hold,-,53.2,62.5,21.25,21.1438,21.5435,20.4054,26.3439,7.0,3.49,24.59,21.4067,21.5634,21.0934,muito cedo,"HOLD: muito cedo, base em formacao. Suporte em S1 (21.09)",66.8,17.4,neutro
-2026-03-20,HGRE11.SA,hold,-,52.7,46.4,125.12,124.4944,126.3068,122.0045,131.8205,2.9,2.0,5.88,125.2433,125.9866,124.3766,cedo,"HOLD: cedo, aguardar Stage 2. Monitorar Pivot (125.24)",47.4,18.8,favoravel
-2026-03-20,ALZR11.SA,hold,-,51.7,62.0,10.55,10.4973,10.5892,10.2874,10.8135,1.5,2.0,3.01,10.5767,10.6034,10.5234,cedo,"HOLD: cedo, aguardar Stage 2. Monitorar Pivot (10.58)",56.3,13.2,favoravel
-2026-03-20,KNSC11.SA,hold,-,51.3,43.9,8.84,8.7906,8.8989,8.6148,9.2408,2.6,2.0,5.12,8.8433,8.8866,8.7966,cedo,"HOLD: cedo, aguardar Stage 2. Monitorar Pivot (8.84)",51.0,16.3,favoravel
-2026-03-20,BCIA11.SA,hold,-,51.0,36.6,92.15,91.6893,93.0694,89.8555,98.4618,3.7,2.0,7.39,92.48,93.19,91.44,cedo,"HOLD: cedo, aguardar Stage 2. Monitorar Pivot (92.48)",38.9,17.6,favoravel
-2026-03-20,TRXF11.SA,hold,-,50.8,56.3,91.6,91.142,91.9233,89.3192,93.8763,1.5,2.0,3.0,91.5233,91.7866,91.3366,muito cedo,"HOLD: muito cedo, base em formacao. Suporte em S1 (91.34)",56.1,6.8,neutro
-2026-03-20,VBBR3.SA,hold,-,50.5,32.1,29.09,28.5849,29.7727,27.009,31.9317,2.1,5.51,11.71,29.2533,29.7766,28.5666,cedo,"HOLD: cedo, aguardar Stage 2. Monitorar Pivot (29.25)",45.0,27.7,favoravel
-2026-03-20,ALUP11.SA,hold,-,50.1,29.7,33.53,33.02,34.0376,31.7495,36.254,2.5,3.85,9.79,33.53,34.04,33.02,cedo,"HOLD: cedo, aguardar Stage 2. Monitorar Pivot (33.53)",30.0,32.3,favoravel
-2026-03-20,CPTS11.SA,hold,-,49.9,50.8,7.94,7.9003,8.0009,7.7423,8.194,1.9,2.0,3.72,7.97,8.0,7.91,cedo,"HOLD: cedo, aguardar Stage 2. Monitorar Pivot (7.97)",54.8,20.3,favoravel
-2026-03-20,IVVB11.SA,hold,-,49.8,64.7,389.45,387.5028,392.2351,379.7527,420.0655,4.2,2.0,8.4,389.7133,391.2166,387.9466,muito cedo,"HOLD: muito cedo, base em formacao. Suporte em S1 (387.95)",66.2,16.1,neutro
-2026-03-20,IRIM11.SA,hold,-,49.3,66.1,62.45,62.1378,62.8478,60.895,65.1388,2.4,2.0,4.83,62.8167,63.2134,62.0534,muito cedo,"HOLD: muito cedo, base em formacao. Suporte em S1 (62.05)",65.0,4.5,neutro
-2026-03-20,KNHY11.SA,hold,-,45.6,38.7,99.35,98.8532,100.1055,96.8761,101.8188,1.5,2.0,3.0,99.1967,99.6334,98.9134,muito cedo,"HOLD: muito cedo, base em formacao. Suporte em S1 (98.91)",50.0,14.6,neutro
-2026-03-20,RBRP11.SA,hold,-,43.7,43.3,51.86,51.46,52.2107,50.4308,54.8116,3.3,2.0,6.51,51.9167,52.0134,51.7634,muito cedo,"HOLD: muito cedo, base em formacao. Suporte em S1 (51.76)",50.0,16.7,neutro
-2026-03-06,IRDM11.SA,hold,-,42.7,54.5,58.5,58.2075,58.6755,57.0434,59.9537,1.5,2.0,3.0,58.5,58.5,58.5,muito cedo,"HOLD: muito cedo, base em formacao. Suporte em S1 (58.50)",64.7,9.2,neutro
-2026-03-20,RBRF11.SA,hold,-,39.4,36.7,6.65,6.6168,6.67,6.4845,6.8218,1.5,2.0,3.1,6.65,6.65,6.65,muito cedo,"HOLD: muito cedo, base em formacao. Suporte em S1 (6.65)",53.7,11.2,neutro
-2026-03-20,HGLG11.SA,hold,-,35.1,36.9,155.6,154.822,156.0996,151.7256,159.4667,1.5,2.0,3.0,156.27,157.24,154.63,muito cedo,"HOLD: muito cedo, base em formacao. Suporte em S1 (154.63)",28.0,11.9,neutro
-2026-03-20,TGMA3.SA,sell,-,62.1,71.6,28.0,27.4166,28.3791,25.4354,34.2708,3.5,7.23,25.0,27.7167,28.4834,27.2334,muito cedo,"SELL: tendencia de baixa, base em formacao. Suporte em S1 (27.23)",68.0,26.3,desfavoravel
-2026-03-20,CVCB3.SA,sell,-,61.7,64.3,1.98,1.9206,2.0394,1.7885,2.4008,3.6,6.88,25.0,1.93,2.03,1.88,muito cedo,"SELL: tendencia de baixa, base em formacao. Suporte em S1 (1.88)",64.2,33.1,desfavoravel
-2026-03-20,CSNA3.SA,sell,-,59.5,64.3,5.99,5.8103,6.1456,5.2639,7.2629,2.7,9.4,25.0,5.9767,6.1134,5.8534,muito cedo,"SELL: tendencia de baixa, base em formacao. Suporte em S1 (5.85)",62.3,38.9,desfavoravel
-2026-03-20,MBRF3.SA,sell,-,59.0,62.6,16.6,16.1604,16.9773,15.0997,20.2005,3.8,6.56,25.0,16.4233,17.2066,15.8166,muito cedo,"SELL: tendencia de baixa, base em formacao. Suporte em S1 (15.82)",58.6,29.5,desfavoravel
-2026-03-20,DOGE-USD,sell,-,57.1,62.1,0.0942,0.0913,0.097,0.0855,0.1039,2.2,6.35,13.8,0.0941,0.0952,0.0929,muito cedo,"SELL: tendencia de baixa, base em formacao. Suporte em S1 (0.09)",65.5,13.8,desfavoravel
-2026-03-20,XPBR31.SA,sell,-,56.3,58.4,96.4,94.35,99.15,87.8455,117.9386,3.6,6.89,25.0,96.89,98.45,94.84,muito cedo,"SELL: tendencia de baixa, base em formacao. Suporte em S1 (94.84)",69.6,13.0,desfavoravel
-2026-03-20,LAVV3.SA,sell,-,55.8,68.8,13.69,13.6215,13.9423,12.776,17.0269,4.0,6.21,25.0,13.9033,14.1166,13.4766,muito cedo,"SELL: tendencia de baixa, base em formacao. Suporte em S1 (13.48)",71.2,18.8,desfavoravel
-2026-03-20,GGBR4.SA,sell,-,55.0,44.3,17.45,17.1053,17.6828,16.3919,21.3816,6.0,4.17,25.0,17.3733,17.5566,17.2666,muito cedo,"SELL: tendencia de baixa, base em formacao. Suporte em S1 (17.27)",47.1,21.5,desfavoravel
-2026-03-20,POMO4.SA,sell,-,53.5,63.0,5.77,5.69,5.8849,5.4293,7.0326,5.1,4.58,23.6,5.7933,5.8566,5.7066,muito cedo,"SELL: tendencia de baixa, base em formacao. Suporte em S1 (5.71)",65.8,21.9,desfavoravel
-2026-03-20,SANB11.SA,sell,-,53.4,58.4,29.25,28.98,29.7894,27.6988,36.5456,5.9,4.42,26.11,29.41,29.81,28.85,muito cedo,"SELL: tendencia de baixa, base em formacao. Suporte em S1 (28.85)",60.9,35.1,desfavoravel
-2026-03-20,BEEF3.SA,sell,-,53.3,60.7,3.64,3.6218,3.7175,3.3647,4.5272,3.5,7.1,25.0,3.7467,3.8634,3.5234,muito cedo,"SELL: tendencia de baixa, base em formacao. Suporte em S1 (3.52)",62.0,32.3,desfavoravel
-2026-03-20,MGLU3.SA,sell,-,52.7,63.2,8.34,8.27,8.5902,7.5227,10.3375,2.8,9.04,25.0,8.4633,8.6566,8.1466,muito cedo,"SELL: tendencia de baixa, base em formacao. Suporte em S1 (8.15)",67.7,39.0,desfavoravel
-2026-03-20,CSAN3.SA,sell,-,52.6,57.2,5.1,5.0,5.253,4.5866,6.25,3.0,8.27,25.0,5.15,5.22,5.03,muito cedo,"SELL: tendencia de baixa, base em formacao. Suporte em S1 (5.03)",60.5,45.9,desfavoravel
-2026-03-20,UNIP6.SA,sell,-,52.4,59.7,58.6,57.4537,59.7854,54.5537,71.9247,5.0,5.05,25.19,59.6533,61.9566,56.2966,muito cedo,"SELL: tendencia de baixa, base em formacao. Suporte em S1 (56.30)",57.3,23.9,desfavoravel
-2026-03-20,ECOR3.SA,sell,-,51.9,58.6,7.81,7.7709,7.9817,7.1977,9.7136,3.4,7.38,25.0,8.0133,8.2166,7.6066,muito cedo,"SELL: tendencia de baixa, base em formacao. Suporte em S1 (7.61)",55.6,33.9,desfavoravel
-2026-03-20,WIZC3.SA,sell,-,51.9,65.5,8.43,8.2915,8.5843,7.8888,9.76,3.6,4.86,17.71,8.5733,8.8766,8.1266,muito cedo,"SELL: tendencia de baixa, base em formacao. Suporte em S1 (8.13)",62.8,33.6,desfavoravel
-2026-03-20,PSSA3.SA,sell,-,51.4,57.8,47.45,46.5367,48.2507,44.6438,52.9687,3.4,4.07,13.82,47.8133,48.2666,46.9966,muito cedo,"SELL: tendencia de baixa, base em formacao. Suporte em S1 (47.00)",62.6,23.1,desfavoravel
-2026-03-20,ASAI3.SA,sell,-,51.4,52.6,7.36,7.3232,7.5687,6.8161,9.154,3.6,6.92,25.0,7.4967,7.6334,7.2234,muito cedo,"SELL: tendencia de baixa, base em formacao. Suporte em S1 (7.22)",55.6,28.8,desfavoravel
-2026-03-20,VINO11.SA,sell,-,50.5,58.4,5.0,4.975,5.0466,4.8277,5.5385,3.8,2.96,11.33,5.0433,5.0866,4.9566,muito cedo,"SELL: tendencia de baixa, base em formacao. Suporte em S1 (4.96)",63.0,13.3,desfavoravel
-2026-03-20,HAPV3.SA,sell,-,49.5,58.7,8.96,8.6912,9.2213,7.9108,10.864,2.8,8.98,25.0,8.9733,9.3866,8.5466,muito cedo,"SELL: tendencia de baixa, base em formacao. Suporte em S1 (8.55)",66.7,21.9,desfavoravel
-2026-03-20,GOAU4.SA,sell,-,48.7,43.4,7.82,7.6548,7.9257,7.3441,9.5685,6.2,4.06,25.0,7.83,7.9,7.75,muito cedo,"SELL: tendencia de baixa, base em formacao. Suporte em S1 (7.75)",54.0,20.4,desfavoravel
-2026-03-20,DIRR3.SA,sell,-,48.5,39.2,13.41,13.3,13.7583,12.4277,16.828,4.0,6.56,26.53,13.5133,13.7266,13.1966,muito cedo,"SELL: tendencia de baixa, base em formacao. Suporte em S1 (13.20)",51.0,40.7,desfavoravel
-2026-03-20,CRO-USD,sell,-,48.1,47.7,0.075,0.0734,0.0768,0.0707,0.0823,3.4,3.68,12.13,0.0752,0.0757,0.0746,muito cedo,"SELL: tendencia de baixa, base em formacao. Suporte em S1 (0.07)",55.6,13.6,desfavoravel
-2026-03-20,LREN3.SA,sell,-,48.1,58.1,14.84,14.4934,15.2251,13.6845,16.2149,2.1,5.58,11.88,14.9067,15.0634,14.6834,muito cedo,"SELL: tendencia de baixa, base em formacao. Suporte em S1 (14.68)",63.0,28.3,desfavoravel
-2026-03-20,TCSA3.SA,sell,-,47.7,36.3,1.26,1.2537,1.2978,1.1582,1.5671,3.3,7.62,25.0,1.2933,1.3266,1.2266,muito cedo,"SELL: tendencia de baixa, base em formacao. Suporte em S1 (1.23)",50.7,28.8,desfavoravel
-2026-03-20,SUZB3.SA,sell,-,46.5,46.2,50.18,49.57,50.8255,47.795,59.4484,5.6,3.58,19.93,50.29,51.01,49.46,muito cedo,"SELL: tendencia de baixa, base em formacao. Suporte em S1 (49.46)",52.0,35.6,desfavoravel
-2026-03-20,CYRE3.SA,sell,-,46.2,36.3,25.05,24.83,25.6648,23.1425,31.0375,3.7,6.8,25.0,25.6433,26.4566,24.2366,muito cedo,"SELL: tendencia de baixa, base em formacao. Suporte em S1 (24.24)",38.5,34.0,desfavoravel
-2026-03-20,VULC3.SA,sell,-,46.1,41.0,16.23,15.93,16.4575,15.1737,19.6246,4.9,4.75,23.19,16.28,16.59,15.92,muito cedo,"SELL: tendencia de baixa, base em formacao. Suporte em S1 (15.92)",46.2,26.5,desfavoravel
-2026-03-20,GRND3.SA,sell,-,45.0,38.6,4.62,4.5604,4.6955,4.3836,5.1382,3.3,3.88,12.67,4.6267,4.6634,4.5834,muito cedo,"SELL: tendencia de baixa, base em formacao. Suporte em S1 (4.58)",50.0,22.8,desfavoravel
-2026-03-20,SYNE3.SA,sell,-,43.3,40.8,4.52,4.4974,4.5872,4.3349,4.9213,2.6,3.61,9.43,4.57,4.63,4.46,muito cedo,"SELL: tendencia de baixa, base em formacao. Suporte em S1 (4.46)",47.6,24.1,desfavoravel
-2026-03-20,RAIZ4.SA,sell,-,42.3,50.3,0.55,0.5335,0.5665,0.4487,0.6669,1.6,15.9,25.0,0.5533,0.5766,0.5266,muito cedo,"SELL: tendencia de baixa, base em formacao. Suporte em S1 (0.53)",55.9,36.7,desfavoravel
+Date,ticker,signal,potencial,rank,confidence,close,entrada,saida,stop,alvo,RR,stop_pct,alvo_pct,pivot,r1,s1,condicao,win_rate,queda_max,regime
+2026-03-20,PRIO3.SA,buy,alto,78.6,84.4,67.89,66.7386,69.2478,62.6609,75.1105,2.1,6.11,12.54,66.6333,69.1466,65.3766,BUY 66.74 | Acima Pivot | Regime OK | Stop 62.66 Alvo 75.11,61.9,20.6,favoravel
+2026-03-20,SLCE3.SA,buy,baixo,74.9,82.3,18.21,17.9748,18.5742,17.3016,18.9875,1.5,3.75,5.63,18.1767,18.5134,17.8734,BUY 17.97 | Acima Pivot | Regime OK | Stop 17.30 Alvo 18.99,64.9,19.2,favoravel
+2026-03-20,ODPV3.SA,buy,alto,73.4,70.2,13.0,12.8623,13.26,12.1778,15.9611,4.5,4.63,25.0,13.0433,13.2066,12.8366,BUY 12.86 se romper Pivot 13.04 | Regime OK | Stop 12.18,62.7,26.1,favoravel
+2026-03-20,CSMG3.SA,buy,alto,73.3,70.3,53.45,52.8054,54.519,50.1911,59.1926,2.4,4.32,12.84,54.15,54.9,52.7,BUY 52.81 se romper Pivot 54.15 | Regime OK | Stop 50.19,68.8,27.2,favoravel
+2026-03-20,HSML11.SA,buy,baixo,72.1,74.0,95.29,95.1565,96.6395,92.877,97.6157,1.1,2.0,3.0,95.2333,95.5566,94.9666,BUY 95.16 | Acima Pivot | Regime OK | Stop 92.88 Alvo 97.62,69.1,4.5,favoravel
+2026-03-20,TIMS3.SA,buy,medio,71.5,69.4,26.13,25.9117,26.6526,24.7397,28.4539,2.2,3.75,10.7,26.28,26.55,25.86,BUY 25.91 se romper Pivot 26.28 | Regime OK | Stop 24.74,63.2,26.7,favoravel
+2026-03-20,BRKM5.SA,buy,alto,70.1,73.8,10.2,10.8041,10.404,8.6074,12.3675,0.7,13.0,25.0,10.7933,11.4066,9.5866,BUY 10.80 se romper Pivot 10.79 | Regime OK | Stop 8.61,63.1,36.3,favoravel
+2026-03-20,BBAS3.SA,buy,alto,69.7,66.1,23.27,23.0795,23.7354,21.8826,27.712,3.9,4.48,20.96,23.2467,23.4834,23.0334,BUY cautela 23.08 | Cedo (neutro) | Stop 21.88,61.9,29.5,neutro
+2026-03-20,NEOE3.SA,buy,medio,69.5,71.9,33.2,33.2297,33.864,32.3733,35.6729,2.9,2.0,7.99,33.2067,33.2434,33.1634,BUY 33.23 se romper Pivot 33.21 | Regime OK | Stop 32.37,61.5,10.2,favoravel
+2026-03-20,MXRF11.SA,buy,baixo,69.0,67.5,9.77,9.7212,9.9127,9.5268,10.0128,1.5,2.0,3.0,9.7533,9.8166,9.7066,BUY 9.72 | Acima Pivot | Regime OK | Stop 9.53 Alvo 10.01,59.6,19.7,favoravel
+2026-03-20,VIVT3.SA,buy,medio,68.6,67.4,40.27,40.0634,41.0754,38.2342,43.3946,1.8,3.69,9.31,40.3667,40.6534,39.9834,BUY 40.06 se romper Pivot 40.37 | Regime OK | Stop 38.23,60.7,26.0,favoravel
+2026-03-20,SBSP3.SA,buy,medio,68.2,70.9,148.5,146.7329,149.4281,139.6115,150.9375,0.6,4.23,8.55,149.18,151.24,146.44,BUY 146.73 se romper Pivot 149.18 | Regime OK | Stop 139.61,65.3,19.0,favoravel
+2026-03-20,SMTO3.SA,buy,medio,67.3,77.1,18.78,18.4468,18.9799,17.1677,19.1716,0.6,6.38,9.57,18.84,19.21,18.41,BUY 18.45 se romper Pivot 18.84 | Regime OK | Stop 17.17,67.9,32.0,favoravel
+2026-03-20,UGPA3.SA,buy,medio,67.1,68.3,26.16,25.9318,26.6832,24.6201,27.9555,1.5,4.49,8.45,26.29,26.57,25.88,BUY 25.93 se romper Pivot 26.29 | Regime OK | Stop 24.62,62.5,26.0,favoravel
+2026-03-20,XPML11.SA,buy,baixo,64.9,66.6,108.45,107.9077,110.619,105.7495,112.1142,1.9,2.0,3.9,108.1967,109.3234,107.3234,BUY parcial 107.91 | Atrasado (favoravel) | Stop 105.75,63.3,50.0,favoravel
+2026-03-20,PETR4.SA,buy,medio,64.8,70.7,45.67,45.9926,46.5834,43.1656,48.0685,0.7,4.19,6.69,45.9467,46.9734,44.6434,BUY 45.99 se romper Pivot 45.95 | Regime OK | Stop 43.17,55.6,24.3,favoravel
+2026-03-20,RADL3.SA,buy,alto,63.5,62.8,22.48,22.7227,22.9296,21.2685,26.241,2.4,4.91,17.32,22.7,22.99,22.19,BUY cautela 22.72 | Cedo (neutro) | Stop 21.27,62.7,22.8,neutro
+2026-03-20,IGTI11.SA,buy,alto,63.4,65.0,25.82,26.2262,26.3364,24.4436,30.0412,2.1,4.86,16.93,26.2,26.58,25.44,BUY cautela 26.23 | Cedo (neutro) | Stop 24.44,66.7,19.9,neutro
+2026-03-20,BPAC11.SA,buy,alto,63.1,65.5,52.74,53.0997,53.7948,48.6843,62.4236,2.1,6.05,20.46,53.0467,54.2734,51.5134,BUY cautela 53.10 | Cedo (neutro) | Stop 48.68,66.9,29.9,neutro
+2026-03-20,GGRC11.SA,buy,baixo,63.0,63.6,10.14,10.1302,10.3428,9.8875,10.4918,1.5,2.0,3.99,10.16,10.19,10.11,BUY 10.13 se romper Pivot 10.16 | Regime OK | Stop 9.89,58.2,17.3,favoravel
+2026-03-20,CMIG4.SA,buy,baixo,62.9,69.9,12.24,12.3223,12.4848,11.638,12.7317,0.6,3.62,5.43,12.31,12.55,12.0,BUY 12.32 se romper Pivot 12.31 | Regime OK | Stop 11.64,60.8,21.7,favoravel
+2026-03-20,WEGE3.SA,buy,alto,62.7,63.9,45.96,45.5142,46.8792,43.3721,52.2849,3.2,3.99,15.74,45.9767,46.5134,45.4234,BUY cautela 45.51 | Cedo (neutro) | Stop 43.37,69.5,18.8,neutro
+2026-03-20,MULT3.SA,buy,alto,62.6,61.6,29.92,30.1301,30.5184,28.2162,35.834,3.0,4.87,20.82,30.1,30.49,29.53,BUY cautela 30.13 | Cedo (neutro) | Stop 28.22,63.2,27.2,neutro
+2026-03-20,RENT3.SA,buy,alto,62.3,62.2,43.21,42.5515,44.0742,39.3082,52.3932,3.0,6.98,23.98,43.3333,44.0766,42.4666,BUY cautela 42.55 | Cedo (neutro) | Stop 39.31,61.2,38.3,neutro
+2026-03-20,ABEV3.SA,buy,alto,62.3,63.8,14.47,14.5312,14.7594,13.83,16.5938,2.9,3.49,15.8,14.5167,14.7034,14.2834,BUY cautela 14.53 | Cedo (neutro) | Stop 13.83,67.4,24.4,neutro
+2026-03-20,AXIA3.SA,buy,alto,61.8,62.8,55.65,56.3029,56.763,52.362,62.9826,1.7,5.26,13.95,56.2467,57.2234,54.6734,BUY cautela 56.30 | Cedo (neutro) | Stop 52.36,66.7,26.8,neutro
+2026-03-20,ABCB4.SA,buy,alto,61.2,62.2,25.19,25.2786,25.6938,24.0343,28.106,2.3,3.75,12.56,25.2533,25.5366,24.9066,BUY cautela 25.28 | Cedo (neutro) | Stop 24.03,66.1,24.8,neutro
+2026-03-20,EGIE3.SA,buy,medio,61.0,62.3,31.31,31.4982,31.9362,29.87,34.5872,1.9,3.71,11.5,31.4667,31.9134,30.8634,BUY cautela 31.50 | Cedo (neutro) | Stop 29.87,64.0,27.3,neutro
+2026-03-20,AXIA6.SA,buy,medio,61.0,60.8,61.02,61.5815,62.2404,57.138,68.6502,1.6,5.29,13.79,61.52,62.71,59.83,BUY cautela 61.58 | Cedo (neutro) | Stop 57.14,59.8,25.2,neutro
+2026-03-20,CPFE3.SA,buy,alto,60.8,61.4,45.66,46.303,46.5732,43.6996,51.5256,2.0,3.81,13.41,46.2567,46.9934,44.9234,BUY cautela 46.30 | Cedo (neutro) | Stop 43.70,60.0,30.6,neutro
+2026-03-20,ITUB4.SA,buy,medio,60.5,58.6,41.55,41.715,42.381,39.5991,48.7362,3.3,3.89,18.29,41.6733,42.1466,41.0766,BUY cautela 41.72 | Cedo (neutro) | Stop 39.60,56.5,25.3,neutro
+2026-03-20,AGRO3.SA,buy,medio,59.0,68.4,21.0,20.7548,21.42,19.7172,22.7086,1.9,4.65,9.81,21.2867,21.5734,20.7134,BUY cautela 20.75 | Cedo (favoravel) | Stop 19.72,61.5,33.0,favoravel
+2026-03-20,EZTC3.SA,buy,medio,58.9,48.3,13.21,13.31,13.4742,12.2384,16.4506,2.9,6.22,26.06,13.2967,13.5434,12.9634,BUY cautela 13.31 | Cedo (neutro) | Stop 12.24,53.3,31.7,neutro
+2026-03-20,EQTL3.SA,buy,medio,57.0,62.0,39.98,39.5523,40.3936,37.4836,40.8016,0.6,4.57,9.03,40.3767,40.8834,39.4734,BUY cautela 39.55 | Cedo (favoravel) | Stop 37.48,66.7,27.5,favoravel
+2026-03-20,BRSR6.SA,buy,medio,55.3,39.6,16.73,16.9069,17.0646,15.9106,19.0999,2.2,4.42,14.74,16.89,17.08,16.54,BUY cautela 16.91 | Cedo (neutro) | Stop 15.91,42.1,22.3,neutro
+2026-03-20,FLRY3.SA,buy,alto,53.3,59.2,14.91,15.055,15.2082,14.1684,17.8288,3.1,4.46,20.22,15.04,15.25,14.7,AGUARDAR | Muito cedo (desfavoravel) | Suporte S1 14.70,65.7,25.0,desfavoravel
+2026-03-20,TAEE11.SA,buy,medio,53.1,39.8,40.83,41.2179,41.6466,39.0095,45.9984,2.2,3.75,13.49,41.1767,41.8234,40.1834,BUY cautela 41.22 | Cedo (neutro) | Stop 39.01,33.3,29.8,neutro
+2026-03-20,CURY3.SA,buy,medio,52.6,53.4,33.06,33.2599,33.7212,30.403,40.65,2.6,6.51,25.0,33.2267,33.9334,32.3534,AGUARDAR | Muito cedo (desfavoravel) | Suporte S1 32.35,57.5,32.2,desfavoravel
+2026-03-20,KLBN11.SA,buy,alto,51.6,56.9,18.4,18.5318,18.768,17.6946,20.9364,2.9,3.35,14.36,18.5133,18.6766,18.2366,AGUARDAR | Muito cedo (desfavoravel) | Suporte S1 18.24,61.7,22.7,desfavoravel
+2026-03-20,PVBI11.SA,buy,baixo,49.4,61.1,79.45,79.1881,80.3077,77.1811,81.1189,1.0,2.0,3.0,79.61,80.03,79.03,BUY cautela 79.19 | Cedo (favoravel) | Stop 77.18,62.7,13.7,favoravel
+2026-03-20,BBSE3.SA,buy,baixo,43.4,53.6,34.09,33.8776,34.7718,32.7834,35.5424,1.5,2.73,5.46,34.24,34.52,33.81,AGUARDAR | Muito cedo (neutro) | Suporte S1 33.81,59.6,19.2,neutro
+2026-03-20,RBRX11.SA,hold,-,73.4,74.2,8.6,8.5174,8.6,8.3471,8.8433,1.9,2.0,3.83,8.5833,8.6466,8.5366,HOLD | Acima Pivot 8.58 | no time (favoravel),72.2,5.6,favoravel
+2026-03-20,VISC11.SA,hold,-,70.8,70.0,109.88,109.276,109.88,107.0905,113.4155,1.9,2.0,3.79,109.7867,110.2034,109.4634,HOLD | Acima Pivot 109.79 | no time (favoravel),58.2,14.3,favoravel
+2026-03-20,HGBS11.SA,hold,-,68.5,68.0,20.34,20.2383,20.34,19.8335,20.8454,1.5,2.0,3.0,20.28,20.41,20.21,HOLD | Acima Pivot 20.28 | no time (favoravel),58.5,14.1,favoravel
+2026-03-20,HFOF11.SA,hold,-,67.4,67.8,6.85,6.7861,6.85,6.6504,7.1035,2.3,2.0,4.68,6.85,6.89,6.81,HOLD | Abaixo Pivot 6.85 | no time (favoravel),64.9,5.9,favoravel
+2026-03-20,RAIL3.SA,hold,-,67.1,71.2,16.12,15.7998,16.12,14.9444,17.368,1.8,5.41,9.93,16.09,16.33,15.88,HOLD | Acima Pivot 16.09 | atrasado (favoravel),73.3,34.1,favoravel
+2026-03-20,BTLG11.SA,hold,-,63.1,71.0,103.17,102.6541,103.17,100.601,105.7337,1.5,2.0,3.0,103.3733,103.7466,102.7966,HOLD | Abaixo Pivot 103.37 | no time (favoravel),63.1,8.9,favoravel
+2026-03-20,KNRI11.SA,hold,-,62.9,71.1,163.22,162.2564,163.22,159.0113,168.4241,1.9,2.0,3.8,163.1367,165.0034,161.3534,HOLD | Acima Pivot 163.14 | cedo (favoravel),71.3,9.5,favoravel
+2026-03-20,SAPR11.SA,hold,-,61.8,36.6,42.67,41.8155,42.67,40.028,47.8665,3.4,4.27,14.47,42.33,43.01,41.99,HOLD | Acima Pivot 42.33 | cedo (neutro),48.0,28.9,neutro
+2026-03-20,HGPO11.SA,hold,-,61.4,59.4,150.52,149.5641,150.52,146.5728,154.051,1.5,2.0,3.0,150.63,151.46,149.69,HOLD | Abaixo Pivot 150.63 | no time (favoravel),59.7,10.5,favoravel
+2026-03-20,XPLG11.SA,hold,-,61.0,68.8,101.75,101.2257,101.75,99.2012,104.2625,1.5,2.0,3.0,101.6267,102.3034,101.0734,HOLD | Acima Pivot 101.63 | cedo (favoravel),69.5,4.4,favoravel
+2026-03-20,USIM5.SA,hold,-,60.1,62.8,6.31,6.1587,6.31,5.7989,7.1106,2.6,5.84,15.46,6.3233,6.3966,6.2366,HOLD | Abaixo Pivot 6.32 | cedo (neutro),62.5,25.9,neutro
+2026-03-20,LVBI11.SA,hold,-,59.8,60.8,109.62,109.0065,109.62,106.8264,112.3713,1.5,2.0,3.09,109.4833,110.1666,108.9366,HOLD | Acima Pivot 109.48 | cedo (favoravel),58.3,8.0,favoravel
+2026-03-20,BTC-USD,hold,-,59.7,67.7,70522.5859,68406.9084,70522.5859,65214.4996,75836.7686,2.3,4.67,10.86,70422.7552,71446.6276,69498.7135,HOLD | Acima Pivot 70422.76 | muito cedo (neutro),75.8,19.2,neutro
+2026-03-20,RCRB11.SA,hold,-,59.3,59.9,141.48,140.0275,141.48,137.227,144.8809,1.7,2.0,3.47,141.3367,142.1634,140.6534,HOLD | Acima Pivot 141.34 | cedo (favoravel),56.6,10.7,favoravel
+2026-03-20,ETH-USD,hold,-,58.8,63.2,2146.4971,2082.1022,2146.4971,1952.1427,2378.4193,2.3,6.24,14.23,2146.4909,2175.7057,2117.2823,HOLD | Acima Pivot 2146.49 | muito cedo (neutro),68.8,19.0,neutro
+2026-03-20,KFOF11.SA,hold,-,58.1,64.7,81.72,81.3114,81.72,79.6852,85.818,2.8,2.0,5.54,81.9233,82.1966,81.4466,HOLD | Abaixo Pivot 81.92 | cedo (favoravel),61.3,8.2,favoravel
+2026-03-20,CXSE3.SA,hold,-,57.7,64.2,17.35,17.21,17.35,16.6662,18.6212,2.6,3.16,8.2,17.56,17.84,17.07,HOLD | Abaixo Pivot 17.56 | cedo (favoravel),61.8,20.2,favoravel
+2026-03-20,LEVE3.SA,hold,-,57.2,62.7,34.58,34.0078,34.58,32.8373,36.901,2.5,3.44,8.51,34.59,34.84,34.33,HOLD | Abaixo Pivot 34.59 | cedo (favoravel),61.7,22.3,favoravel
+2026-03-20,BRCR11.SA,hold,-,56.5,63.0,47.0,46.5337,47.0,45.603,48.9409,2.6,2.0,5.17,47.2333,47.9666,46.2666,HOLD | Abaixo Pivot 47.23 | cedo (favoravel),62.7,11.5,favoravel
+2026-03-20,ITSA4.SA,hold,-,56.3,35.3,13.1,12.99,13.1,12.4489,14.9696,3.7,4.17,15.24,13.1367,13.2834,12.9534,HOLD | Abaixo Pivot 13.14 | cedo (neutro),46.7,29.1,neutro
+2026-03-20,SOL-USD,hold,-,55.9,55.7,89.8536,87.158,89.8536,82.07,97.2125,2.0,5.84,11.54,89.4441,90.6463,88.6513,HOLD | Acima Pivot 89.44 | muito cedo (neutro),71.4,16.9,neutro
+2026-03-20,JHSF3.SA,hold,-,55.8,32.6,8.34,8.29,8.34,7.8579,10.2402,4.5,5.21,23.52,8.46,8.63,8.17,HOLD | Abaixo Pivot 8.46 | cedo (neutro),49.0,27.5,neutro
+2026-03-20,MLAS3.SA,hold,-,55.7,39.5,1.21,1.1737,1.21,1.105,1.4053,3.4,5.85,19.73,1.23,1.25,1.19,HOLD | Abaixo Pivot 1.23 | cedo (favoravel),38.5,17.1,favoravel
+2026-03-20,VALE3.SA,hold,-,55.4,33.6,75.55,74.155,75.55,70.9113,90.0065,4.9,4.37,21.38,75.6533,76.5966,74.6066,HOLD | Abaixo Pivot 75.65 | cedo (neutro),46.7,28.4,neutro
+2026-03-20,ENGI11.SA,hold,-,55.1,43.0,48.84,48.5958,48.84,46.3288,55.3227,3.0,4.67,13.84,49.4633,50.0866,48.2166,HOLD | Abaixo Pivot 49.46 | cedo (neutro),42.2,44.9,neutro
+2026-03-20,BBDC4.SA,hold,-,54.9,43.2,18.33,18.07,18.33,17.262,21.8234,4.6,4.47,20.77,18.3867,18.6534,18.0634,HOLD | Abaixo Pivot 18.39 | cedo (neutro),44.4,27.5,neutro
+2026-03-20,LTC-USD,hold,-,54.7,53.0,56.1763,54.491,56.1763,52.3083,59.045,2.1,4.01,8.36,55.9505,56.6358,55.491,HOLD | Acima Pivot 55.95 | muito cedo (neutro),72.7,24.5,neutro
+2026-03-20,KNCR11.SA,hold,-,54.7,47.6,105.49,104.9625,105.49,102.8633,108.1114,1.5,2.0,3.0,105.39,105.75,105.13,HOLD | Acima Pivot 105.39 | cedo (favoravel),50.0,13.3,favoravel
+2026-03-20,BRCO11.SA,hold,-,54.2,65.0,118.99,118.3318,118.99,115.9652,123.8866,2.3,2.0,4.69,119.3833,120.2566,118.1166,HOLD | Abaixo Pivot 119.38 | cedo (favoravel),65.4,8.5,favoravel
+2026-03-20,ISAE4.SA,hold,-,53.7,31.8,27.24,27.1,27.24,26.1848,30.187,3.4,3.38,11.39,27.4267,27.7534,26.9134,HOLD | Abaixo Pivot 27.43 | cedo (favoravel),50.0,25.0,favoravel
+2026-03-20,RANI3.SA,hold,-,53.2,47.1,8.97,8.9252,8.97,8.5841,10.0961,3.4,3.82,13.12,9.04,9.13,8.88,HOLD | Abaixo Pivot 9.04 | cedo (neutro),37.5,50.0,neutro
+2026-03-20,MDIA3.SA,hold,-,53.2,62.5,21.25,21.1438,21.25,20.4054,26.3439,7.0,3.49,24.59,21.4067,21.5634,21.0934,HOLD | Abaixo Pivot 21.41 | muito cedo (neutro),66.8,17.4,neutro
+2026-03-20,HGRE11.SA,hold,-,52.7,46.4,125.12,124.4944,125.12,122.0045,131.8205,2.9,2.0,5.88,125.2433,125.9866,124.3766,HOLD | Abaixo Pivot 125.24 | cedo (favoravel),47.4,18.8,favoravel
+2026-03-20,ALZR11.SA,hold,-,51.7,62.0,10.55,10.4973,10.55,10.2874,10.8135,1.5,2.0,3.01,10.5767,10.6034,10.5234,HOLD | Abaixo Pivot 10.58 | cedo (favoravel),56.3,13.2,favoravel
+2026-03-20,KNSC11.SA,hold,-,51.3,43.9,8.84,8.7906,8.84,8.6148,9.2408,2.6,2.0,5.12,8.8433,8.8866,8.7966,HOLD | Abaixo Pivot 8.84 | cedo (favoravel),51.0,16.3,favoravel
+2026-03-20,BCIA11.SA,hold,-,51.0,36.6,92.15,91.6893,92.15,89.8555,98.4618,3.7,2.0,7.39,92.48,93.19,91.44,HOLD | Abaixo Pivot 92.48 | cedo (favoravel),38.9,17.6,favoravel
+2026-03-20,TRXF11.SA,hold,-,50.8,56.3,91.6,91.142,91.6,89.3192,93.8763,1.5,2.0,3.0,91.5233,91.7866,91.3366,HOLD | Acima Pivot 91.52 | muito cedo (neutro),56.1,6.8,neutro
+2026-03-20,VBBR3.SA,hold,-,50.5,32.1,29.09,28.5849,29.09,27.009,31.9317,2.1,5.51,11.71,29.2533,29.7766,28.5666,HOLD | Abaixo Pivot 29.25 | cedo (favoravel),45.0,27.7,favoravel
+2026-03-20,ALUP11.SA,hold,-,50.1,29.7,33.53,33.02,33.53,31.7495,36.254,2.5,3.85,9.79,33.53,34.04,33.02,HOLD | Abaixo Pivot 33.53 | cedo (favoravel),30.0,32.3,favoravel
+2026-03-20,CPTS11.SA,hold,-,49.9,50.8,7.94,7.9003,7.94,7.7423,8.194,1.9,2.0,3.72,7.97,8.0,7.91,HOLD | Abaixo Pivot 7.97 | cedo (favoravel),54.8,20.3,favoravel
+2026-03-20,IVVB11.SA,hold,-,49.8,64.7,389.45,387.5028,389.45,379.7527,420.0655,4.2,2.0,8.4,389.7133,391.2166,387.9466,HOLD | Abaixo Pivot 389.71 | muito cedo (neutro),66.2,16.1,neutro
+2026-03-20,IRIM11.SA,hold,-,49.3,66.1,62.45,62.1378,62.45,60.895,65.1388,2.4,2.0,4.83,62.8167,63.2134,62.0534,HOLD | Abaixo Pivot 62.82 | muito cedo (neutro),65.0,4.5,neutro
+2026-03-20,KNHY11.SA,hold,-,45.6,38.7,99.35,98.8532,99.35,96.8761,101.8188,1.5,2.0,3.0,99.1967,99.6334,98.9134,HOLD | Acima Pivot 99.20 | muito cedo (neutro),50.0,14.6,neutro
+2026-03-20,RBRP11.SA,hold,-,43.7,43.3,51.86,51.46,51.86,50.4308,54.8116,3.3,2.0,6.51,51.9167,52.0134,51.7634,HOLD | Abaixo Pivot 51.92 | muito cedo (neutro),50.0,16.7,neutro
+2026-03-06,IRDM11.SA,hold,-,42.7,54.5,58.5,58.2075,58.5,57.0434,59.9537,1.5,2.0,3.0,58.5,58.5,58.5,HOLD | Abaixo Pivot 58.50 | muito cedo (neutro),64.7,9.2,neutro
+2026-03-20,RBRF11.SA,hold,-,39.4,36.7,6.65,6.6168,6.65,6.4845,6.8218,1.5,2.0,3.1,6.65,6.65,6.65,HOLD | Acima Pivot 6.65 | muito cedo (neutro),53.7,11.2,neutro
+2026-03-20,HGLG11.SA,hold,-,35.1,36.9,155.6,154.822,155.6,151.7256,159.4667,1.5,2.0,3.0,156.27,157.24,154.63,HOLD | Abaixo Pivot 156.27 | muito cedo (neutro),28.0,11.9,neutro
+2026-03-20,TGMA3.SA,sell,-,62.1,71.6,28.0,27.4166,28.0,25.4354,34.2708,3.5,7.23,25.0,27.7167,28.4834,27.2334,SELL | Tendencia de baixa | Muito cedo (desfavoravel),68.0,26.3,desfavoravel
+2026-03-20,CVCB3.SA,sell,-,61.7,64.3,1.98,1.9206,1.98,1.7885,2.4008,3.6,6.88,25.0,1.93,2.03,1.88,SELL | Tendencia de baixa | Muito cedo (desfavoravel),64.2,33.1,desfavoravel
+2026-03-20,CSNA3.SA,sell,-,59.5,64.3,5.99,5.8103,5.99,5.2639,7.2629,2.7,9.4,25.0,5.9767,6.1134,5.8534,SELL | Tendencia de baixa | Muito cedo (desfavoravel),62.3,38.9,desfavoravel
+2026-03-20,MBRF3.SA,sell,-,59.0,62.6,16.6,16.1604,16.6,15.0997,20.2005,3.8,6.56,25.0,16.4233,17.2066,15.8166,SELL | Tendencia de baixa | Muito cedo (desfavoravel),58.6,29.5,desfavoravel
+2026-03-20,DOGE-USD,sell,-,57.1,62.1,0.0942,0.0913,0.0942,0.0855,0.1039,2.2,6.35,13.8,0.0941,0.0952,0.0929,SELL | Tendencia de baixa | Muito cedo (desfavoravel),65.5,13.8,desfavoravel
+2026-03-20,XPBR31.SA,sell,-,56.3,58.4,96.4,94.35,96.4,87.8455,117.9386,3.6,6.89,25.0,96.89,98.45,94.84,SELL | Tendencia de baixa | Muito cedo (desfavoravel),69.6,13.0,desfavoravel
+2026-03-20,LAVV3.SA,sell,-,55.8,68.8,13.69,13.6215,13.69,12.776,17.0269,4.0,6.21,25.0,13.9033,14.1166,13.4766,SELL | Tendencia de baixa | Muito cedo (desfavoravel),71.2,18.8,desfavoravel
+2026-03-20,GGBR4.SA,sell,-,55.0,44.3,17.45,17.1053,17.45,16.3919,21.3816,6.0,4.17,25.0,17.3733,17.5566,17.2666,SELL | Tendencia de baixa | Muito cedo (desfavoravel),47.1,21.5,desfavoravel
+2026-03-20,POMO4.SA,sell,-,53.5,63.0,5.77,5.69,5.77,5.4293,7.0326,5.1,4.58,23.6,5.7933,5.8566,5.7066,SELL | Tendencia de baixa | Muito cedo (desfavoravel),65.8,21.9,desfavoravel
+2026-03-20,SANB11.SA,sell,-,53.4,58.4,29.25,28.98,29.25,27.6988,36.5456,5.9,4.42,26.11,29.41,29.81,28.85,SELL | Tendencia de baixa | Muito cedo (desfavoravel),60.9,35.1,desfavoravel
+2026-03-20,BEEF3.SA,sell,-,53.3,60.7,3.64,3.6218,3.64,3.3647,4.5272,3.5,7.1,25.0,3.7467,3.8634,3.5234,SELL | Tendencia de baixa | Muito cedo (desfavoravel),62.0,32.3,desfavoravel
+2026-03-20,MGLU3.SA,sell,-,52.7,63.2,8.34,8.27,8.34,7.5227,10.3375,2.8,9.04,25.0,8.4633,8.6566,8.1466,SELL | Tendencia de baixa | Muito cedo (desfavoravel),67.7,39.0,desfavoravel
+2026-03-20,CSAN3.SA,sell,-,52.6,57.2,5.1,5.0,5.1,4.5866,6.25,3.0,8.27,25.0,5.15,5.22,5.03,SELL | Tendencia de baixa | Muito cedo (desfavoravel),60.5,45.9,desfavoravel
+2026-03-20,UNIP6.SA,sell,-,52.4,59.7,58.6,57.4537,58.6,54.5537,71.9247,5.0,5.05,25.19,59.6533,61.9566,56.2966,SELL | Tendencia de baixa | Muito cedo (desfavoravel),57.3,23.9,desfavoravel
+2026-03-20,ECOR3.SA,sell,-,51.9,58.6,7.81,7.7709,7.81,7.1977,9.7136,3.4,7.38,25.0,8.0133,8.2166,7.6066,SELL | Tendencia de baixa | Muito cedo (desfavoravel),55.6,33.9,desfavoravel
+2026-03-20,WIZC3.SA,sell,-,51.9,65.5,8.43,8.2915,8.43,7.8888,9.76,3.6,4.86,17.71,8.5733,8.8766,8.1266,SELL | Tendencia de baixa | Muito cedo (desfavoravel),62.8,33.6,desfavoravel
+2026-03-20,PSSA3.SA,sell,-,51.4,57.8,47.45,46.5367,47.45,44.6438,52.9687,3.4,4.07,13.82,47.8133,48.2666,46.9966,SELL | Tendencia de baixa | Muito cedo (desfavoravel),62.6,23.1,desfavoravel
+2026-03-20,ASAI3.SA,sell,-,51.4,52.6,7.36,7.3232,7.36,6.8161,9.154,3.6,6.92,25.0,7.4967,7.6334,7.2234,SELL | Tendencia de baixa | Muito cedo (desfavoravel),55.6,28.8,desfavoravel
+2026-03-20,VINO11.SA,sell,-,50.5,58.4,5.0,4.975,5.0,4.8277,5.5385,3.8,2.96,11.33,5.0433,5.0866,4.9566,SELL | Tendencia de baixa | Muito cedo (desfavoravel),63.0,13.3,desfavoravel
+2026-03-20,HAPV3.SA,sell,-,49.5,58.7,8.96,8.6912,8.96,7.9108,10.864,2.8,8.98,25.0,8.9733,9.3866,8.5466,SELL | Tendencia de baixa | Muito cedo (desfavoravel),66.7,21.9,desfavoravel
+2026-03-20,GOAU4.SA,sell,-,48.7,43.4,7.82,7.6548,7.82,7.3441,9.5685,6.2,4.06,25.0,7.83,7.9,7.75,SELL | Tendencia de baixa | Muito cedo (desfavoravel),54.0,20.4,desfavoravel
+2026-03-20,DIRR3.SA,sell,-,48.5,39.2,13.41,13.3,13.41,12.4277,16.828,4.0,6.56,26.53,13.5133,13.7266,13.1966,SELL | Tendencia de baixa | Muito cedo (desfavoravel),51.0,40.7,desfavoravel
+2026-03-20,CRO-USD,sell,-,48.1,47.7,0.075,0.0734,0.075,0.0707,0.0823,3.4,3.68,12.13,0.0752,0.0757,0.0746,SELL | Tendencia de baixa | Muito cedo (desfavoravel),55.6,13.6,desfavoravel
+2026-03-20,LREN3.SA,sell,-,48.1,58.1,14.84,14.4934,14.84,13.6845,16.2149,2.1,5.58,11.88,14.9067,15.0634,14.6834,SELL | Tendencia de baixa | Muito cedo (desfavoravel),63.0,28.3,desfavoravel
+2026-03-20,TCSA3.SA,sell,-,47.7,36.3,1.26,1.2537,1.26,1.1582,1.5671,3.3,7.62,25.0,1.2933,1.3266,1.2266,SELL | Tendencia de baixa | Muito cedo (desfavoravel),50.7,28.8,desfavoravel
+2026-03-20,SUZB3.SA,sell,-,46.5,46.2,50.18,49.57,50.18,47.795,59.4484,5.6,3.58,19.93,50.29,51.01,49.46,SELL | Tendencia de baixa | Muito cedo (desfavoravel),52.0,35.6,desfavoravel
+2026-03-20,CYRE3.SA,sell,-,46.2,36.3,25.05,24.83,25.05,23.1425,31.0375,3.7,6.8,25.0,25.6433,26.4566,24.2366,SELL | Tendencia de baixa | Muito cedo (desfavoravel),38.5,34.0,desfavoravel
+2026-03-20,VULC3.SA,sell,-,46.1,41.0,16.23,15.93,16.23,15.1737,19.6246,4.9,4.75,23.19,16.28,16.59,15.92,SELL | Tendencia de baixa | Muito cedo (desfavoravel),46.2,26.5,desfavoravel
+2026-03-20,GRND3.SA,sell,-,45.0,38.6,4.62,4.5604,4.62,4.3836,5.1382,3.3,3.88,12.67,4.6267,4.6634,4.5834,SELL | Tendencia de baixa | Muito cedo (desfavoravel),50.0,22.8,desfavoravel
+2026-03-20,SYNE3.SA,sell,-,43.3,40.8,4.52,4.4974,4.52,4.3349,4.9213,2.6,3.61,9.43,4.57,4.63,4.46,SELL | Tendencia de baixa | Muito cedo (desfavoravel),47.6,24.1,desfavoravel
+2026-03-20,RAIZ4.SA,sell,-,42.3,50.3,0.55,0.5335,0.55,0.4487,0.6669,1.6,15.9,25.0,0.5533,0.5766,0.5266,SELL | Tendencia de baixa | Muito cedo (desfavoravel),55.9,36.7,desfavoravel
