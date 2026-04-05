@@ -58,11 +58,23 @@ drive.mount("/content/drive")
 import math
 import random
 import time
+from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
+
+try:
+    from ticker_metadata import get_ticker_meta, get_segment_for_tickers
+except ImportError:
+    def get_ticker_meta(ticker):
+        t = ticker.strip().upper()
+        if t.endswith("-USD"): return {"asset_class": "crypto", "sector": "crypto", "segment_key": "crypto"}
+        if t.endswith("11.SA"): return {"asset_class": "fii", "sector": "fii", "segment_key": "fii"}
+        return {"asset_class": "equity", "sector": "other_equity", "segment_key": "other_equity"}
+    def get_segment_for_tickers(tickers):
+        return {t: get_ticker_meta(t)["segment_key"] for t in tickers}
 import os
 import json
 import gc
@@ -1016,32 +1028,27 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
     if mean_exposure < 0.40:
         trade_bonus -= (0.40 - mean_exposure) * 2.0
 
-    # -- MDD penalty (v5 — HARD constraint at 25%) -------------------------
-    # The GA was finding fit=9.01 with MDD=-30.8%. The penalty must be
-    # overwhelming above 25% so NO solution with MDD>25% can beat one <=25%.
+    # -- MDD penalty (v7 — smooth softplus, no hard walls) ------------------
+    # Softplus replaces piecewise linear to avoid discontinuities in GA landscape
+    def _softplus(x, k=5.0):
+        """Smooth penalty: 0 when x<0, rises steeply when x>0."""
+        cx = max(min(float(k * x), 50.0), -50.0)
+        return math.log1p(math.exp(cx)) / k
+
     mdd_penalty = 0.0
     abs_mdd = abs(median_mdd)
-    if abs_mdd > 0.08:
-        mdd_penalty += (abs_mdd - 0.08) * 8.0    # gentle above 8%
-    if abs_mdd > 0.15:
-        mdd_penalty += (abs_mdd - 0.15) * 20.0   # moderate above 15%
-    if abs_mdd > 0.20:
-        mdd_penalty += (abs_mdd - 0.20) * 60.0   # steep above 20%
-    if abs_mdd > 0.22:
-        mdd_penalty += (abs_mdd - 0.22) * 200.0  # HARD WALL tightened from 25% to 22%
-    if abs_mdd > 0.28:
-        mdd_penalty += (abs_mdd - 0.28) * 400.0  # nuclear penalty above 28%
-    # Bonus for excellent MDD control
+    # Primary: smooth ramp centered at 15%, steep above 20%
+    mdd_penalty += 1.6 * _softplus((abs_mdd - 0.15) / 0.03, k=5.0)
+    # Bonus for excellent control
     if abs_mdd < 0.18:
-        mdd_penalty -= 4.0  # reward strategies with MDD < 18%
+        mdd_penalty -= 4.0
     if abs_mdd < 0.12:
-        mdd_penalty -= 3.0  # extra reward for MDD < 12%
+        mdd_penalty -= 3.0
 
-    # Tail-risk penalty: worst-quartile MDD (much stronger)
+    # Tail-risk penalty (worst-quartile): smooth ramp above 22%
     mdd_p25 = float(np.percentile(mdd_vals, 25))
     abs_mdd_tail = abs(mdd_p25)
-    if abs_mdd_tail > 0.20:
-        mdd_penalty += (abs_mdd_tail - 0.20) * 25.0
+    mdd_penalty += 0.8 * _softplus((abs_mdd_tail - 0.22) / 0.04, k=5.0)
     if abs_mdd_tail > 0.30:
         mdd_penalty += (abs_mdd_tail - 0.30) * 60.0
     if abs_mdd_tail > 0.40:
@@ -2346,9 +2353,33 @@ def run():
         except Exception as e:
             print(f"[ETL MERGE] Failed: {e}. Continuing without ETL features.")
 
-    exclude = {DATE_COL, TICKER_COL, OPEN_COL, HIGH_COL, LOW_COL, CLOSE_COL, "sma200", "sma200_slope", "atr"}
-    num_cols = [c for c in df.columns if c not in exclude and pd.api.types.is_numeric_dtype(df[c])]
-    base_feat_cols = num_cols  # all numeric cols are candidates; Spearman ranking + dedup selects top MAX_FEATURES per ticker
+    # ── Causal feature allowlist ─────────────────────────────────────
+    # Block model-derived columns to prevent circular feature contamination.
+    # Only OHLCV-derived technicals and ETL features are allowed as GA inputs.
+    _BLOCKED_PREFIXES = ("p_", "pred_", "EV_", "best_buy", "best_sell", "buy_trust", "sell_trust", "fund_")
+    _BLOCKED_COLS = {
+        DATE_COL, TICKER_COL, OPEN_COL, HIGH_COL, LOW_COL, CLOSE_COL,
+        "sma200", "sma200_slope", "atr",
+        # Model outputs (from stock_bin_models / stock_reg_models / stock_final_output)
+        "risk_return", "upside_pct", "downside_pct", "err_buy_pct", "err_sell_pct",
+        "up20_bin", "dd5_bin", "signal", "split",
+        # Snapshot fundamentals (static values applied retroactively — look-ahead bias)
+        "fund_score", "dividend_yield", "trailing_pe", "price_to_book", "market_cap",
+        "price", "volume",
+    }
+    num_cols = [c for c in df.columns
+                if c not in _BLOCKED_COLS
+                and not any(c.startswith(pfx) for pfx in _BLOCKED_PREFIXES)
+                and pd.api.types.is_numeric_dtype(df[c])]
+    base_feat_cols = num_cols
+
+    # Anti-leakage assertion: no model outputs should survive filtering
+    _all_blocked = {c for c in df.columns if any(c.startswith(pfx) for pfx in _BLOCKED_PREFIXES)} | _BLOCKED_COLS
+    _leaked = set(base_feat_cols) & _all_blocked
+    if _leaked:
+        print(f"[WARN] Blocked columns found in features, removing: {sorted(_leaked)}")
+        base_feat_cols = [c for c in base_feat_cols if c not in _leaked]
+    print(f"[FEATS] causal candidates: {len(base_feat_cols)} (blocked {len(_all_blocked & set(df.columns))} model/snapshot cols)")
 
     tickers = df[TICKER_COL].dropna().unique().tolist()
     total_tickers = len(tickers)
@@ -2559,6 +2590,7 @@ def run():
         vol = g["volume"].to_numpy(np.float64) if "volume" in g.columns else np.full(len(c), np.nan)
 
         # Convert to float32 to save memory (half of float64)
+        _seg = get_ticker_meta(str(tkr))
         ticker_payloads[str(tkr)] = {
             "open": o.astype(np.float32), "high": h.astype(np.float32),
             "low": l.astype(np.float32), "close": c.astype(np.float32),
@@ -2570,6 +2602,8 @@ def run():
             "long_votes": long_votes.astype(np.float32),
             "short_votes": short_votes.astype(np.float32),
             "feat_corr": _sel_corrs,
+            "segment_key": _seg["segment_key"],
+            "asset_class": _seg["asset_class"],
         }
         if (ix_tkr % max(1, PRINT_EVERY)) == 0 or ix_tkr == len(tickers):
             dt = time.perf_counter() - prep_t0
@@ -3227,8 +3261,11 @@ def run():
                 ),
             })
 
+        _tkr_meta = get_ticker_meta(tkr)
         results_summary.append({
             "ticker": tkr,
+            "segment_key": _tkr_meta["segment_key"],
+            "asset_class": _tkr_meta["asset_class"],
             "test_return": st["total_return"],
             "test_mdd": st["mdd"],
             "test_sharpe": st["sharpe"],
@@ -3346,6 +3383,20 @@ def run():
         all_pass = obj_win_rate_ok and obj_mdd_ok and obj_bh_ok and obj_trades_ok
         print(f"  TODOS OBJETIVOS     : {'ALL PASS' if all_pass else 'FAIL -- re-avaliar'}")
         print(sep)
+
+        # -- Per-segment metrics (equal-weight) ----------------------------
+        if "segment_key" in df_sum.columns:
+            print(f"\n{'─' * 60}")
+            print(f"  METRICAS POR SEGMENTO (equal-weight)")
+            print(f"{'─' * 60}")
+            for seg, grp in df_sum.groupby("segment_key"):
+                _wr = grp["test_win_rate"].median()
+                _ret = grp["test_return"].median()
+                _mdd = grp["test_mdd"].median()
+                _n = len(grp)
+                _tr = grp["test_trades"].median()
+                print(f"  {seg:25s} | n={_n:3d} | WR={_wr:.1%} | Ret={_ret:+.1%} | MDD={_mdd:.1%} | Trades={_tr:.0f}")
+            print(f"{'─' * 60}")
 
         # -- Feature importance per ticker ---------------------------------
         # Derived purely from data already in ticker_payloads (no logic change).
