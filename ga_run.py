@@ -3386,9 +3386,9 @@ def run():
 
         # -- Per-segment metrics (equal-weight) ----------------------------
         if "segment_key" in df_sum.columns:
-            print(f"\n{'─' * 60}")
+            print(f"\n{'-' * 60}")
             print(f"  METRICAS POR SEGMENTO (equal-weight)")
-            print(f"{'─' * 60}")
+            print(f"{'-' * 60}")
             for seg, grp in df_sum.groupby("segment_key"):
                 _wr = grp["test_win_rate"].median()
                 _ret = grp["test_return"].median()
@@ -3396,7 +3396,7 @@ def run():
                 _n = len(grp)
                 _tr = grp["test_trades"].median()
                 print(f"  {seg:25s} | n={_n:3d} | WR={_wr:.1%} | Ret={_ret:+.1%} | MDD={_mdd:.1%} | Trades={_tr:.0f}")
-            print(f"{'─' * 60}")
+            print(f"{'-' * 60}")
 
         # -- Feature importance per ticker ---------------------------------
         # Derived purely from data already in ticker_payloads (no logic change).
