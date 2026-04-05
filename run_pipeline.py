@@ -34,6 +34,9 @@ OUTPUT_MODELS = os.path.join(OUTPUT_DATA, "models")
 for d in [OUTPUT_BASE, OUTPUT_DATA, OUTPUT_MODELS]:
     os.makedirs(d, exist_ok=True)
 
+BIN_RUNTIME_MODE = "full"
+REG_RUNTIME_MODE = "full"
+
 
 def step1_etl():
     """Step 1: ETL -- download, feature engineering, target creation, save parquet."""
@@ -52,7 +55,7 @@ def step2_bin_models():
     print("STEP 2/4 -- BINARY MODELS (bin_Stock_modelos_individuais)")
     print("=" * 80)
     from stock_bin_models import run_bin_models
-    run_bin_models()
+    run_bin_models(mode=BIN_RUNTIME_MODE)
     print("\n[OK] Binary models concluido.")
     print(f"   Models em: {OUTPUT_MODELS}/")
     print(f"   Signals em: {OUTPUT_BASE}/ensemble_signals_history*.parquet")
@@ -64,7 +67,7 @@ def step3_reg_models():
     print("STEP 3/4 -- REGRESSION MODELS (reg_Stock_modelos_individuais)")
     print("=" * 80)
     from stock_reg_models import run_reg_models
-    run_reg_models()
+    run_reg_models(mode=REG_RUNTIME_MODE)
     print("\n[OK] Regression models concluido.")
     print(f"   Outputs em: {OUTPUT_BASE}/forecast_history_wide.parquet")
 
@@ -102,12 +105,19 @@ STEPS = {
 
 
 def main():
+    global BIN_RUNTIME_MODE, REG_RUNTIME_MODE
     parser = argparse.ArgumentParser(description="Stock Pipeline Runner")
     parser.add_argument(
         "--steps",
         type=str,
         default=None,
         help="Comma-separated step numbers to run. Use 5 for GA only.",
+    )
+    parser.add_argument(
+        "--mode",
+        choices=["full", "data-only", "load"],
+        default="full",
+        help="Operational mode for pipeline refreshes. `data-only`/`load` reuse BIN artifacts when possible.",
     )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument(
@@ -121,6 +131,9 @@ def main():
         help="Full mode: run all steps including GA (1,2,3,4,5)",
     )
     args = parser.parse_args()
+
+    BIN_RUNTIME_MODE = "full" if args.mode == "full" else "auto"
+    REG_RUNTIME_MODE = "full"
 
     if args.ga_only:
         steps_to_run = [1, 4, 5]  # ETL + rebuild history + GA
@@ -136,6 +149,7 @@ def main():
     print("=" * 80)
     print(f"Output directory: {OUTPUT_BASE}")
     print(f"Steps to run:     {steps_to_run}")
+    print(f"Runner mode:      {args.mode} | BIN={BIN_RUNTIME_MODE} | REG={REG_RUNTIME_MODE}")
     print(f"Working dir:      {os.getcwd()}")
     print("=" * 80)
 

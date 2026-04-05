@@ -481,14 +481,16 @@ def run_etl():
         low   = df['Low'].values
         n = len(df)
 
-        up_hit = np.zeros(n, dtype='int8')
-        dd_hit = np.zeros(n, dtype='int8')
-        order  = np.full(n, -1, dtype='int8')  # -1 => none
+        # Keep the last `horizon` rows as NaN: there is not enough future path
+        # to assign a fully observed label without right-censoring.
+        up_hit = np.full(n, np.nan, dtype=np.float32)
+        dd_hit = np.full(n, np.nan, dtype=np.float32)
+        order  = np.full(n, np.nan, dtype=np.float32)
 
         for t in range(n):
-            end = min(n, t + horizon + 1)
-            if end - t <= 1:
+            if (t + horizon) >= n:
                 continue
+            end = t + horizon + 1
 
             entry = close[t]
             up_th = entry * (1.0 + up_thr)
@@ -503,20 +505,18 @@ def run_etl():
             hit_up = up_idx[0] if len(up_idx) else None
             hit_dd = dd_idx[0] if len(dd_idx) else None
 
-            if hit_up is not None:
-                up_hit[t] = 1
-            if hit_dd is not None:
-                dd_hit[t] = 1
+            up_hit[t] = 1.0 if hit_up is not None else 0.0
+            dd_hit[t] = 1.0 if hit_dd is not None else 0.0
 
             if keep_order:
                 if hit_up is None and hit_dd is None:
-                    order[t] = -1
+                    order[t] = -1.0
                 elif hit_up is None:
-                    order[t] = 0
+                    order[t] = 0.0
                 elif hit_dd is None:
-                    order[t] = 1
+                    order[t] = 1.0
                 else:
-                    order[t] = 1 if hit_up < hit_dd else 0
+                    order[t] = 1.0 if hit_up < hit_dd else 0.0
 
         s_up   = pd.Series(up_hit, index=df.index, name=name_up)
         s_down = pd.Series(dd_hit, index=df.index, name=name_dd)
@@ -953,12 +953,11 @@ def run_etl():
         high  = df['High'].values
         low   = df['Low'].values
         n = len(df)
-        tgt = np.zeros(n, dtype='int8')
+        tgt = np.full(n, np.nan, dtype=np.float32)
         for t in range(n):
-            end = min(n, t + horizon + 1)
-            if end - t <= 1:
-                tgt[t] = 0
+            if (t + horizon) >= n:
                 continue
+            end = t + horizon + 1
             entry = close[t]
             up_th = entry * (1.0 + up)
             dd_th = entry * (1.0 + dd)
@@ -968,19 +967,22 @@ def run_etl():
             hit_dd_idx = np.where(lseg <= dd_th)[0]
             hit_up = hit_up_idx[0] if len(hit_up_idx) else None
             hit_dd = hit_dd_idx[0] if len(hit_dd_idx) else None
-            tgt[t] = 1 if (hit_up is not None and (hit_dd is None or hit_up < hit_dd)) else 0
+            tgt[t] = 1.0 if (hit_up is not None and (hit_dd is None or hit_up < hit_dd)) else 0.0
         return pd.Series(tgt, index=df.index, name=name)
 
     def make_best_entry_sale(df, horizon=30):
         low = df['Low'].values
         high = df['High'].values
         n = len(df)
-        best_entry = np.empty(n, dtype='float32')
-        best_sale  = np.empty(n, dtype='float32')
+        # Targets are defined for the path after the signal date (D+1 onward).
+        best_entry = np.full(n, np.nan, dtype='float32')
+        best_sale  = np.full(n, np.nan, dtype='float32')
         for t in range(n):
-            end = min(n, t + horizon + 1)
-            window_low = low[t:end]
-            window_high = high[t:end]
+            if (t + horizon) >= n:
+                continue
+            end = t + horizon + 1
+            window_low = low[t+1:end]
+            window_high = high[t+1:end]
             best_entry[t] = float(np.nanmin(window_low))
             best_sale[t]  = float(np.nanmax(window_high))
         s_entry = pd.Series(best_entry, index=df.index, name='target_best_entry')
@@ -1441,11 +1443,11 @@ def run_etl():
                 ohlcv, horizon=HORIZON, up_thr=UP_THR, dd_thr=DD_THR, keep_order=False
             )
 
-            y_up20 = y_up20.fillna(0).astype('int8')
-            y_dd5  = y_dd5.fillna(0).astype('int8')
+            y_up20 = pd.to_numeric(y_up20, errors='coerce')
+            y_dd5  = pd.to_numeric(y_dd5, errors='coerce')
 
-            rate_up = float(y_up20.mean()) if len(y_up20) else 0.0
-            rate_dd = float(y_dd5.mean()) if len(y_dd5) else 0.0
+            rate_up = float(y_up20.dropna().mean()) if y_up20.notna().any() else 0.0
+            rate_dd = float(y_dd5.dropna().mean()) if y_dd5.notna().any() else 0.0
 
             # FIIs (ending in 11.SA) are low-volatility: skip degeneracy for them
             is_fii = tk.endswith("11.SA")
@@ -1651,8 +1653,8 @@ def run_etl():
             y_up20, y_dd5 = make_targets_up_down(
                 ohlcv, horizon=HORIZON, up_thr=UP_THR, dd_thr=DD_THR, keep_order=False
             )
-            y_up20 = y_up20.fillna(0).astype('int8').rename(('target_up20', tk))
-            y_dd5  = y_dd5.fillna(0).astype('int8').rename(('target_dd5',  tk))
+            y_up20 = to_float32_safe(y_up20).rename(('target_up20', tk))
+            y_dd5  = to_float32_safe(y_dd5).rename(('target_dd5',  tk))
 
             y_entry, y_sale = make_best_entry_sale(ohlcv, horizon=HORIZON)
             y_entry = to_float32_safe(y_entry).rename(('target_best_entry', tk))
@@ -1695,7 +1697,7 @@ def run_etl():
 
     for tname in ('target_up20','target_dd5'):
         if tname in y.columns.get_level_values(0):
-            y.loc[:, (tname, slice(None))] = y.loc[:, (tname, slice(None))].astype('int8')
+            y.loc[:, (tname, slice(None))] = to_float32_safe(y.loc[:, (tname, slice(None))])
     for tname in ('target_best_entry','target_best_sale'):
         if tname in y.columns.get_level_values(0):
             y.loc[:, (tname, slice(None))] = to_float32_safe(y.loc[:, (tname, slice(None))])
@@ -1703,21 +1705,20 @@ def run_etl():
 
     # Garantir 100% preenchido (inf/NaN) globalmente (features já estão ok; segurança adicional)
     X = fill_100pct(X, allow_bfill=ALLOW_BFILL_EXOGENOUS)
-    y = fill_100pct(y, allow_bfill=True)
+    y = y.replace([np.inf, -np.inf], np.nan)
 
     # Verificações finais
     assert not X.isna().any().any(), "Ainda há NaN em X após preenchimento!"
-    assert not y.isna().any().any(), "Ainda há NaN em y após preenchimento!"
 
     # ============================
     # Saída única combinada
     # ============================
     DATASET = pd.concat([X, y], axis=1).sort_index()
     # Segurança final (caso algum merge crie lacunas):
-    DATASET = fill_100pct(DATASET, allow_bfill=ALLOW_BFILL_EXOGENOUS)
+    DATASET.loc[:, X.columns] = fill_100pct(DATASET.loc[:, X.columns], allow_bfill=ALLOW_BFILL_EXOGENOUS)
 
     # Sanidade: sem NaN
-    assert not DATASET.isna().any().any(), "Ainda há NaN no dataset final!"
+    assert not DATASET.loc[:, X.columns].isna().any().any(), "Ainda ha NaN nas features do dataset final!"
 
     # ============================
     # Feature reduction (per ticker, MI vs targets)
@@ -1746,12 +1747,12 @@ def run_etl():
     # Output (full and reduced)
     # ============================
     DATASET_FULL = pd.concat([X, y], axis=1).sort_index()
-    DATASET_FULL = fill_100pct(DATASET_FULL, allow_bfill=ALLOW_BFILL_EXOGENOUS)
-    assert not DATASET_FULL.isna().any().any(), "NaN in full dataset!"
+    DATASET_FULL.loc[:, X.columns] = fill_100pct(DATASET_FULL.loc[:, X.columns], allow_bfill=ALLOW_BFILL_EXOGENOUS)
+    assert not DATASET_FULL.loc[:, X.columns].isna().any().any(), "NaN in feature block of full dataset!"
 
     DATASET_REDUCED = pd.concat([X_reduced, y], axis=1).sort_index()
-    DATASET_REDUCED = fill_100pct(DATASET_REDUCED, allow_bfill=ALLOW_BFILL_EXOGENOUS)
-    assert not DATASET_REDUCED.isna().any().any(), "NaN in reduced dataset!"
+    DATASET_REDUCED.loc[:, X_reduced.columns] = fill_100pct(DATASET_REDUCED.loc[:, X_reduced.columns], allow_bfill=ALLOW_BFILL_EXOGENOUS)
+    assert not DATASET_REDUCED.loc[:, X_reduced.columns].isna().any().any(), "NaN in feature block of reduced dataset!"
 
     if SAVE_PARQUET:
         DATASET_FULL = normalize_before_save(DATASET_FULL)
@@ -1831,10 +1832,11 @@ def run_etl():
                 continue
 
             yt = y.loc[:, lvl0 == t].copy()  # cols = (t, ticker)
-            yt = yt.apply(pd.to_numeric, errors="coerce").fillna(0).astype("int8")
+            yt = yt.apply(pd.to_numeric, errors="coerce")
 
             # --- geral (todas as datas e tickers empilhados) ---
             arr = yt.to_numpy().ravel()
+            arr = arr[np.isfinite(arr)]
             rate1 = float(arr.mean()) if arr.size else np.nan
             n1 = int(arr.sum()) if arr.size else 0
             n = int(arr.size)
@@ -1846,7 +1848,7 @@ def run_etl():
 
             # --- por ticker ---
             # mean por coluna => taxa de 1 por ticker
-            per_ticker_rate1 = yt.mean(axis=0)
+            per_ticker_rate1 = yt.mean(axis=0, skipna=True)
             per_ticker_rate1.index = per_ticker_rate1.index.get_level_values(1).astype(str)
 
             print(f"\n[{t}] Taxa(1) por ticker (top {topk} MAIORES):")

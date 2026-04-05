@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Run GA in stages as separate subprocesses (clean memory between stages)."""
-import subprocess, json, time, sys
+import subprocess, json, time, sys, os
+
+REPO_DIR = os.path.dirname(os.path.abspath(__file__))
 
 TOTAL_STAGES = 10
 t_total = time.time()
@@ -26,7 +28,7 @@ ga_run.GA_MAX_WINDOWS_STAGE2 = 4
 ga_run.GA_EVAL_WORKERS = 1
 ga_run.run()
 """],
-        cwd="/home/user/test",
+        cwd=REPO_DIR,
         timeout=3600,
     )
 

@@ -21,7 +21,10 @@ def run_bin_models(mode: str = "full"):
                       use cached predictions from the last full run.
     """
     import os as _os
-    if mode == "data-only":
+    requested_mode = str(mode or "full").strip().lower()
+    if requested_mode not in {"full", "train", "load", "auto", "data-only"}:
+        raise ValueError(f"Unsupported mode for run_bin_models: {mode}")
+    if requested_mode == "data-only":
         _out = "./output/ensemble_signals_history.parquet"
         if _os.path.exists(_out):
             print(f"[bin_models] data-only: usando cache -> {_out}  (skipping ML scoring)")
@@ -106,7 +109,13 @@ def run_bin_models(mode: str = "full"):
     # -------------------------
     # USER CONFIG
     # -------------------------
-    MODE              = "train"  # "auto" (load if exists else train) | "train" | "load"
+    MODE              = {
+        "full": "train",
+        "train": "train",
+        "load": "load",
+        "auto": "auto",
+        "data-only": "auto",
+    }[requested_mode]  # "auto" (load if exists else train) | "train" | "load"
     _base_models = ["lgbm", "hgb", "rf", "et"]
     if HAS_XGB:
         _base_models.append("xgb")
@@ -117,6 +126,9 @@ def run_bin_models(mode: str = "full"):
     MODEL_DIR         = "./output/data/models"
     MODEL_TAG         = "multi_model_timeaware_v11_cv_recency_asset_thr"   # bump tag
     ARTIFACTS_VERSION = 7
+    BIN_TUNE_PROFILE  = str(_os.getenv("BIN_TUNE_PROFILE", "full")).strip().lower()
+    if BIN_TUNE_PROFILE not in {"full", "fast"}:
+        raise ValueError(f"Unsupported BIN_TUNE_PROFILE={BIN_TUNE_PROFILE!r}; use 'full' or 'fast'")
 
     PARQUET_PATH      = "./output/data/expanded_stock_reduced.parquet"
     TARGETS           = ["target_up20", "target_dd5"]
@@ -153,6 +165,9 @@ def run_bin_models(mode: str = "full"):
     NEG_POS_RATIO     = None
     RF_TUNE_MAX_ROWS  = 100_000
     ET_TUNE_MAX_ROWS  = 80_000
+    HGB_TUNE_MAX_ROWS = 120_000
+    XGB_TUNE_MAX_ROWS = 120_000
+    CATBOOST_TUNE_MAX_ROWS = 120_000
 
     # --- features ---
     ADD_TICKER_DUMMIES   = True
@@ -172,6 +187,7 @@ def run_bin_models(mode: str = "full"):
 
     # Número de trials para o RandomizedSearch manual no CV
     # Ajuste conforme seu tempo disponível (ex: lgbm=20 se tiver GPU, rf=10 se tiver CPU rápida)
+    FINAL_LGB_ROUNDS = 600
     NTRIALS = {
         "lgbm": 12,
         "hgb":  10,
@@ -180,6 +196,30 @@ def run_bin_models(mode: str = "full"):
         "xgb":  10,
         "catboost": 8,
     }
+    if BIN_TUNE_PROFILE == "fast":
+        CV_FOLDS = 2
+        CV_VALID_DAYS = 40
+        MAX_TRAIN_ROWS = min(int(MAX_TRAIN_ROWS), 220_000)
+        RF_TUNE_MAX_ROWS = min(int(RF_TUNE_MAX_ROWS), 60_000)
+        ET_TUNE_MAX_ROWS = min(int(ET_TUNE_MAX_ROWS), 50_000)
+        HGB_TUNE_MAX_ROWS = min(int(HGB_TUNE_MAX_ROWS), 80_000)
+        XGB_TUNE_MAX_ROWS = min(int(XGB_TUNE_MAX_ROWS), 80_000)
+        CATBOOST_TUNE_MAX_ROWS = min(int(CATBOOST_TUNE_MAX_ROWS), 60_000)
+        FINAL_LGB_ROUNDS = 350
+        NTRIALS = {
+            "lgbm": 4,
+            "hgb":  3,
+            "rf":   2,
+            "et":   2,
+            "xgb":  3,
+            "catboost": 2,
+        }
+    N_TRIALS = NTRIALS.copy()
+    print(
+        f"[bin_models] tune profile={BIN_TUNE_PROFILE} | "
+        f"cv_folds={CV_FOLDS} | cv_valid_days={CV_VALID_DAYS} | "
+        f"max_train_rows={MAX_TRAIN_ROWS} | lgb_rounds={FINAL_LGB_ROUNDS}"
+    )
 
     # Configuração de Early Stopping para LightGBM
     EARLY_STOPPING_LGBM = 100
@@ -428,9 +468,12 @@ def run_bin_models(mode: str = "full"):
     def _meta_path():
         return os.path.join(MODEL_DIR, f"{MODEL_TAG}_meta.json")
 
+    def _legacy_lgbm_model_path(target, kind="tv"):
+        return os.path.join(MODEL_DIR, f"{MODEL_TAG}_{kind}_lgbm_{target}.txt")
+
     def _model_path(model_key, target, kind="tv"):
         if model_key == "lgbm":
-            ext = ".txt"
+            ext = ".joblib"
         elif model_key == "catboost":
             ext = ".cbm"
         elif model_key == "xgb":
@@ -444,7 +487,7 @@ def run_bin_models(mode: str = "full"):
             return
         path = _model_path(model_key, target, kind=kind)
         if model_key == "lgbm":
-            _atomic_save_lgbm(model_obj, path)
+            _atomic_save_joblib(model_obj, path)
         elif model_key == "xgb":
             os.makedirs(os.path.dirname(path), exist_ok=True)
             model_obj.save_model(path)
@@ -463,27 +506,45 @@ def run_bin_models(mode: str = "full"):
                 meta = json.load(f)
 
         loaded = {}
+        failed = []
         for model_key in run_models:
             for target in targets:
                 path = _model_path(model_key, target, kind=kind)
+                legacy_path = _legacy_lgbm_model_path(target, kind=kind) if model_key == "lgbm" else None
                 obj = None
                 if os.path.exists(path):
-                    if model_key == "lgbm":
-                        with suppress_output():
-                            obj = lgb.Booster(model_file=path)
-                    elif model_key == "xgb" and HAS_XGB:
-                        obj = xgb.XGBClassifier()
-                        obj.load_model(path)
-                    elif model_key == "catboost" and HAS_CATBOOST:
-                        obj = CatBoostClassifier()
-                        obj.load_model(path)
-                    else:
-                        obj = joblib.load(path)
+                    try:
+                        if model_key == "lgbm":
+                            obj = joblib.load(path)
+                        elif model_key == "xgb" and HAS_XGB:
+                            obj = xgb.XGBClassifier()
+                            obj.load_model(path)
+                        elif model_key == "catboost" and HAS_CATBOOST:
+                            obj = CatBoostClassifier()
+                            obj.load_model(path)
+                        else:
+                            obj = joblib.load(path)
+                    except Exception as e:
+                        failed.append((model_key, target, path, repr(e)))
+                        obj = None
+                elif legacy_path and os.path.exists(legacy_path):
+                    failed.append((
+                        model_key,
+                        target,
+                        legacy_path,
+                        "legacy_lgbm_text_artifact_incompatible_with_current_runtime",
+                    ))
                 loaded[(model_key, target)] = obj
 
         ok = sum(1 for v in loaded.values() if v is not None)
         tot = len(run_models) * len(targets)
         print(f"[load] {kind} models loaded: {ok}/{tot}")
+        if failed:
+            print(f"[load] {kind} invalid artifacts: {len(failed)}")
+            for model_key, target, path, err in failed[:8]:
+                print(f"  - {model_key}/{target}: {path} -> {err}")
+            if len(failed) > 8:
+                print(f"  ... and {len(failed) - 8} more invalid artifacts")
         return meta, loaded
 
     def _atomic_save_json(obj, path):
@@ -1349,6 +1410,21 @@ def run_bin_models(mode: str = "full"):
                 if (models_loaded_tv.get((mk, t)) is None) or (models_loaded_train.get((mk, t)) is None):
                     need_train = True
                     break
+    if MODE == "load":
+        missing_loaded = [
+            (mk, t)
+            for mk in RUN_MODELS
+            for t in TARGETS
+            if (models_loaded_tv.get((mk, t)) is None) or (models_loaded_train.get((mk, t)) is None)
+        ]
+        if missing_loaded:
+            missing_str = ", ".join(f"{mk}/{t}" for mk, t in missing_loaded[:8])
+            if len(missing_loaded) > 8:
+                missing_str += f", ... (+{len(missing_loaded) - 8})"
+            raise RuntimeError(
+                "[bin_models] load mode failed: missing or invalid artifacts for "
+                f"{missing_str}. Use mode='auto' or retrain in mode='full'."
+            )
 
 
     @dataclass
@@ -1675,7 +1751,7 @@ def run_bin_models(mode: str = "full"):
                 X_tr, y_tr, w_tr, X_va, y_va, w_va = build_fold_arrays(fs, target)
 
                 # smaller caps for hgb
-                X_tr, y_tr, w_tr = _cap_rows_for_tree_models(X_tr, y_tr, 120_000, w_tr)
+                X_tr, y_tr, w_tr = _cap_rows_for_tree_models(X_tr, y_tr, HGB_TUNE_MAX_ROWS, w_tr)
 
                 clf = HistGradientBoostingClassifier(**params)
                 clf = fit_with_weights(clf, X_tr, y_tr.astype(int), w_tr)
@@ -1750,7 +1826,7 @@ def run_bin_models(mode: str = "full"):
             fold_scores = []
             for fs in CV_FOLDS_SPEC:
                 X_tr, y_tr, w_tr, X_va, y_va, w_va = build_fold_arrays(fs, target)
-                X_tr, y_tr, w_tr = _cap_rows_for_tree_models(X_tr, y_tr, 120_000, w_tr)
+                X_tr, y_tr, w_tr = _cap_rows_for_tree_models(X_tr, y_tr, XGB_TUNE_MAX_ROWS, w_tr)
                 clf = xgb.XGBClassifier(**params)
                 clf = fit_with_weights(clf, X_tr, y_tr.astype(int), w_tr)
                 p = clf.predict_proba(X_va)[:, 1]
@@ -1778,7 +1854,7 @@ def run_bin_models(mode: str = "full"):
             fold_scores = []
             for fs in CV_FOLDS_SPEC:
                 X_tr, y_tr, w_tr, X_va, y_va, w_va = build_fold_arrays(fs, target)
-                X_tr, y_tr, w_tr = _cap_rows_for_tree_models(X_tr, y_tr, 120_000, w_tr)
+                X_tr, y_tr, w_tr = _cap_rows_for_tree_models(X_tr, y_tr, CATBOOST_TUNE_MAX_ROWS, w_tr)
                 p_cb = dict(params)
                 p_cb.pop("auto_class_weights", None)
                 clf = CatBoostClassifier(**p_cb)
@@ -2516,7 +2592,6 @@ def run_bin_models(mode: str = "full"):
     if not RUN_NOTEBOOK_EXTRA_ENSEMBLES:
         # Export compatibility artifact expected by final step
         out_hist = "./output/ensemble_signals_history.parquet"
-        hist = apply_df_display.reset_index().rename(columns={"index": "Date", "ticker_rec": "ticker"}).copy()
 
         def _pick_col(df, candidates, default=np.nan):
             for c in candidates:
@@ -2524,32 +2599,131 @@ def run_bin_models(mode: str = "full"):
                     return df[c]
             return pd.Series(default, index=df.index)
 
+        def _select_history_model_key(target):
+            pref_order = ["lgbm", "hgb", "rf", "et", "xgb", "catboost"]
+            for mk in pref_order:
+                if mk not in RUN_MODELS:
+                    continue
+                tmeta = meta.get("targets", {}).get(target, {}).get(mk)
+                mdl = final_models.get((mk, target))
+                if tmeta is not None and mdl is not None:
+                    return mk
+            return None
+
+        try:
+            compat_mask_valid = np.asarray(mask_valid, dtype=bool)
+        except Exception:
+            compat_mask_valid = None
+        try:
+            compat_mask_test = np.asarray(mask_test, dtype=bool)
+        except Exception:
+            compat_mask_test = None
+        try:
+            compat_mask_final = np.asarray(mask_final, dtype=bool)
+        except Exception:
+            compat_mask_final = None
+        try:
+            compat_mask_apply = np.asarray(mask_apply, dtype=bool)
+        except Exception:
+            compat_mask_apply = None
+
+        def _build_dense_compat_history():
+            n_rows = int(len(LONG))
+            hist_full = pd.DataFrame({
+                "Date": pd.to_datetime(LONG.index, errors="coerce"),
+            })
+            try:
+                hist_full["ticker"] = pd.Series(ticker_series).astype(str).values
+            except Exception:
+                hist_full["ticker"] = pd.Series(
+                    recover_ticker_series_for_mask(np.ones(n_rows, dtype=bool))
+                ).astype(str).values
+
+            split_arr = np.full(n_rows, "", dtype=object)
+            for split_name, split_mask in [
+                ("VALID", compat_mask_valid),
+                ("TEST", compat_mask_test),
+                ("FINAL", compat_mask_final),
+                ("APPLY", compat_mask_apply),
+            ]:
+                if split_mask is None:
+                    continue
+                if len(split_mask) == n_rows:
+                    split_arr[split_mask] = split_name
+            hist_full["split"] = split_arr
+
+            batch_size = max(10_000, int(os.getenv("BIN_COMPAT_HISTORY_BATCH", "200000")))
+
+            def _predict_target(target, model_key):
+                if model_key is None:
+                    return np.zeros(n_rows, dtype=np.float32), np.zeros(n_rows, dtype=np.int8)
+                tmeta = meta.get("targets", {}).get(target, {}).get(model_key)
+                model = final_models.get((model_key, target))
+                if tmeta is None or model is None:
+                    return np.zeros(n_rows, dtype=np.float32), np.zeros(n_rows, dtype=np.int8)
+
+                thr = float(tmeta.get("threshold", 0.5))
+                proba = np.zeros(n_rows, dtype=np.float32)
+                for start in range(0, n_rows, batch_size):
+                    end = min(n_rows, start + batch_size)
+                    block = align_columns(LONG.iloc[start:end].copy(), saved_cols)
+                    p = predict_proba_model(model_key, model, block.values)
+                    proba[start:end] = np.asarray(p, dtype=np.float32)
+                pred = (proba >= thr).astype(np.int8)
+                return proba, pred
+
+            mk_up = _select_history_model_key("target_up20")
+            mk_dd = _select_history_model_key("target_dd5")
+            hist_full["p_up20"], hist_full["pred_up20"] = _predict_target("target_up20", mk_up)
+            hist_full["p_dd5"], hist_full["pred_dd5"] = _predict_target("target_dd5", mk_dd)
+            return hist_full, f"rescored_long(up20={mk_up}, dd5={mk_dd})"
+
+        hist_source = "apply_df_display"
+        if "hist_out_reset" in locals() and isinstance(hist_out_reset, pd.DataFrame) and len(hist_out_reset) > 0:
+            hist = hist_out_reset.copy()
+            hist_source = "hist_out_reset"
+        else:
+            hist, hist_source = _build_dense_compat_history()
+
+        if "ticker_rec" in hist.columns and "ticker" not in hist.columns:
+            hist = hist.rename(columns={"ticker_rec": "ticker"})
+        if "Date" not in hist.columns:
+            hist = hist.reset_index().rename(columns={"index": "Date"})
+
         hist["p_up20"] = _pick_col(hist, [
+            "p_up20",
             "proba_target_up20__lgbm", "proba_target_up20__hgb",
-            "proba_target_up20__rf", "proba_target_up20__et"
+            "proba_target_up20__rf", "proba_target_up20__et",
+            "proba_target_up20__xgb", "proba_target_up20__catboost",
         ], default=0.0)
         hist["p_dd5"] = _pick_col(hist, [
+            "p_dd5",
             "proba_target_dd5__lgbm", "proba_target_dd5__hgb",
-            "proba_target_dd5__rf", "proba_target_dd5__et"
+            "proba_target_dd5__rf", "proba_target_dd5__et",
+            "proba_target_dd5__xgb", "proba_target_dd5__catboost",
         ], default=0.0)
         hist["pred_up20"] = _pick_col(hist, [
+            "pred_up20",
             "pred_target_up20__lgbm", "pred_target_up20__hgb",
-            "pred_target_up20__rf", "pred_target_up20__et"
+            "pred_target_up20__rf", "pred_target_up20__et",
+            "pred_target_up20__xgb", "pred_target_up20__catboost",
         ], default=0)
         hist["pred_dd5"] = _pick_col(hist, [
+            "pred_dd5",
             "pred_target_dd5__lgbm", "pred_target_dd5__hgb",
-            "pred_target_dd5__rf", "pred_target_dd5__et"
+            "pred_target_dd5__rf", "pred_target_dd5__et",
+            "pred_target_dd5__xgb", "pred_target_dd5__catboost",
         ], default=0)
 
         hist["Date"] = pd.to_datetime(hist["Date"], errors="coerce")
         hist["ticker"] = hist["ticker"].astype(str)
         if "split" not in hist.columns:
-            hist["split"] = "APPLY"
+            hist["split"] = ""
 
         hist_out = hist[["Date", "ticker", "split", "p_up20", "p_dd5", "pred_up20", "pred_dd5"]].copy()
         hist_out = normalize_before_save(hist_out)
         hist_out.to_parquet(out_hist, index=False)
-        print(f"[OK] Saved compatibility history -> {out_hist} | rows={len(hist_out)}")
+        print(f"[OK] Saved compatibility history -> {out_hist} | rows={len(hist_out)} | source={hist_source}")
 
         print("[info] Skipping notebook-only extra ensemble section.")
         return
@@ -4006,7 +4180,6 @@ def run_bin_models(mode: str = "full"):
         # 7) ens_stackLGBM — LightGBM meta-learner on base model probabilities
         print(f"[{target}] 7) ens_stackLGBM")
         try:
-            from sklearn.model_selection import TimeSeriesSplit
             Xmeta_va, k_meta = build_meta_matrix(base_va, keys_order=keys)
             Xmeta_te_lgb, _ = build_meta_matrix(base_te, keys_order=keys)
             Xmeta_fi_lgb, _ = build_meta_matrix(base_fi, keys_order=keys)
@@ -4022,7 +4195,8 @@ def run_bin_models(mode: str = "full"):
                     "colsample_bytree": 1.0, "reg_lambda": 1.0,
                     "n_estimators": 100, "verbosity": -1, "random_state": 42
                 }
-                for train_idx, val_idx in CV_SPLITS:
+                for train_dates, val_dates in CV_SPLITS:
+                    train_idx, val_idx = mask_rows_by_dates(valid_rows_dates, train_dates, val_dates)
                     if len(val_idx) < 30:
                         continue
                     X_tr_m, y_tr_m = Xmeta_va[train_idx], y_va.values[train_idx].astype(int)

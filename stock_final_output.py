@@ -443,13 +443,42 @@ def run_final_output():
     # MERGE + METRICS
     # ============================================================
     def merge_reg_ens(reg_p: pd.DataFrame, ens_k: pd.DataFrame) -> pd.DataFrame:
-        df = reg_p.merge(ens_k, on=["Date","ticker"], how="left")
+        ens_k = ens_k.copy()
+        if len(ens_k) == 0:
+            raise ValueError("Empty ENS chunk for requested window.")
+
+        ens_k = ens_k.sort_values(["Date", "ticker"]).drop_duplicates(["Date", "ticker"], keep="last")
+        reg_keys = reg_p[["Date", "ticker"]].drop_duplicates()
+        ens_keys = ens_k[["Date", "ticker"]].drop_duplicates()
+        overlap_keys = reg_keys.merge(ens_keys, on=["Date", "ticker"], how="inner")
+        overlap_ratio = float(len(overlap_keys) / max(1, len(reg_keys)))
+        join_how = "left"
+        if overlap_ratio < 0.80:
+            join_how = "inner"
+            print(
+                f"  [DBG] merge_reg_ens fallback: overlap={overlap_ratio:.1%} -> using inner join on aligned REG/ENS keys",
+                flush=True,
+            )
+
+        df = reg_p.merge(ens_k, on=["Date","ticker"], how=join_how)
         df["split"] = df.get("split", np.nan)
 
-        df["p_up20"] = to_num(df.get("p_up20", 0)).fillna(0.0).clip(0, 1)
-        df["p_dd5"]  = to_num(df.get("p_dd5", 0)).fillna(0.0).clip(0, 1)
-        df["pred_up20"] = to_num(df.get("pred_up20", np.nan))
-        df["pred_dd5"]  = to_num(df.get("pred_dd5", np.nan))
+        raw_p_up20 = to_num(df.get("p_up20", np.nan))
+        raw_p_dd5  = to_num(df.get("p_dd5", np.nan))
+        if len(df) and (("p_up20" in df.columns) or ("p_dd5" in df.columns)):
+            cov_up = float(raw_p_up20.notna().mean())
+            cov_dd = float(raw_p_dd5.notna().mean())
+            min_cov = min(cov_up, cov_dd)
+            if min_cov < 0.80:
+                raise ValueError(
+                    f"Low REG/ENS merge coverage: p_up20={cov_up:.1%}, p_dd5={cov_dd:.1%}. "
+                    "This would silently turn missing signals into zeros."
+                )
+
+        df["p_up20"] = raw_p_up20.fillna(0.0).clip(0, 1)
+        df["p_dd5"]  = raw_p_dd5.fillna(0.0).clip(0, 1)
+        df["pred_up20"] = to_num(df.get("pred_up20", np.nan)).fillna(0).clip(0, 1).round().astype(np.int8)
+        df["pred_dd5"]  = to_num(df.get("pred_dd5", np.nan)).fillna(0).clip(0, 1).round().astype(np.int8)
         df["up20_bin"] = to_num(df.get("up20_bin", 0)).fillna(0).astype(int)
         df["dd5_bin"]  = to_num(df.get("dd5_bin", 0)).fillna(0).astype(int)
         return df
@@ -812,6 +841,7 @@ def run_final_output():
         all_closes_df = preload_yahoo_history(tickers_sa, START_DATE, END_DATE)
     rows_total = 0
     _loop_count = 0
+    low_coverage_errors = []
 
     for s, e in date_windows(START_DATE, END_DATE, CHUNK_DAYS):
         _loop_count += 1
@@ -871,7 +901,11 @@ def run_final_output():
                     ens_k = normalize_ensemble(ens_chunk)
                     del ens_chunk
                 else:
-                    ens_k = pd.DataFrame(columns=["Date","ticker","split","p_up20","p_dd5","pred_up20","pred_dd5","up20_bin","dd5_bin"])
+                    del ens_tbl
+                    print(f"  [DBG] empty ENS window -> skipping {s} -> {e}", flush=True)
+                    del reg_p
+                    gc.collect()
+                    continue
                 del ens_tbl
             else:
                 ens_k = pd.DataFrame(columns=["Date","ticker","split","p_up20","p_dd5","pred_up20","pred_dd5","up20_bin","dd5_bin"])
@@ -932,11 +966,25 @@ def run_final_output():
         except Exception as exc:
             import traceback
             print(f"[ERROR] iter={_loop_count} window={s}->{e}: {exc}", flush=True)
+            if "Low REG/ENS merge coverage" in str(exc):
+                low_coverage_errors.append((str(s), str(e), str(exc)))
             traceback.print_exc()
             continue
 
     if parquet_writer is not None:
         parquet_writer.close()
+
+    if low_coverage_errors:
+        try:
+            if WRITE_PARQUET and os.path.exists(OUT_HIST_PARQUET):
+                os.remove(OUT_HIST_PARQUET)
+        except Exception:
+            pass
+        raise RuntimeError(
+            f"Final output gerou cobertura REG/ENS insuficiente em {len(low_coverage_errors)} janela(s); "
+            "o parquet parcial foi descartado logicamente e a etapa deve ser rerodada com ensemble history consistente. "
+            f"Primeiro erro: {low_coverage_errors[0][0]}->{low_coverage_errors[0][1]} :: {low_coverage_errors[0][2]}"
+        )
 
     print(f"[OK] Parquet salvo em: {OUT_HIST_PARQUET} | rows={rows_total:,}" if WRITE_PARQUET else "[OK] Parquet desativado")
     print("[DONE]")

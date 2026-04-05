@@ -2366,6 +2366,25 @@ def run():
     out_xlsx = os.path.join(OUTPUT_DIR, f"summary_latest.xlsx")
     out_apply_csv = os.path.join(OUTPUT_DIR, f"apply_last_{APPLY_DAYS}d__H{FWD_H}.csv")
 
+    # Freeze feature selection to the earliest trainable slice so the GA does not
+    # rank features using future labels from later walk-forward windows.
+    all_dates_for_selection = pd.DatetimeIndex(
+        pd.Series(pd.to_datetime(df[DATE_COL], errors="coerce")).dropna().sort_values().unique()
+    )
+    feature_selection_cutoff = None
+    if len(all_dates_for_selection) > 0:
+        dmin_all = pd.Timestamp(all_dates_for_selection[0]).normalize()
+        dmax_all = pd.Timestamp(all_dates_for_selection[-1]).normalize()
+        first_train_end = dmin_all + pd.DateOffset(years=3) - pd.Timedelta(days=1)
+        first_test_end = (first_train_end + pd.Timedelta(days=1)) + pd.DateOffset(months=6) - pd.Timedelta(days=1)
+        if first_test_end <= dmax_all:
+            feature_selection_cutoff = first_train_end - pd.offsets.BDay(FWD_H)
+        else:
+            cutoff_pos = max(0, int(round(len(all_dates_for_selection) * 0.70)) - 1)
+            feature_selection_cutoff = pd.Timestamp(all_dates_for_selection[cutoff_pos]).normalize()
+    if feature_selection_cutoff is not None:
+        print(f"[FEATS] selection cutoff (train-only): <= {pd.Timestamp(feature_selection_cutoff).date()}")
+
     # ── Hybrid feature selection function ──────────────────────────────
     def hybrid_feature_selection(
         g: pd.DataFrame,
@@ -2501,8 +2520,22 @@ def run():
         y_event_temp[~np.isfinite(ret_fwd_temp)] = np.nan
         y_event_temp[~np.isfinite(thr_temp)] = np.nan
 
+        # Hybrid feature selection must use only the trainable slice, otherwise later
+        # walk-forward windows leak future labels into the feature ranking step.
+        select_mask = np.ones(len(g), dtype=bool)
+        if feature_selection_cutoff is not None:
+            date_mask = pd.to_datetime(g[DATE_COL], errors="coerce") <= feature_selection_cutoff
+            select_mask = np.asarray(date_mask, dtype=bool)
+        if int(np.sum(select_mask & np.isfinite(y_event_temp))) < MIN_VALID_SAMPLES_FOR_CORRELATION:
+            fallback_rows = max(MIN_VALID_SAMPLES_FOR_CORRELATION, int(np.ceil(len(g) * 0.70)))
+            select_mask = np.zeros(len(g), dtype=bool)
+            select_mask[:min(len(g), fallback_rows)] = True
+
+        g_select = g.loc[select_mask].reset_index(drop=True)
+        y_event_select = y_event_temp[select_mask]
+
         # Hybrid feature selection: point-biserial (binary) + MI+Spearman (continuous)
-        feat_cols, _sel_corrs = hybrid_feature_selection(g, base_feat_cols, y_event_temp)
+        feat_cols, _sel_corrs = hybrid_feature_selection(g_select, base_feat_cols, y_event_select)
         if len(feat_cols) < 5:
             reasons["few_feats"] = reasons.get("few_feats", 0) + 1
             continue
@@ -2548,8 +2581,10 @@ def run():
         print(f"[PHASE1] filtered: {reasons}")
 
     if not ticker_payloads:
-        print("Nenhum ticker preparado.")
-        return
+        raise RuntimeError(
+            "Nenhum ticker preparado para o GA. "
+            "Verifique coverage do history_consolidated.parquet e MIN_ROWS_TICKER."
+        )
 
     # --- Build PayloadStore (memmap) to eliminate per-window duplication ---
     store = PayloadStore.build_from_ticker_payloads(
@@ -3209,6 +3244,19 @@ def run():
 
     df_sum = pd.DataFrame(results_summary)
     df_app = pd.DataFrame(results_apply)
+
+    # Schema validation: ensure required columns exist before saving
+    required_apply_cols = {"Date", "ticker", "signal", "confidence", "rank", "close", "entrada", "stop", "alvo", "RR"}
+    required_summary_cols = {"ticker", "test_return", "test_mdd", "test_sharpe", "test_trades", "test_win_rate"}
+    if not df_app.empty:
+        missing_apply = sorted(required_apply_cols - set(df_app.columns))
+        if missing_apply:
+            raise RuntimeError(f"Apply output schema incomplete: missing {missing_apply}")
+    if not df_sum.empty:
+        missing_summary = sorted(required_summary_cols - set(df_sum.columns))
+        if missing_summary:
+            raise RuntimeError(f"Summary output schema incomplete: missing {missing_summary}")
+
     # Sort Apply: buy signals first, then by rank_score descending
     if not df_app.empty:
         # Keep only the most recent date per ticker

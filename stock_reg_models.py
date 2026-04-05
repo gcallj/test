@@ -77,6 +77,11 @@ def run_reg_models(mode: str = "full"):
 
     MODEL_TAG    = "v35_BASELINE_ONLY_IMPROVED_SPLIT_TEST_ASYM_BAND_VOLADAPT_WFCAL_CLASSFB_OPLEVELS_v4"
     SAVE_OUTPUTS = True
+    REG_FAST_MODE = str(os.getenv("REG_FAST_MODE", "0")).strip().lower() in {"1", "true", "yes", "on"}
+    try:
+        REG_PROGRESS_EVERY = max(1, int(os.getenv("REG_PROGRESS_EVERY", "10")))
+    except Exception:
+        REG_PROGRESS_EVERY = 10
 
     REG_TARGETS = ["target_best_entry", "target_best_sale"]
 
@@ -751,6 +756,8 @@ def run_reg_models(mode: str = "full"):
     except ImportError:
         HAS_LGB_REG = False
         USE_ML_REGRESSION = False
+    if REG_FAST_MODE:
+        USE_ML_REGRESSION = False
 
     def _extract_features_for_ticker(df_full, tk, feature_cols_cache={}):
         """Extract feature columns for a specific ticker from the MultiIndex parquet."""
@@ -825,14 +832,18 @@ def run_reg_models(mode: str = "full"):
     print("\n[3/7] Preparando séries e escolhendo baseline + banda WFcal/class-fallback...")
     if USE_ML_REGRESSION and HAS_LGB_REG:
         print(f"  ML Regression: ON (blend={ML_REG_BLEND_WEIGHT:.0%} ML + {1-ML_REG_BLEND_WEIGHT:.0%} baseline)")
+    elif REG_FAST_MODE:
+        print("  ML Regression: OFF (REG_FAST_MODE=1)")
     else:
         print("  ML Regression: OFF")
 
     prepared = {}
     meta_best = {}
     _feat_cache = {}
-
-    for tk in tqdm(tickers_valid, desc="Tickers", leave=False):
+    t_stage3 = time.time()
+    total_tickers = len(tickers_valid)
+    progress_iter = tqdm(tickers_valid, desc="Tickers", leave=True, file=sys.stdout)
+    for idx_tk, tk in enumerate(progress_iter, start=1):
         close = close_map.get(tk)
         if close is None:
             continue
@@ -960,6 +971,16 @@ def run_reg_models(mode: str = "full"):
             }
 
             meta_best[f"{tk}|||{tgt}"] = best
+
+        if (idx_tk % REG_PROGRESS_EVERY == 0) or (idx_tk == total_tickers):
+            elapsed = max(1e-9, time.time() - t_stage3)
+            avg_sec = elapsed / idx_tk
+            eta_sec = max(0.0, avg_sec * (total_tickers - idx_tk))
+            progress_iter.write(
+                f"[3/7] progress: {idx_tk}/{total_tickers} tickers | "
+                f"prepared={len(prepared)} | elapsed={elapsed/60:.1f}m | "
+                f"eta={eta_sec/60:.1f}m"
+            )
 
     print(f"  [OK] Séries preparadas: {len(prepared)} (ticker,target)")
 
