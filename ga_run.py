@@ -2570,18 +2570,33 @@ def run():
             date_mask = pd.to_datetime(g[DATE_COL], errors="coerce") <= feature_selection_cutoff
             select_mask = np.asarray(date_mask, dtype=bool)
         if int(np.sum(select_mask & np.isfinite(y_event_temp))) < MIN_VALID_SAMPLES_FOR_CORRELATION:
-            fallback_rows = max(MIN_VALID_SAMPLES_FOR_CORRELATION, int(np.ceil(len(g) * 0.70)))
-            select_mask = np.zeros(len(g), dtype=bool)
-            select_mask[:min(len(g), fallback_rows)] = True
+            # Fallback for recent IPOs: use first 70% of VALID rows (not NaN rows)
+            valid_rows = np.where(np.isfinite(y_event_temp))[0]
+            if len(valid_rows) >= MIN_VALID_SAMPLES_FOR_CORRELATION:
+                cutoff_idx = valid_rows[min(len(valid_rows) - 1, int(len(valid_rows) * 0.70))]
+                select_mask = np.zeros(len(g), dtype=bool)
+                select_mask[:cutoff_idx + 1] = True
+            else:
+                select_mask = np.isfinite(y_event_temp)  # use all valid rows
 
         g_select = g.loc[select_mask].reset_index(drop=True)
         y_event_select = y_event_temp[select_mask]
 
         # Hybrid feature selection: point-biserial (binary) + MI+Spearman (continuous)
         feat_cols, _sel_corrs = hybrid_feature_selection(g_select, base_feat_cols, y_event_select)
-        if len(feat_cols) < 5:
-            reasons["few_feats"] = reasons.get("few_feats", 0) + 1
-            continue
+        if len(feat_cols) < 3:
+            # Fallback: use default technical features if Spearman fails
+            # (common for recent IPOs with little data before selection cutoff)
+            _default_feats = [c for c in ["rsi_14", "macd_hist", "bb_pctb", "roc_5", "volatility_20",
+                                           "dist_ma20", "rel_volume", "stochastic_k", "cci_20", "williams_r"]
+                              if c in base_feat_cols]
+            if len(_default_feats) >= 3:
+                feat_cols = _default_feats[:MAX_FEATURES]
+                _sel_corrs = [(c, 0.0) for c in feat_cols]
+                print(f"  [{tkr}] Spearman found {len(feat_cols)} feats -> using {len(feat_cols)} defaults")
+            else:
+                reasons["few_feats"] = reasons.get("few_feats", 0) + 1
+                continue
 
         directed_cols, long_votes, short_votes = build_direct_feature_signal(g, feat_cols)
         dates = pd.to_datetime(g[DATE_COL], errors="coerce").to_numpy()
