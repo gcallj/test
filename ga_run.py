@@ -2379,6 +2379,18 @@ def run():
     if _leaked:
         print(f"[WARN] Blocked columns found in features, removing: {sorted(_leaked)}")
         base_feat_cols = [c for c in base_feat_cols if c not in _leaked]
+    # Cap features to prevent search space explosion (>100 features degrades GA convergence)
+    MAX_CAUSAL_FEATURES = 80
+    if len(base_feat_cols) > MAX_CAUSAL_FEATURES:
+        # Pre-filter: keep only features with sufficient variance across tickers
+        _var_scores = []
+        for c in base_feat_cols:
+            _v = pd.to_numeric(df[c], errors="coerce")
+            _std = float(_v.std(skipna=True)) if _v.notna().mean() > 0.3 else 0.0
+            _var_scores.append((c, _std))
+        _var_scores.sort(key=lambda x: x[1], reverse=True)
+        base_feat_cols = [c for c, _ in _var_scores[:MAX_CAUSAL_FEATURES]]
+        print(f"[FEATS] capped from {len(_var_scores)} to {MAX_CAUSAL_FEATURES} by variance")
     print(f"[FEATS] causal candidates: {len(base_feat_cols)} (blocked {len(_all_blocked & set(df.columns))} model/snapshot cols)")
 
     tickers = df[TICKER_COL].dropna().unique().tolist()
@@ -2713,12 +2725,33 @@ def run():
             run_mode=run_mode,
             seed_genome=prev_genome_for_seed,
         )
-        try:
-            with open(out_global_ckpt, "w", encoding="utf-8") as f:
-                json.dump({"fitness": float(global_fit), "genome": list(global_genome)}, f, ensure_ascii=False, indent=2)
-            print(f"[GLOBAL_GA] checkpoint saved fit={global_fit:.4f}")
-        except Exception as e:
-            print(f"[WARN] global checkpoint save failed: {e}")
+        # Guardrail: only save checkpoint if fitness improved over previous
+        prev_fit_for_guard = float("nan")
+        if prev_genome_for_seed is not None and os.path.exists(out_global_ckpt):
+            try:
+                _prev_ck = json.load(open(out_global_ckpt, "r", encoding="utf-8"))
+                prev_fit_for_guard = float(_prev_ck.get("fitness", float("nan")))
+            except Exception:
+                pass
+
+        if np.isfinite(prev_fit_for_guard) and global_fit < prev_fit_for_guard:
+            print(f"[GLOBAL_GA] GUARDRAIL: new fitness {global_fit:.4f} < previous {prev_fit_for_guard:.4f}")
+            print(f"[GLOBAL_GA] Keeping previous checkpoint (no regression allowed)")
+            # Reload previous genome for apply phase
+            try:
+                _prev_ck = json.load(open(out_global_ckpt, "r", encoding="utf-8"))
+                global_genome = _prev_ck["genome"]
+                global_params = decode_global_params(global_genome)
+                global_fit = prev_fit_for_guard
+            except Exception:
+                pass
+        else:
+            try:
+                with open(out_global_ckpt, "w", encoding="utf-8") as f:
+                    json.dump({"fitness": float(global_fit), "genome": list(global_genome)}, f, ensure_ascii=False, indent=2)
+                print(f"[GLOBAL_GA] checkpoint saved fit={global_fit:.4f}")
+            except Exception as e:
+                print(f"[WARN] global checkpoint save failed: {e}")
         print(f"[GLOBAL_GA] done fit={global_fit:.4f} mode={mode_label}")
 
     # FASE 3: apply rápido sem GA por ticker
