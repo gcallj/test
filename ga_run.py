@@ -3599,10 +3599,45 @@ def run():
     # Cleanup memmap store
     store.cleanup()
 
-    # -- Send to Telegram --------------------------------------------------
+    # -- Send to Telegram with metrics summary -----------------------------
     if os.path.exists(out_xlsx):
+        # Build caption with key metrics and latest date
+        try:
+            _latest_date = df_app["Date"].max() if not df_app.empty else "N/A"
+            _n_buy = int((df_app["signal"] == "buy").sum()) if not df_app.empty else 0
+            _n_sell = int((df_app["signal"] == "sell").sum()) if not df_app.empty else 0
+            _n_hold = int((df_app["signal"] == "hold").sum()) if not df_app.empty else 0
+            _conf_med = float(pd.to_numeric(df_app["confidence"], errors="coerce").median()) if not df_app.empty else 0
+            _wr_med = float(df_sum["test_win_rate"].median() * 100) if not df_sum.empty else 0
+            _mdd_med = float(df_sum["test_mdd"].median() * 100) if not df_sum.empty else 0
+            _ret_med = float(df_sum["test_return"].median() * 100) if not df_sum.empty else 0
+            _tickers = len(df_sum) if not df_sum.empty else 0
+
+            # Top 5 buy signals by confidence
+            _top_buys = ""
+            if not df_app.empty:
+                _buys = df_app[df_app["signal"] == "buy"].nlargest(5, "confidence")
+                if len(_buys) > 0:
+                    _top_buys = "\n\nTop BUY:\n" + "\n".join(
+                        f"  {r.ticker} conf={r.confidence:.0f} R:R={r.RR:.1f} entrada={r.entrada:.2f}"
+                        for r in _buys.itertuples()
+                    )
+
+            caption = (
+                f"Trading Signals B3 - {_latest_date}\n"
+                f"\n"
+                f"Sinais: {_n_buy} BUY | {_n_hold} HOLD | {_n_sell} SELL\n"
+                f"Tickers: {_tickers}\n"
+                f"\n"
+                f"WR: {_wr_med:.1f}% | MDD: {_mdd_med:.1f}% | Ret: {_ret_med:.1f}%\n"
+                f"Confidence: {_conf_med:.0f} | Fitness: {global_fit:.2f}"
+                f"{_top_buys}"
+            )
+        except Exception:
+            caption = f"Trading Signals B3 - fitness={global_fit:.2f}"
+
         print(f"[TELEGRAM] Sending {out_xlsx} ({os.path.getsize(out_xlsx)} bytes)...")
-        _send_telegram(out_xlsx)
+        _send_telegram(out_xlsx, caption=caption)
     else:
         print(f"[TELEGRAM] SKIP — file not found: {out_xlsx}")
 
