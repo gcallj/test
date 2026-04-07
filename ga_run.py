@@ -1065,7 +1065,7 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
     if mean_ret < 0.0:
         underperf_penalty += abs(mean_ret) * 30.0
 
-    # -- Win-rate bonus (v6: assertive, penalize mediocre) ----------
+    # -- Win-rate bonus (v7: aggressive push to 70%+) ----------
     win_rate_bonus = 0.0
     # Sub-55% hard penalty (com custos reais, WR < 55% não é lucrativo)
     if mean_win_rate < 0.55:
@@ -1085,6 +1085,14 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
         win_rate_bonus += (med_win_rate - 0.55) * 4.0
     if med_win_rate > 0.62:
         win_rate_bonus += (med_win_rate - 0.62) * 6.0
+    # v7: Aggressive push above current baseline (68%)
+    # Steep gradient only kicks in above 0.68 to incentivize pushing past current ceiling
+    if med_win_rate > 0.68:
+        win_rate_bonus += (med_win_rate - 0.68) * 40.0
+    if med_win_rate > 0.70:
+        win_rate_bonus += (med_win_rate - 0.70) * 60.0
+    if mean_win_rate > 0.68:
+        win_rate_bonus += (mean_win_rate - 0.68) * 25.0
 
     # -- Consistency bonus: reward stable per-ticker performance -----------
     consistency_bonus = 0.0
