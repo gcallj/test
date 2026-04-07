@@ -78,10 +78,13 @@ jobs:
           python3 -u -c "
           import os, json, time
           os.environ['GA_RUN_MODE'] = 'train'
-          os.environ['GA_FAST_MODE'] = 'false'
+          os.environ['GA_FAST_MODE'] = 'true'
+          os.environ['GA_AUTO_TUNE'] = '0'
           os.environ['GA_EVAL_WORKERS'] = '4'
 
           import ga_run
+          ga_run.FAST_MODE = True
+          ga_run.GA_AUTO_TUNE = 0
           ga_run.GA_STAGE1_POP_SIZE = int('${{ inputs.pop_size }}')
           ga_run.GA_STAGE1_NGEN = int('${{ inputs.ngen_per_stage }}')
           ga_run.GA_STAGE2_POP_SIZE = int('${{ inputs.pop_size }}') // 2
