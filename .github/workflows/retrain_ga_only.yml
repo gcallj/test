@@ -1,0 +1,158 @@
+name: Retrain GA Only (No BIN/REG)
+
+on:
+  workflow_dispatch:
+    inputs:
+      stages:
+        description: 'Number of stages (each runs N gens)'
+        default: '5'
+        type: string
+      ngen_per_stage:
+        description: 'Generations per stage'
+        default: '12'
+        type: string
+      pop_size:
+        description: 'Population size'
+        default: '60'
+        type: string
+      windows:
+        description: 'Walk-forward windows'
+        default: '8'
+        type: string
+
+jobs:
+  retrain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      GA_RUN_MODE: "train"
+      GA_FAST_MODE: "false"
+      GA_EVAL_WORKERS: "4"
+      PYTHONIOENCODING: "utf-8"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ hashFiles('requirements.txt') }}
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Show current checkpoint
+        run: |
+          echo "Before retrain:"
+          python3 -c "import json; d=json.load(open('global_ga_checkpoint.json')); print(f'  fitness={d[\"fitness\"]:.4f}')"
+          echo "Config: pop=${{ inputs.pop_size }}, stages=${{ inputs.stages }}, ngen=${{ inputs.ngen_per_stage }}, windows=${{ inputs.windows }}"
+
+      - name: Run ETL only (Step 1)
+        run: |
+          python -u run_pipeline.py --steps 1
+
+      - name: Show available data
+        run: |
+          ls -lh history_consolidated.* output/*.parquet 2>/dev/null || echo "Will use ETL fallback"
+
+      - name: Backup current checkpoint
+        run: |
+          cp global_ga_checkpoint.json global_ga_checkpoint_pre_retrain.json.bak
+
+      - name: Retrain GA (staged) - WR-weighted
+        run: |
+          python3 -u -c "
+          import os, json, time
+          os.environ['GA_RUN_MODE'] = 'train'
+          os.environ['GA_FAST_MODE'] = 'false'
+          os.environ['GA_EVAL_WORKERS'] = '4'
+
+          import ga_run
+          ga_run.GA_STAGE1_POP_SIZE = int('${{ inputs.pop_size }}')
+          ga_run.GA_STAGE1_NGEN = int('${{ inputs.ngen_per_stage }}')
+          ga_run.GA_STAGE2_POP_SIZE = int('${{ inputs.pop_size }}') // 2
+          ga_run.GA_STAGE2_NGEN = int('${{ inputs.ngen_per_stage }}') // 2
+          ga_run.GA_MAX_WINDOWS = int('${{ inputs.windows }}')
+          ga_run.GA_MAX_WINDOWS_STAGE2 = min(int('${{ inputs.windows }}'), 6)
+          ga_run.GA_EVAL_WORKERS = 4
+
+          stages = int('${{ inputs.stages }}')
+          best_fitness = 0
+          best_genome = None
+          for s in range(1, stages + 1):
+              print(f'=== STAGE {s}/{stages} ===', flush=True)
+              ck = json.load(open('global_ga_checkpoint.json'))
+              print(f'Starting fitness: {ck[\"fitness\"]:.4f}', flush=True)
+              t0 = time.time()
+              try:
+                  ga_run.run()
+              except Exception as e:
+                  print(f'Stage {s} error: {e}', flush=True)
+                  continue
+              ck = json.load(open('global_ga_checkpoint.json'))
+              print(f'Stage {s} done: fitness={ck[\"fitness\"]:.4f} ({time.time()-t0:.0f}s)', flush=True)
+              if ck['fitness'] > best_fitness:
+                  best_fitness = ck['fitness']
+                  best_genome = ck['genome']
+                  print(f'  -> NEW BEST: {best_fitness:.4f}', flush=True)
+          print(f'\\n=== FINAL ===', flush=True)
+          print(f'Best fitness across stages: {best_fitness:.4f}', flush=True)
+          " 2>&1 | tee retrain.log
+
+      - name: Generate final signals (load mode)
+        if: always()
+        run: |
+          python3 -u -c "
+          import os
+          os.environ['GA_RUN_MODE'] = 'load'
+          import ga_run
+          ga_run.RUN_MODE = 'load'
+          try:
+              ga_run.run()
+          except Exception as e:
+              print(f'Load error: {e}')
+          " 2>&1 | tail -50
+
+      - name: Show results
+        if: always()
+        run: |
+          echo "After retrain:"
+          python3 -c "import json; d=json.load(open('global_ga_checkpoint.json')); print(f'  fitness={d[\"fitness\"]:.4f}')"
+          ls -lh summary_latest.xlsx apply_last_*.csv 2>/dev/null || true
+
+      - name: Commit retrained checkpoint
+        if: success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add global_ga_checkpoint.json apply_last_5d__H5.csv summary_latest.xlsx 2>/dev/null || true
+          FITNESS=$(python3 -c "import json; print(f'{json.load(open(\"global_ga_checkpoint.json\"))[\"fitness\"]:.4f}')")
+          git commit -m "Retrain GA-only: fitness=${FITNESS}" || echo "No changes"
+          git push || echo "Push failed"
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: retrain-ga-only-${{ github.run_number }}
+          path: |
+            summary_latest.xlsx
+            apply_last_5d__H5.csv
+            global_ga_checkpoint.json
+            global_ga_checkpoint_pre_retrain.json.bak
+            retrain.log
+          retention-days: 30
