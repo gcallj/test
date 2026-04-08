@@ -237,6 +237,7 @@ def run_chunk(
     window_plans,
     seed_genomes,
     resume_ckpt=None,
+    window_offset=0,
 ):
     """Run one GA chunk (ngen generations). Returns (best_genome, best_fit, hof)."""
     import pickle
@@ -247,11 +248,18 @@ def run_chunk(
 
     wp_bytes = pickle.dumps(window_plans)
 
-    # Uniform window indices for this chunk
+    # Uniform window indices, with rotational offset for diversity across chunks
     n_win = len(window_plans)
     step = n_win / window_count
-    window_indices = [min(max(0, int(round(i * step))), n_win - 1)
+    window_indices = [min(max(0, int(round(i * step + window_offset)) % n_win), n_win - 1)
                       for i in range(window_count)]
+    window_indices = sorted(set(window_indices))[:window_count]
+    while len(window_indices) < window_count:
+        # Pad if dedupe collapsed any
+        for j in range(n_win):
+            if j not in window_indices:
+                window_indices.append(j)
+                break
 
     print(f"\n{'='*60}", flush=True)
     print(f"[CHUNK {chunk_id}] windows={window_indices} pop={pop_size} ngen={ngen}",
@@ -299,6 +307,8 @@ def main():
                         help="Clear prior progress and restart fresh")
     parser.add_argument("--apply-best", action="store_true",
                         help="If best_found > main, overwrite main checkpoint at end")
+    parser.add_argument("--window-offset", type=int, default=0,
+                        help="Rotational offset for window indices (for diversity across batches)")
     args = parser.parse_args()
 
     if args.reset:
@@ -405,6 +415,7 @@ def main():
                 window_plans=window_plans,
                 seed_genomes=seed,
                 resume_ckpt=resume_ckpt,
+                window_offset=args.window_offset,
             )
         except Exception as e:
             print(f"[CHUNK {chunk_id}] ERROR: {e}", flush=True)

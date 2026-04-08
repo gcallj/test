@@ -1,0 +1,163 @@
+[2026-04-08 00:33:06] ============================================================
+[2026-04-08 00:33:06] AUTONOMOUS LOOP STARTED
+[2026-04-08 00:33:06] Target stop time: 2026-04-08 06:00:00
+[2026-04-08 00:33:06] Chunks per batch: 2
+[2026-04-08 00:33:06] Max batches: 8
+[2026-04-08 00:33:06] ============================================================
+[2026-04-08 00:33:06] [INIT] main checkpoint fitness: 18.33015638505818
+[2026-04-08 00:33:06] [INIT] base WR_med_all: 68.02%
+[2026-04-08 00:33:06] [INIT] best so far: WR=71.43% fit=18.3342 chunk=7
+[2026-04-08 00:33:06] [BACKUP OK] autonomous_start
+[2026-04-08 00:33:06] 
+[2026-04-08 00:33:06] ============================================================
+[2026-04-08 00:33:06] BATCH 1 | remaining: 5.4h | config: offset=0 pop=24 ngen=4 windows=4
+[2026-04-08 00:33:06] ============================================================
+[2026-04-08 00:33:06] [RUN] starting 2 chunks (offset=0, pop=24, ngen=4, win=4)...
+[2026-04-08 00:33:16]   [BASE] Evaluating seed genome (current main checkpoint)...
+[2026-04-08 00:33:50]   [BASE] fit=18.3302 WR_med_all=71.2% WR_mean_all=70.2% MDD=8.2% ret=0.29 #>=70%=66/118 (34s)
+[2026-04-08 00:33:50]   [CHUNK 8] windows=[0, 9, 18, 27] pop=24 ngen=4
+[2026-04-08 00:36:02] ============================================================
+[2026-04-08 00:36:02] AUTONOMOUS LOOP STARTED
+[2026-04-08 00:36:02] Target stop time: 2026-04-08 06:00:00
+[2026-04-08 00:36:02] Chunks per batch: 2
+[2026-04-08 00:36:02] Max batches: 8
+[2026-04-08 00:36:02] ============================================================
+[2026-04-08 00:36:02] [INIT] main checkpoint fitness: 18.33015638505818
+[2026-04-08 00:36:02] [INIT] best so far: WR=71.43% fit=18.3342 chunk=7
+[2026-04-08 00:36:02] [INIT] matched chunk 4 fit=18.3302 -> initial_wr=71.19%
+[2026-04-08 00:36:02] [INIT] SAFETY: raising initial_wr to best_so_far=71.43%
+[2026-04-08 00:36:02] [BACKUP OK] autonomous_start
+[2026-04-08 00:36:02] 
+[2026-04-08 00:36:02] ============================================================
+[2026-04-08 00:36:02] BATCH 1 | remaining: 5.4h | config: offset=0 pop=24 ngen=4 windows=4
+[2026-04-08 00:36:02] ============================================================
+[2026-04-08 00:36:02] [RUN] starting 2 chunks (offset=0, pop=24, ngen=4, win=4)...
+[2026-04-08 00:36:09]   [BASE] Evaluating seed genome (current main checkpoint)...
+[2026-04-08 00:36:39]   [BASE] fit=18.3302 WR_med_all=71.2% WR_mean_all=70.2% MDD=8.2% ret=0.29 #>=70%=66/118 (30s)
+[2026-04-08 00:36:39]   [CHUNK 8] windows=[0, 9, 18, 27] pop=24 ngen=4
+[2026-04-08 00:50:47]   [GA] S2 gen 001/004 | best=-0.35686 | gen=848.0s | elapsed=14.1m | eta=42.4m | workers=1
+[2026-04-08 00:58:22]   [GA] S2 gen 002/004 | best=-0.35686 | gen=455.3s | elapsed=21.7m | eta=21.7m | workers=1
+[2026-04-08 01:05:11]   [GA] S2 gen 003/004 | best=-0.35686 | gen=408.6s | elapsed=28.5m | eta=9.5m | workers=1
+[2026-04-08 01:12:28]   [GA] S2 gen 004/004 | best=-0.35686 | gen=436.8s | elapsed=35.8m | eta=0.0m | workers=1
+[2026-04-08 01:12:28]   [CHUNK 8] completed 4 gens in 35.8m | hof[0].fit=-0.3569
+[2026-04-08 01:12:28]   [CHUNK 8] evaluating best genome on all tickers...
+[2026-04-08 01:13:01]   [CHUNK 8] progress saved to local_ga_chunk_progress.json
+[2026-04-08 01:13:01]   [CHUNK 8] METRICS vs BASE:
+[2026-04-08 01:13:01]     fit=18.3342 (delta +0.0040)
+[2026-04-08 01:13:01]     WR_med_all (summary)=71.4% (delta +0.24pp)
+[2026-04-08 01:13:01]   [CHUNK 8] no improvement vs best so far (WR 71.4% fit 18.3342)
+[2026-04-08 01:13:01]   [CHUNK 9] windows=[0, 9, 18, 27] pop=24 ngen=4
+[2026-04-08 01:26:55]   [GA] S2 gen 001/004 | best=-0.33201 | gen=834.2s | elapsed=13.9m | eta=41.7m | workers=1
+[2026-04-08 01:33:16]   [GA] S2 gen 002/004 | best=-0.33201 | gen=380.1s | elapsed=20.2m | eta=20.2m | workers=1
+[2026-04-08 01:39:45]   [GA] S2 gen 003/004 | best=-0.33201 | gen=389.8s | elapsed=26.7m | eta=8.9m | workers=1
+[2026-04-08 01:47:21]   [GA] S2 gen 004/004 | best=-0.33201 | gen=456.0s | elapsed=34.3m | eta=0.0m | workers=1
+[2026-04-08 01:47:21]   [CHUNK 9] completed 4 gens in 34.3m | hof[0].fit=-0.3320
+[2026-04-08 01:47:21]   [CHUNK 9] evaluating best genome on all tickers...
+[2026-04-08 01:47:54]   [CHUNK 9] progress saved to local_ga_chunk_progress.json
+[2026-04-08 01:47:54]   [CHUNK 9] METRICS vs BASE:
+[2026-04-08 01:47:54]     fit=22.1314 (delta +3.8013)
+[2026-04-08 01:47:54]     WR_med_all (summary)=71.7% (delta +0.55pp)
+[2026-04-08 01:47:54]   [CHUNK 9] *** NEW BEST: WR_med_all 71.4% -> 71.7% ***
+[2026-04-08 01:47:54]   delta WR_med_all: +0.55pp
+[2026-04-08 01:47:58] [BATCH 1] done in 71.9m, ok=True
+[2026-04-08 01:47:58] [BATCH 1] best_so_far: WR=71.74% fit=22.1314 n>=70=66 sharpe=0.267 (chunk 9)
+[2026-04-08 01:47:58] [BACKUP OK] batch1_before_apply
+[2026-04-08 01:47:58] [APPLY] Updated global_ga_checkpoint.json WR 71.43% -> 71.74% fit 18.3302 -> 22.1314
+[2026-04-08 01:48:17] [GIT COMMIT] Autonomous batch 1: WR 71.43% -> 71.74%, fit 18.3302 -> 22.1314
+[2026-04-08 01:48:22] [GIT PUSH] success
+[2026-04-08 01:48:22] [BACKUP OK] batch1_done
+[2026-04-08 01:48:22] 
+[2026-04-08 01:48:22] ============================================================
+[2026-04-08 01:48:22] BATCH 2 | remaining: 4.2h | config: offset=3 pop=24 ngen=4 windows=4
+[2026-04-08 01:48:22] ============================================================
+[2026-04-08 01:48:22] [RUN] starting 2 chunks (offset=3, pop=24, ngen=4, win=4)...
+[2026-04-08 01:48:32]   [BASE] Evaluating seed genome (current main checkpoint)...
+[2026-04-08 01:49:06]   [BASE] fit=22.1314 WR_med_all=71.7% WR_mean_all=71.5% MDD=8.3% ret=0.29 #>=70%=66/118 (34s)
+[2026-04-08 01:49:06]   [CHUNK 10] windows=[3, 12, 21, 30] pop=24 ngen=4
+[2026-04-08 02:02:53]   [GA] S2 gen 001/004 | best=-1.02705 | gen=826.9s | elapsed=13.8m | eta=41.3m | workers=1
+[2026-04-08 02:09:28]   [GA] S2 gen 002/004 | best=-1.02705 | gen=395.5s | elapsed=20.4m | eta=20.4m | workers=1
+[2026-04-08 02:16:15]   [GA] S2 gen 003/004 | best=-1.00095 | gen=407.2s | elapsed=27.2m | eta=9.1m | workers=1
+[2026-04-08 02:22:58]   [GA] S2 gen 004/004 | best=-0.97767 | gen=402.6s | elapsed=33.9m | eta=0.0m | workers=1
+[2026-04-08 02:22:58]   [CHUNK 10] completed 4 gens in 33.9m | hof[0].fit=-0.9777
+[2026-04-08 02:22:58]   [CHUNK 10] evaluating best genome on all tickers...
+[2026-04-08 02:23:32]   [CHUNK 10] progress saved to local_ga_chunk_progress.json
+[2026-04-08 02:23:32]   [CHUNK 10] METRICS vs BASE:
+[2026-04-08 02:23:32]     fit=20.8861 (delta -1.2454)
+[2026-04-08 02:23:32]     WR_med_all (summary)=71.1% (delta -0.60pp)
+[2026-04-08 02:23:32]   [CHUNK 10] no improvement vs best so far (WR 71.7% fit 22.1314)
+[2026-04-08 02:23:32]   [CHUNK 11] windows=[3, 12, 21, 30] pop=24 ngen=4
+[2026-04-08 02:38:44]   [GA] S2 gen 001/004 | best=-1.49457 | gen=912.3s | elapsed=15.2m | eta=45.6m | workers=1
+[2026-04-08 02:45:26]   [GA] S2 gen 002/004 | best=-1.49457 | gen=402.1s | elapsed=21.9m | eta=21.9m | workers=1
+[2026-04-08 02:51:57]   [GA] S2 gen 003/004 | best=-1.49457 | gen=390.7s | elapsed=28.4m | eta=9.5m | workers=1
+[2026-04-08 02:57:03]   [GA] S2 gen 004/004 | best=-1.43952 | gen=306.6s | elapsed=33.5m | eta=0.0m | workers=1
+[2026-04-08 02:57:03]   [CHUNK 11] completed 4 gens in 33.5m | hof[0].fit=-1.4395
+[2026-04-08 02:57:03]   [CHUNK 11] evaluating best genome on all tickers...
+[2026-04-08 02:57:37]   [CHUNK 11] progress saved to local_ga_chunk_progress.json
+[2026-04-08 02:57:37]   [CHUNK 11] METRICS vs BASE:
+[2026-04-08 02:57:37]     fit=15.3918 (delta -6.7396)
+[2026-04-08 02:57:37]     WR_med_all (summary)=68.4% (delta -3.36pp)
+[2026-04-08 02:57:37]   [CHUNK 11] no improvement vs best so far (WR 71.7% fit 22.1314)
+[2026-04-08 02:57:37]   delta WR_med_all: +0.00pp
+[2026-04-08 02:57:38] [BATCH 2] done in 69.3m, ok=True
+[2026-04-08 02:57:38] [BATCH 2] best_so_far: WR=71.74% fit=22.1314 n>=70=66 sharpe=0.267 (chunk 9)
+[2026-04-08 02:57:38] [BATCH 2] no improvement vs current best (71.74%)
+[2026-04-08 02:57:39] [BACKUP OK] batch2_done
+[2026-04-08 02:57:39] 
+[2026-04-08 02:57:39] ============================================================
+[2026-04-08 02:57:39] BATCH 3 | remaining: 3.0h | config: offset=6 pop=30 ngen=4 windows=5
+[2026-04-08 02:57:39] ============================================================
+[2026-04-08 02:57:39] [RUN] starting 2 chunks (offset=6, pop=30, ngen=4, win=5)...
+[2026-04-08 02:58:02]   [BASE] Evaluating seed genome (current main checkpoint)...
+[2026-04-08 02:58:37]   [BASE] fit=22.1314 WR_med_all=71.7% WR_mean_all=71.5% MDD=8.3% ret=0.29 #>=70%=66/118 (34s)
+[2026-04-08 02:58:37]   [CHUNK 12] windows=[6, 13, 20, 28, 35] pop=30 ngen=4
+[2026-04-08 03:23:22]   [GA] S2 gen 001/004 | best=0.91839 | gen=1485.3s | elapsed=24.8m | eta=74.3m | workers=1
+[2026-04-08 03:32:50]   [GA] S2 gen 002/004 | best=0.93602 | gen=567.9s | elapsed=34.2m | eta=34.2m | workers=1
+[2026-04-08 03:44:49]   [GA] S2 gen 003/004 | best=0.93602 | gen=718.9s | elapsed=46.2m | eta=15.4m | workers=1
+[2026-04-08 03:57:59]   [GA] S2 gen 004/004 | best=0.93602 | gen=790.1s | elapsed=59.4m | eta=0.0m | workers=1
+[2026-04-08 03:57:59]   [CHUNK 12] completed 4 gens in 59.4m | hof[0].fit=0.9360
+[2026-04-08 03:57:59]   [CHUNK 12] evaluating best genome on all tickers...
+[2026-04-08 03:58:32]   [CHUNK 12] progress saved to local_ga_chunk_progress.json
+[2026-04-08 03:58:32]   [CHUNK 12] METRICS vs BASE:
+[2026-04-08 03:58:32]     fit=15.2880 (delta -6.8434)
+[2026-04-08 03:58:32]     WR_med_all (summary)=70.2% (delta -1.55pp)
+[2026-04-08 03:58:32]   [CHUNK 12] no improvement vs best so far (WR 71.7% fit 22.1314)
+[2026-04-08 03:58:32]   [CHUNK 13] windows=[6, 13, 20, 28, 35] pop=30 ngen=4
+[2026-04-08 04:27:23]   [GA] S2 gen 001/004 | best=1.36393 | gen=1730.9s | elapsed=28.8m | eta=86.5m | workers=1
+[2026-04-08 04:39:48]   [GA] S2 gen 002/004 | best=1.36393 | gen=745.1s | elapsed=41.3m | eta=41.3m | workers=1
+[2026-04-08 04:50:57]   [GA] S2 gen 003/004 | best=1.36393 | gen=668.5s | elapsed=52.4m | eta=17.5m | workers=1
+[2026-04-08 05:02:16]   [GA] S2 gen 004/004 | best=1.36393 | gen=679.5s | elapsed=63.7m | eta=0.0m | workers=1
+[2026-04-08 05:02:16]   [CHUNK 13] completed 4 gens in 63.7m | hof[0].fit=1.3639
+[2026-04-08 05:02:16]   [CHUNK 13] evaluating best genome on all tickers...
+[2026-04-08 05:02:49]   [CHUNK 13] progress saved to local_ga_chunk_progress.json
+[2026-04-08 05:02:49]   [CHUNK 13] METRICS vs BASE:
+[2026-04-08 05:02:49]     fit=20.5156 (delta -1.6158)
+[2026-04-08 05:02:49]     WR_med_all (summary)=71.1% (delta -0.66pp)
+[2026-04-08 05:02:49]   [CHUNK 13] no improvement vs best so far (WR 71.7% fit 22.1314)
+[2026-04-08 05:02:49]   delta WR_med_all: +0.00pp
+[2026-04-08 05:02:51] [BATCH 3] done in 125.2m, ok=True
+[2026-04-08 05:02:51] [BATCH 3] best_so_far: WR=71.74% fit=22.1314 n>=70=66 sharpe=0.267 (chunk 9)
+[2026-04-08 05:02:51] [BATCH 3] no improvement vs current best (71.74%)
+[2026-04-08 05:02:51] [BACKUP OK] batch3_done
+[2026-04-08 05:02:51] 
+[2026-04-08 05:02:51] ============================================================
+[2026-04-08 05:02:51] BATCH 4 | remaining: 1.0h | config: offset=9 pop=24 ngen=6 windows=4
+[2026-04-08 05:02:51] ============================================================
+[2026-04-08 05:02:51] [RUN] starting 2 chunks (offset=9, pop=24, ngen=6, win=4)...
+[2026-04-08 05:03:03]   [BASE] Evaluating seed genome (current main checkpoint)...
+[2026-04-08 05:03:37]   [BASE] fit=22.1314 WR_med_all=71.7% WR_mean_all=71.5% MDD=8.3% ret=0.29 #>=70%=66/118 (35s)
+[2026-04-08 05:03:37]   [CHUNK 14] windows=[0, 9, 18, 27] pop=24 ngen=6
+[2026-04-08 05:16:05]   [GA] S2 gen 001/006 | best=-0.33201 | gen=748.0s | elapsed=12.5m | eta=62.3m | workers=1
+[2026-04-08 05:22:53]   [GA] S2 gen 002/006 | best=-0.33201 | gen=407.9s | elapsed=19.3m | eta=38.5m | workers=1
+[2026-04-08 05:27:49]   [GA] S2 gen 003/006 | best=-0.32892 | gen=296.0s | elapsed=24.2m | eta=24.2m | workers=1
+[2026-04-08 05:33:47]   [GA] S2 gen 004/006 | best=-0.32892 | gen=357.3s | elapsed=30.2m | eta=15.1m | workers=1
+[2026-04-08 05:41:11]   [GA] S2 gen 005/006 | best=-0.32892 | gen=444.8s | elapsed=37.6m | eta=7.5m | workers=1
+[2026-04-08 05:48:26]   [GA] S2 gen 006/006 | best=-0.32892 | gen=434.5s | elapsed=44.8m | eta=0.0m | workers=1
+[2026-04-08 05:48:26]   [CHUNK 14] completed 6 gens in 44.8m | hof[0].fit=-0.3289
+[2026-04-08 05:48:26]   [CHUNK 14] evaluating best genome on all tickers...
+[2026-04-08 05:49:03]   [CHUNK 14] progress saved to local_ga_chunk_progress.json
+[2026-04-08 05:49:03]   [CHUNK 14] METRICS vs BASE:
+[2026-04-08 05:49:03]     fit=21.2762 (delta -0.8553)
+[2026-04-08 05:49:03]     WR_med_all (summary)=71.4% (delta -0.31pp)
+[2026-04-08 05:49:03]   [CHUNK 14] no improvement vs best so far (WR 71.7% fit 22.1314)
+[2026-04-08 05:49:03]   [CHUNK 15] windows=[0, 9, 18, 27] pop=24 ngen=6
+[2026-04-08 06:03:24]   [GA] S2 gen 001/006 | best=-0.33201 | gen=861.7s | elapsed=14.4m | eta=71.8m | workers=1
