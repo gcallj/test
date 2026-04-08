@@ -3411,16 +3411,9 @@ def run():
                 0.05 * q_stop * 100           # qualidade do stop
             , 1)
 
-            # ── CLASSIFICACAO DE POTENCIAL ──
+            # ── CLASSIFICACAO DE POTENCIAL (pre-override, sera recalculado abaixo) ──
             _net_pct = (take_reward / max(entry_ref, ATR_EPS) - COST_PER_TRADE_PCT) * (1.0 - IR_SWING_PCT)
-            if sig == "buy" and _net_pct >= 0.10 and bt_win_rate >= 0.60:
-                potencial = "alto"
-            elif sig == "buy" and _net_pct >= 0.05:
-                potencial = "medio"
-            elif sig == "buy":
-                potencial = "baixo"
-            else:
-                potencial = "-"
+            potencial = "-"  # placeholder; valor real sera atribuido apos o override
 
             # ── SAIDA: melhor preco de venda no dia seguinte ──
             # Estima a maxima do proximo dia usando historico de intraday highs
@@ -3558,7 +3551,19 @@ def run():
                     potencial = "observar"
                 else:
                     potencial = "-"
-            # buys mantem classificacao original (alto/medio/baixo)
+            elif final_sig == "buy":
+                # Recalcular potencial para buys (promovidos podem ter entrado
+                # como "-" porque o calculo original so atribuia se GA disse buy)
+                # Usa o mesmo criterio do calculo original:
+                #   alto:  net_pct >= 10% + wr >= 60%
+                #   medio: net_pct >= 5%
+                #   baixo: resto
+                if _net_pct >= 0.10 and bt_win_rate >= 0.60:
+                    potencial = "alto"
+                elif _net_pct >= 0.05:
+                    potencial = "medio"
+                else:
+                    potencial = "baixo"
 
             # ═══════════════════════════════════════════════════════════════
             # CONDICAO: narrativa coerente com signal + stage + acao
