@@ -3539,143 +3539,161 @@ def run():
                 # Stage 2 ideal/momentum/cedo/pullback holds: mantem rank (sao bons watchlist)
             # Buys mantem rank original
 
-            # Potencial tambem reflete signal final
-            if final_sig == "sell":
-                potencial = "-"
+            # ═══════════════════════════════════════════════════════════════
+            # POTENCIAL NUMERICO: % esperado de alta ate o alvo
+            # ═══════════════════════════════════════════════════════════════
+            # Prioridade:
+            #   1. BUY: % ate alvo (take_profit) a partir do preco de entrada
+            #   2. HOLD Stage 2 ideal/momentum: % ate R1 (breakout target)
+            #   3. HOLD Stage 2 pullback: % ate R1 apos segurar S1
+            #   4. HOLD Stage 1 Base: % ate R1 (breakout target)
+            #   5. HOLD Stage 3/4: negativo (potencial de queda)
+            #   6. SELL: potencial = NaN ("-")
+            _alvo_pct_num = (take_profit - best_buy) / max(best_buy, ATR_EPS) * 100.0 if best_buy > 0 else 0.0
+            _stop_pct_num = abs(stop_loss - best_buy) / max(best_buy, ATR_EPS) * 100.0 if best_buy > 0 else 0.0
+            _r1_pct = (r1 - close_val) / max(close_val, ATR_EPS) * 100.0 if close_val > 0 else 0.0
+
+            if final_sig == "buy":
+                # Potencial = % ate alvo (take_profit configurado pelo GA)
+                potencial_pct = round(_alvo_pct_num, 1)
             elif final_sig == "hold":
                 if stage_num == 2 and timing_sub in ("ideal", "momentum"):
-                    potencial = "watchlist"  # bom, aguardando gatilho
+                    # Esperado: breakout de R1 com alvo ~= take_profit
+                    potencial_pct = round(_alvo_pct_num, 1)
+                elif stage_num == 2 and timing_sub == "pullback":
+                    # Entra no suporte S1, alvo ate take_profit
+                    potencial_pct = round(_alvo_pct_num, 1)
+                elif stage_num == 2 and timing_sub == "cedo":
+                    # Convicção menor, alvo mais conservador (ate R1)
+                    potencial_pct = round(max(_r1_pct, _alvo_pct_num * 0.7), 1)
+                elif stage_num == 2 and timing_sub == "atrasado":
+                    # Precisa de pullback primeiro, potencial reduzido
+                    potencial_pct = round(_alvo_pct_num * 0.5, 1)
+                elif stage_num == 1:
+                    # Base lateral: breakout de R1
+                    potencial_pct = round(_r1_pct if _r1_pct > 0 else _alvo_pct_num * 0.5, 1)
+                elif stage_num == 3:
+                    # Topo: potencial negativo (caminho e descer)
+                    potencial_pct = round(-_stop_pct_num, 1)
+                else:
+                    potencial_pct = 0.0
+            else:  # sell
+                potencial_pct = None  # sera gravado como "-"
+
+            # Legacy 'potencial' categorico (mantido para backward compat em scripts antigos)
+            if final_sig == "sell":
+                potencial = "-"
+            elif final_sig == "buy":
+                if _alvo_pct_num >= 10.0 and bt_win_rate >= 0.60:
+                    potencial = "alto"
+                elif _alvo_pct_num >= 5.0:
+                    potencial = "medio"
+                else:
+                    potencial = "baixo"
+            else:  # hold
+                if stage_num == 2 and timing_sub in ("ideal", "momentum"):
+                    potencial = "watchlist"
                 elif stage_num == 2 and timing_sub in ("cedo", "pullback"):
                     potencial = "cautela"
                 elif stage_num == 1:
                     potencial = "observar"
                 else:
                     potencial = "-"
-            elif final_sig == "buy":
-                # Recalcular potencial para buys (promovidos podem ter entrado
-                # como "-" porque o calculo original so atribuia se GA disse buy)
-                # Usa o mesmo criterio do calculo original:
-                #   alto:  net_pct >= 10% + wr >= 60%
-                #   medio: net_pct >= 5%
-                #   baixo: resto
-                if _net_pct >= 0.10 and bt_win_rate >= 0.60:
-                    potencial = "alto"
-                elif _net_pct >= 0.05:
-                    potencial = "medio"
-                else:
-                    potencial = "baixo"
 
             # ═══════════════════════════════════════════════════════════════
-            # CONDICAO: narrativa coerente com signal + stage + acao
+            # RECOMENDACAO: texto unico consolidado (sinal + stage + potencial + plano)
             # ═══════════════════════════════════════════════════════════════
-            _stop_pct = abs(stop_loss - best_buy) / max(best_buy, ATR_EPS) * 100.0 if best_buy > 0 else 0.0
-            _alvo_pct = (take_profit - best_buy) / max(best_buy, ATR_EPS) * 100.0 if best_buy > 0 else 0.0
+            # Formato: "ACAO [@preco] * Stage X Tipo * +YY.Y% (win_rate%) * gatilho/stop"
+            _wr_pct = round(bt_win_rate * 100, 0)
 
-            if final_sig == "sell":
-                # === SELL (sempre Stage 3/4) ===
+            if final_sig == "buy":
+                # COMPRAR @entrada * Stage 2 Alta ideal * +9.6% alvo (WR 74%) * Stop @61.50 -3.2%
+                _stage_short = f"{stage_label.replace('Stage ', 'S')} {timing_sub}"
+                recomendacao = (
+                    f"COMPRAR @{best_buy:.2f} * {_stage_short} * "
+                    f"+{_alvo_pct_num:.1f}% alvo (WR {_wr_pct:.0f}%) * "
+                    f"Stop @{stop_loss:.2f} -{_stop_pct_num:.1f}%"
+                )
+
+            elif final_sig == "sell":
                 if stage_num == 4:
-                    condicao = (
-                        f"VENDER: {stage_label} (tendencia de baixa confirmada) | "
-                        f"Sair da posicao. Aguardar preco retomar MA200 e formar nova base."
+                    recomendacao = (
+                        f"VENDER * Stage 4 Queda * Abaixo MA200 (tendencia de baixa) * "
+                        f"Sair e aguardar nova base"
                     )
                 elif stage_num == 3:
-                    condicao = (
-                        f"VENDER: {stage_label} + regime {_regime_str} (distribuicao em bear) | "
-                        f"Stop apertado em {pivot:.2f}. Nao abrir novas posicoes."
+                    recomendacao = (
+                        f"VENDER * Stage 3 Topo + regime {_regime_str} * "
+                        f"Distribuicao em bear * Stop @{pivot:.2f}"
                     )
                 else:
-                    condicao = (
-                        f"VENDER: {stage_label} + regime {_regime_str} | "
-                        f"Abaixo Pivot {pivot:.2f} com confianca baixa"
+                    recomendacao = (
+                        f"VENDER * {stage_label} * regime {_regime_str} * "
+                        f"Abaixo Pivot @{pivot:.2f}"
                     )
 
-            elif final_sig == "buy":
-                # === BUY (apenas Stage 2 ideal/momentum/cedo/pullback com GA buy) ===
-                if timing_sub == "ideal":
-                    condicao = (
-                        f"COMPRAR {best_buy:.2f} | {stage_label} ideal (preco colado MA50, regime {_regime_str}) | "
-                        f"Stop {stop_loss:.2f} (-{_stop_pct:.1f}%) Alvo {take_profit:.2f} (+{_alvo_pct:.1f}%)"
-                    )
-                elif timing_sub == "momentum":
-                    condicao = (
-                        f"COMPRAR {best_buy:.2f} | {stage_label} momentum (+{dist_ma_disp(close_val, _ma50_val)}% MA50) | "
-                        f"Stop {stop_loss:.2f} (-{_stop_pct:.1f}%) Alvo {take_profit:.2f} (+{_alvo_pct:.1f}%)"
-                    )
-                elif timing_sub == "cedo":
-                    condicao = (
-                        f"COMPRAR parcial {best_buy:.2f} | {stage_label} cedo (cruzamento MA50/MA200 recente) | "
-                        f"Stop {stop_loss:.2f} Alvo {take_profit:.2f} (menor convicção)"
-                    )
-                elif timing_sub == "pullback":
-                    condicao = (
-                        f"COMPRAR {best_buy:.2f} | {stage_label} em pullback (suporte S1 {s1:.2f}) | "
-                        f"Stop {stop_loss:.2f} Alvo {take_profit:.2f}"
-                    )
-                else:
-                    condicao = (
-                        f"COMPRAR {best_buy:.2f} | {stage_label} | "
-                        f"Stop {stop_loss:.2f} Alvo {take_profit:.2f}"
-                    )
-
-            else:  # final_sig == "hold"
-                # === HOLD com detalhes claros do que monitorar ===
+            else:  # hold
                 if stage_num == 2 and timing_sub in ("ideal", "momentum"):
-                    # Stage 2 bom mas GA nao disparou buy -> aguardar setup
                     if _above_r1:
-                        condicao = (
-                            f"AGUARDAR setup | {stage_label} acima R1 {r1:.2f} (esticado) | "
-                            f"Comprar em pullback ate Pivot {pivot:.2f} ou S1 {s1:.2f}"
+                        recomendacao = (
+                            f"AGUARDAR pullback * S2 Alta {timing_sub} * acima R1 (esticado) * "
+                            f"Comprar em pullback @{pivot:.2f} ou @{s1:.2f}"
                         )
                     elif _above_pivot:
-                        condicao = (
-                            f"AGUARDAR setup | {stage_label} entre Pivot e R1 | "
-                            f"Comprar se romper R1 {r1:.2f} (breakout) ou cair ate S1 {s1:.2f} (pullback)"
+                        recomendacao = (
+                            f"AGUARDAR setup * S2 Alta {timing_sub} * entre Pivot e R1 * "
+                            f"+{_alvo_pct_num:.1f}% se romper R1 @{r1:.2f}"
                         )
                     else:
-                        condicao = (
-                            f"AGUARDAR setup | {stage_label} abaixo Pivot {pivot:.2f} | "
-                            f"Comprar se retomar Pivot com volume"
+                        recomendacao = (
+                            f"AGUARDAR setup * S2 Alta {timing_sub} * abaixo Pivot * "
+                            f"Comprar se retomar @{pivot:.2f}"
                         )
                 elif stage_num == 2 and timing_sub == "cedo":
-                    condicao = (
-                        f"OBSERVAR | {stage_label} cedo (cruzamento MA50/MA200 recente, sem confirmacao) | "
-                        f"Comprar apos 3+ fechamentos acima R1 {r1:.2f}"
+                    recomendacao = (
+                        f"OBSERVAR * S2 Alta cedo (cruzamento recente) * "
+                        f"Comprar apos 3+ fechamentos acima R1 @{r1:.2f}"
                     )
                 elif stage_num == 2 and timing_sub == "pullback":
-                    condicao = (
-                        f"AGUARDAR suporte | {stage_label} em pullback (abaixo MA50 {_ma50_val:.2f}) | "
-                        f"Comprar se segurar S1 {s1:.2f} e retomar MA50"
+                    recomendacao = (
+                        f"AGUARDAR suporte * S2 Alta pullback * abaixo MA50 @{_ma50_val:.2f} * "
+                        f"Comprar se segurar S1 @{s1:.2f}"
                     )
                 elif stage_num == 2 and timing_sub == "atrasado":
-                    condicao = (
-                        f"AGUARDAR pullback | {stage_label} esticado +{dist_ma_disp(close_val, _ma50_val)}% da MA50 | "
-                        f"Comprar em correcao ate {s1:.2f} ou MA50 {_ma50_val:.2f}"
+                    recomendacao = (
+                        f"AGUARDAR pullback * S2 Alta atrasado (+{dist_ma_disp(close_val, _ma50_val)}% MA50) * "
+                        f"Esperar correcao ate @{s1:.2f}"
                     )
                 elif stage_num == 3:
-                    condicao = (
-                        f"AGUARDAR | {stage_label} (MA50 caindo, distribuicao em formacao) | "
-                        f"Nao abrir novas posicoes. Vender se perder Pivot {pivot:.2f}"
+                    recomendacao = (
+                        f"AGUARDAR * Stage 3 Topo (MA50 caindo) * "
+                        f"Nao abrir. Vender se perder Pivot @{pivot:.2f}"
                     )
                 elif stage_num == 1:
-                    condicao = (
-                        f"OBSERVAR | {stage_label} (base lateral, sem tendencia definida) | "
-                        f"Breakout = romper R1 {r1:.2f} com volume. Breakdown = perder S1 {s1:.2f}"
+                    recomendacao = (
+                        f"OBSERVAR * Stage 1 Base lateral * "
+                        f"Breakout @{r1:.2f} = comprar | Breakdown @{s1:.2f} = evitar"
                     )
                 else:
-                    condicao = (
-                        f"OBSERVAR | {estagio} (regime {_regime_str}) | "
-                        f"Pivot {pivot:.2f}, R1 {r1:.2f}, S1 {s1:.2f}"
+                    recomendacao = (
+                        f"OBSERVAR * {stage_label} * regime {_regime_str} * "
+                        f"R1 @{r1:.2f} S1 @{s1:.2f}"
                     )
+
+
+            # Formatar potencial_pct para exibicao
+            _potencial_pct_str = f"{potencial_pct:+.1f}%" if potencial_pct is not None else "-"
 
             results_apply.append({
                 # === Identificacao (esquerda) ===
                 "Date": pd.to_datetime(dates[i]).strftime("%Y-%m-%d"),
                 "ticker": tkr,
-                # === Decisao coerente (4 colunas na esquerda) ===
-                "signal": sig,               # final (apos override)
+                # === DECISAO UNIFICADA (coluna principal) ===
+                "recomendacao": recomendacao,
+                "potencial_pct": _potencial_pct_str,
+                # === Filtros rapidos (signal + estagio) ===
+                "signal": sig,
                 "estagio": estagio,
-                "acao": acao_final,
-                "condicao": condicao,
                 # === Preco e niveis operacionais ===
                 "close": round(close_val, 4),
                 "entrada": best_buy,
@@ -3683,20 +3701,17 @@ def run():
                 "stop": stop_loss,
                 "alvo": take_profit,
                 "RR": rr_display,
-                "stop_pct": stop_pct_val,
-                "alvo_pct": alvo_pct_val,
                 "pivot": pivot,
                 "r1": r1,
                 "s1": s1,
                 # === Metadados de qualidade ===
-                "potencial": potencial,
                 "rank": rank_score,
                 "confidence": round(confidence, 1),
                 "win_rate": round(bt_win_rate * 100, 1),
                 "queda_max": round(queda_max_esperada * 100, 1),
                 "regime": _regime_str,
                 # === Auditoria ===
-                "signal_ga": signal_ga,      # sinal bruto do GA (para debug)
+                "signal_ga": signal_ga,      # sinal bruto do GA (pre-override)
             })
 
         _tkr_meta = get_ticker_meta(tkr)
@@ -3721,7 +3736,7 @@ def run():
     df_app = pd.DataFrame(results_apply)
 
     # Schema validation: ensure required columns exist before saving
-    required_apply_cols = {"Date", "ticker", "signal", "estagio", "acao", "confidence", "rank", "close", "entrada", "stop", "alvo", "RR", "condicao"}
+    required_apply_cols = {"Date", "ticker", "recomendacao", "potencial_pct", "signal", "estagio", "confidence", "rank", "close", "entrada", "stop", "alvo", "RR"}
     required_summary_cols = {"ticker", "test_return", "test_mdd", "test_sharpe", "test_trades", "test_win_rate"}
     if not df_app.empty:
         missing_apply = sorted(required_apply_cols - set(df_app.columns))
@@ -3869,21 +3884,20 @@ def run():
                     col_comments = {
                         "Date": "Data do pregao",
                         "ticker": "Codigo do ativo",
-                        "signal": "buy = comprar | hold = aguardar",
-                        "confidence": "0-100: confianca no sinal\n20% win_rate + 15% distribuicao + 15% viabilidade\n10% backtest + 10% sinal + 10% acordo + 10% regime + 10% ML",
+                        "recomendacao": "Texto unificado com acao + stage + potencial + gatilho.\nSubstitui condicao/acao.",
+                        "potencial_pct": "Potencial de alta esperado (%):\n- BUY: % ate alvo\n- HOLD Stage 2: % ate R1 ou alvo\n- HOLD Stage 1: % ate breakout R1\n- HOLD Stage 3: potencial negativo (caminho = descer)\n- SELL: -",
+                        "signal": "buy = comprar | hold = aguardar | sell = sair",
+                        "estagio": "Minervini Stage + sub-timing:\nStage 1 Base, Stage 2 Alta (ideal/momentum/cedo/pullback/atrasado),\nStage 3 Topo, Stage 4 Queda",
+                        "confidence": "0-100: confianca no sinal (GA + stage + pivot)",
                         "close": "Preco de fechamento",
                         "entrada": "Preco sugerido de compra (ordem limite)",
                         "stop": "Stop loss (baseado em ATR)",
-                        "alvo": "Alvo de venda (baseado no potencial estatistico da acao,\nnao no ATR. Usa mediana+P75 dos retornos forward positivos)",
-                        "RR": "Risco:Retorno. Minimo 1.0 para comprar.\nEx: 2.5 = alvo 2.5x maior que stop",
-                        "stop_pct": "Stop em % do preco de entrada",
-                        "alvo_pct": "Alvo em % do preco de entrada",
-                        "queda_max": "Previsao de queda maxima (%) baseada no MDD historico\najustado pela volatilidade atual",
-                        "piso": "Preco piso estimado (close * (1 - queda_max))",
+                        "alvo": "Alvo de venda",
+                        "RR": "Risco:Retorno. Minimo 1.0 para comprar",
+                        "queda_max": "Previsao de queda maxima (%) baseada no MDD historico",
                         "win_rate": "Win rate do backtest (% trades positivos)",
-                        "wr_tier": "Classificacao: excelente(70%+) bom(60%+) aceitavel(52%+) fraco(<52%) ruim(<45%)",
-                        "dist_quality": "Qualidade da distribuicao (big wins vs big losses, 0-100)",
                         "regime": "Regime de mercado: favoravel/neutro/desfavoravel",
+                        "signal_ga": "Sinal bruto do GA antes do override por stage (auditoria)",
                     }
 
                     # Write headers with comments
@@ -3894,10 +3908,15 @@ def run():
 
                     # Column widths
                     apply_widths = {
-                        "Date": 12, "ticker": 12, "signal": 8, "confidence": 11,
-                        "close": 10, "entrada": 10, "stop": 10, "alvo": 10, "RR": 6,
-                        "stop_pct": 9, "alvo_pct": 9, "queda_max": 10, "piso": 10,
-                        "win_rate": 10, "wr_tier": 12, "dist_quality": 12, "regime": 13,
+                        "Date": 12, "ticker": 12,
+                        "recomendacao": 90,          # wide for full text
+                        "potencial_pct": 13,
+                        "signal": 8, "estagio": 26,
+                        "close": 10, "entrada": 10, "stop": 10, "alvo": 10,
+                        "saida": 10, "RR": 6,
+                        "pivot": 10, "r1": 10, "s1": 10,
+                        "rank": 8, "confidence": 11, "win_rate": 10,
+                        "queda_max": 10, "regime": 13, "signal_ga": 10,
                     }
                     for col_idx, col_name in enumerate(df_app.columns):
                         ws_app.set_column(col_idx, col_idx, apply_widths.get(col_name, 11))
