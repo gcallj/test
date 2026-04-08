@@ -639,6 +639,117 @@ def compute_regime_score(c: np.ndarray, ma200: np.ndarray, vol_rank: np.ndarray)
     return regime
 
 
+def dist_ma_disp(close: float, ma: float) -> str:
+    """Retorna string com % de distancia do preco ate a MA (para display)."""
+    if not (np.isfinite(close) and np.isfinite(ma)) or ma <= 0:
+        return "?"
+    pct = (close - ma) / ma * 100.0
+    return f"{pct:+.1f}"
+
+
+def classify_minervini_stage(
+    close: float,
+    ma50: float,
+    ma200: float,
+    ma50_prev: float,
+    ma200_prev: float,
+    high_20: float = None,
+) -> Tuple[int, str, str, str]:
+    """
+    Classifica o estagio da acao segundo Minervini Stage Analysis.
+
+    Retorna (stage_num, stage_label, timing_sub, action_hint):
+      - stage_num: 1, 2, 3, 4 ou 0 (indefinido)
+      - stage_label: "Stage 1 Base", "Stage 2 Alta", "Stage 3 Topo", "Stage 4 Queda"
+      - timing_sub: "ideal" / "cedo" / "atrasado" / "pullback" / "breakout" / "evitar" / "-"
+      - action_hint: "COMPRAR" / "COMPRAR cautela" / "OBSERVAR" / "AGUARDAR" / "EVITAR"
+
+    Stage 2 (Alta) com varias micro-posicoes:
+      - "ideal": preco entre MA50 e 10% acima, MA50 subindo firme
+      - "cedo": MA50 cruzou MA200 ha pouco (cruzamento recente)
+      - "atrasado": preco >15% acima da MA50 (esticado, aguardar pullback)
+      - "pullback": preco abaixo do MA50 mas ainda acima do MA200
+      - "breakout": Stage 1->2 transicao, preco rompendo topo 20d
+    """
+    # Check data availability
+    if not (np.isfinite(close) and np.isfinite(ma50) and np.isfinite(ma200)):
+        return (0, "Indefinido", "-", "OBSERVAR")
+
+    # Usar >= para incluir igualdade (evitar perder casos borderline)
+    above_50 = close >= ma50 * 0.999     # tolerancia 0.1%
+    below_50 = close < ma50 * 0.999
+    above_200 = close >= ma200 * 0.999
+    below_200 = close < ma200 * 0.999
+    ma_aligned_up = ma50 >= ma200 * 1.001   # MA50 claramente acima
+    ma_aligned_down = ma50 < ma200 * 0.999  # MA50 claramente abaixo
+
+    # MA slopes (previous vs current) - tolerancia 0.1%
+    ma50_rising = bool(np.isfinite(ma50_prev)) and ma50 > ma50_prev * 1.001
+    ma50_flat = bool(np.isfinite(ma50_prev)) and abs(ma50 - ma50_prev) / max(ma50_prev, ATR_EPS) <= 0.001
+    ma50_falling = bool(np.isfinite(ma50_prev)) and ma50 < ma50_prev * 0.999
+    ma200_rising = bool(np.isfinite(ma200_prev)) and ma200 > ma200_prev * 1.001
+    ma200_falling = bool(np.isfinite(ma200_prev)) and ma200 < ma200_prev * 0.999
+
+    dist_ma50 = (close - ma50) / max(ma50, ATR_EPS) if ma50 > 0 else 0.0
+    dist_ma200 = (close - ma200) / max(ma200, ATR_EPS) if ma200 > 0 else 0.0
+
+    # ========== STAGE 4: Queda (downtrend confirmado) ==========
+    # Criterios fortes: close < MA200 AND MA50 < MA200 (ou MA200 caindo)
+    if below_200 and (ma_aligned_down or ma200_falling):
+        return (4, "Stage 4 Queda", "evitar", "EVITAR")
+
+    # ========== STAGE 4 leve: close abaixo MA200 mas MA50 ainda alinhada ==========
+    if below_200:
+        return (4, "Stage 4 Queda", "evitar", "EVITAR")
+
+    # --- A partir daqui: close >= MA200 ---
+
+    # ========== STAGE 3: Topo (distribuicao, acima MA200 mas MA50 caindo) ==========
+    # Checar ANTES do Stage 2 porque MA50 caindo descarta uptrend
+    if ma50_falling or (ma200_rising is False and ma50_flat and dist_ma200 > 0.05):
+        return (3, "Stage 3 Topo", "evitar", "AGUARDAR")
+
+    # ========== STAGE 1: Base (consolidacao lateral) ==========
+    # MA50 plana (+/-0.1%) e MA200 nao subindo forte = lateralidade
+    if ma50_flat and not ma200_rising:
+        return (1, "Stage 1 Base", "consolidacao", "OBSERVAR")
+
+    # --- A partir daqui: MA50 subindo e close > MA200 ---
+
+    # ========== STAGE 2 CEDO (checar ANTES de ideal): ==========
+    # MA50 cruzou MA200 ha pouco (diff MA50-MA200 < 3%) + MA50 subindo
+    # Isso indica transicao Stage 1->2, ainda nao confirmado
+    if above_50 and ma50_rising and above_200:
+        ma50_above_ma200_pct = (ma50 - ma200) / max(ma200, ATR_EPS)
+        if 0 <= ma50_above_ma200_pct < 0.03:
+            return (2, "Stage 2 Alta", "cedo", "COMPRAR cautela")
+
+    # ========== STAGE 2: Alta com MA50 subindo firme (cruzamento ja consolidado) ==========
+    if above_50 and ma_aligned_up and ma50_rising:
+        # Sub-classificacao por distancia da MA50:
+        if dist_ma50 > 0.15:
+            # Preco muito esticado da MA50 (>15%)
+            return (2, "Stage 2 Alta", "atrasado", "AGUARDAR")
+        elif abs(dist_ma50) <= 0.03:
+            # Preco colado a MA50 (+/-3%) = ideal para entrar
+            return (2, "Stage 2 Alta", "ideal", "COMPRAR")
+        elif dist_ma50 > 0.03:
+            # Entre +3% e +15% = momentum
+            return (2, "Stage 2 Alta", "momentum", "COMPRAR")
+
+    # ========== STAGE 2 PULLBACK: close abaixo MA50 mas Stage 2 ainda valido ==========
+    # above_200 + below_50 + MA50 ainda subindo ou MA200 subindo
+    if below_50 and above_200 and (ma50_rising or ma200_rising or ma_aligned_up):
+        return (2, "Stage 2 Alta", "pullback", "COMPRAR cautela")
+
+    # ========== STAGE 1 fallback: acima MA200 mas sem forca ==========
+    if above_200:
+        return (1, "Stage 1 Base", "consolidacao", "OBSERVAR")
+
+    # Fallback geral: indefinido
+    return (0, "Indefinido", "-", "OBSERVAR")
+
+
 def compute_weighted_votes(x: np.ndarray, z_threshold: float, feat_n: int):
     """Votação ponderada por magnitude: combina contagem binária com peso contínuo."""
     binary_long = (x > z_threshold).sum(axis=1) / feat_n
@@ -3216,37 +3327,40 @@ def run():
             s1 = round(2 * pivot - _prev_h, 4)
             r2 = round(pivot + (_prev_h - _prev_l), 4)
 
-            # ── TIMING + CONDICAO: integrados e coerentes ──
+            # ── TIMING + CONDICAO: integrados e coerentes (Minervini Stages) ──
             _ma50_val = ma50_apply[i] if i < len(ma50_apply) and np.isfinite(ma50_apply[i]) else np.nan
             _ma200_val = ma200_apply[i] if i < len(ma200_apply) and np.isfinite(ma200_apply[i]) else np.nan
+            # MAs anteriores (20d atras) para detectar slope
+            _ma50_prev = ma50_apply[i - 20] if i >= 20 and np.isfinite(ma50_apply[i - 20]) else np.nan
+            _ma200_prev = ma200_apply[i - 20] if i >= 20 and np.isfinite(ma200_apply[i - 20]) else np.nan
+            # Maxima dos ultimos 20 dias para detectar breakout
+            _high_20 = float(np.nanmax(payload["high"][max(0, i - 19):i + 1])) if i >= 0 else close_val
 
-            # VCP contraction
+            # VCP contraction (volatilidade contraindo)
             _vcp_score = 0.0
             if i >= 20:
                 _rng_10 = float(np.max(payload["high"][max(0,i-9):i+1]) - np.min(payload["low"][max(0,i-9):i+1]))
                 _rng_20 = float(np.max(payload["high"][max(0,i-19):i+1]) - np.min(payload["low"][max(0,i-19):i+1]))
                 _vcp_score = 1.0 - min(_rng_10 / max(_rng_20, ATR_EPS), 1.0)
 
-            # Determine timing from MAs (Minervini Stage)
-            if np.isfinite(_ma50_val) and np.isfinite(_ma200_val):
-                _above_50 = close_val > _ma50_val
-                _above_200 = close_val > _ma200_val
-                _ma_aligned = _ma50_val > _ma200_val
-
-                if _above_200 and _above_50 and _ma_aligned:
-                    timing = "no time"
-                elif _above_200 and not _above_50:
-                    timing = "cedo"
-                elif not _above_200:
-                    timing = "muito cedo"
-                else:
-                    timing = "atrasado"
-            else:
-                timing = "neutro"
+            # Classificacao Minervini
+            stage_num, stage_label, timing_sub, action_hint = classify_minervini_stage(
+                close=close_val,
+                ma50=_ma50_val,
+                ma200=_ma200_val,
+                ma50_prev=_ma50_prev,
+                ma200_prev=_ma200_prev,
+                high_20=_high_20,
+            )
+            # Label composta: "Stage 2 Alta - ideal"
+            estagio = f"{stage_label} - {timing_sub}" if timing_sub != "-" else stage_label
+            # Legacy "timing" field mantido para compatibilidade (agora com vocab novo)
+            timing = timing_sub if timing_sub != "-" else "indefinido"
 
             # Determine condicao: integra timing + pivot + signal
             _above_pivot = close_val > pivot
             _above_r1 = close_val > r1
+            _above_s1 = close_val > s1
 
             # ── Entrada/Saida coerentes com pivot levels ──
             # BUY: entrada perto de S1 (suporte), saida/alvo perto de R1 (resistencia)
@@ -3278,34 +3392,122 @@ def run():
             # Saida coerente com alvo
             best_sell = round(min(take_profit * 0.99, close_val * 1.02), 4) if sig == "buy" else round(close_val, 4)
 
-            # ── Condicao unificada: timing + regime + acao ──
+            # ── Condicao unificada: stage + regime + acao concreta ──
             _regime_str = "favoravel" if regime_val >= 0.6 else ("neutro" if regime_val >= 0.3 else "desfavoravel")
+
+            # Helper: nivel a monitorar baseado em distancia do preco
+            _stop_pct = abs(stop_loss - best_buy) / max(best_buy, ATR_EPS) * 100.0 if best_buy > 0 else 0.0
+            _alvo_pct = (take_profit - best_buy) / max(best_buy, ATR_EPS) * 100.0 if best_buy > 0 else 0.0
+
             if sig == "buy":
-                if timing == "no time" and _regime_str == "favoravel":
-                    if _above_r1:
-                        condicao = f"BUY {best_buy:.2f} | Forte: acima R1 | Regime OK | Stop {stop_loss:.2f} Alvo {take_profit:.2f}"
-                    elif _above_pivot:
-                        condicao = f"BUY {best_buy:.2f} | Acima Pivot | Regime OK | Stop {stop_loss:.2f} Alvo {take_profit:.2f}"
-                    else:
-                        condicao = f"BUY {best_buy:.2f} se romper Pivot {pivot:.2f} | Regime OK | Stop {stop_loss:.2f}"
-                elif timing == "cedo":
-                    condicao = f"BUY cautela {best_buy:.2f} | Cedo ({_regime_str}) | Stop {stop_loss:.2f}"
-                elif timing == "muito cedo":
-                    condicao = f"AGUARDAR | Muito cedo ({_regime_str}) | Suporte S1 {s1:.2f}"
-                elif timing == "atrasado":
-                    condicao = f"BUY parcial {best_buy:.2f} | Atrasado ({_regime_str}) | Stop {stop_loss:.2f}"
+                # =========== BUY SIGNALS ===========
+                if stage_num == 2 and timing_sub == "ideal":
+                    # Stage 2 perfeito, preco colado a MA50
+                    condicao = (
+                        f"COMPRAR {best_buy:.2f} | {stage_label} ideal (regime {_regime_str}) | "
+                        f"Stop {stop_loss:.2f} (-{_stop_pct:.1f}%) Alvo {take_profit:.2f} (+{_alvo_pct:.1f}%)"
+                    )
+                elif stage_num == 2 and timing_sub == "momentum":
+                    condicao = (
+                        f"COMPRAR {best_buy:.2f} | {stage_label} momentum (acima Pivot {pivot:.2f}) | "
+                        f"Stop {stop_loss:.2f} Alvo {take_profit:.2f}"
+                    )
+                elif stage_num == 2 and timing_sub == "cedo":
+                    condicao = (
+                        f"COMPRAR parcial {best_buy:.2f} | {stage_label} cedo (cruzamento recente) | "
+                        f"Stop {stop_loss:.2f} Alvo {take_profit:.2f}"
+                    )
+                elif stage_num == 2 and timing_sub == "pullback":
+                    condicao = (
+                        f"COMPRAR {best_buy:.2f} | {stage_label} em pullback ate S1 {s1:.2f} | "
+                        f"Stop {stop_loss:.2f} Alvo {take_profit:.2f}"
+                    )
+                elif stage_num == 2 and timing_sub == "atrasado":
+                    condicao = (
+                        f"AGUARDAR pullback ate {s1:.2f} | {stage_label} atrasado (preco esticado +{dist_ma_disp(close_val, _ma50_val)}% MA50) | "
+                        f"Se comprar: Stop {stop_loss:.2f}"
+                    )
+                elif stage_num == 4:
+                    condicao = (
+                        f"EVITAR - {stage_label} (sinal buy ignorado por tendencia de baixa) | "
+                        f"Aguardar formacao de base acima MA200"
+                    )
+                elif stage_num == 3:
+                    condicao = (
+                        f"CAUTELA - {stage_label} (possivel distribuicao) | "
+                        f"Se comprar: Stop apertado {stop_loss:.2f}, sair em R1 {r1:.2f}"
+                    )
+                elif stage_num == 1:
+                    condicao = (
+                        f"AGUARDAR breakout de R1 {r1:.2f} | {stage_label} (consolidacao lateral) | "
+                        f"Comprar se volume confirmar: entrada {best_buy:.2f}"
+                    )
                 else:
-                    condicao = f"BUY {best_buy:.2f} | {timing} ({_regime_str}) | Stop {stop_loss:.2f} Alvo {take_profit:.2f}"
+                    condicao = (
+                        f"COMPRAR {best_buy:.2f} | {stage_label} | "
+                        f"Stop {stop_loss:.2f} Alvo {take_profit:.2f}"
+                    )
             else:
-                if _above_pivot:
-                    condicao = f"HOLD | Acima Pivot {pivot:.2f} | {timing} ({_regime_str})"
+                # =========== HOLD SIGNALS ===========
+                if stage_num == 2 and timing_sub in ("ideal", "momentum"):
+                    # Stage 2 bom mas sem gatilho - mostrar oque monitorar
+                    if _above_r1:
+                        condicao = (
+                            f"HOLD: {stage_label} acima R1 {r1:.2f} (momentum forte) | "
+                            f"Comprar em pullback para Pivot {pivot:.2f} ou S1 {s1:.2f}"
+                        )
+                    elif _above_pivot:
+                        condicao = (
+                            f"HOLD: {stage_label} sem setup agora | "
+                            f"Comprar se romper R1 {r1:.2f} ou pullback S1 {s1:.2f}"
+                        )
+                    else:
+                        condicao = (
+                            f"HOLD: {stage_label} abaixo Pivot {pivot:.2f} | "
+                            f"Comprar se retomar Pivot (confirma alta)"
+                        )
+                elif stage_num == 2 and timing_sub == "cedo":
+                    condicao = (
+                        f"HOLD: {stage_label} cedo (cruzamento MA50/MA200 recente) | "
+                        f"Aguardar confirmacao acima R1 {r1:.2f}"
+                    )
+                elif stage_num == 2 and timing_sub == "pullback":
+                    condicao = (
+                        f"HOLD: {stage_label} em pullback | "
+                        f"Comprar se segurar S1 {s1:.2f} e retomar MA50"
+                    )
+                elif stage_num == 2 and timing_sub == "atrasado":
+                    condicao = (
+                        f"HOLD: {stage_label} esticado +{dist_ma_disp(close_val, _ma50_val)}% da MA50 | "
+                        f"Aguardar pullback para {s1:.2f} antes de comprar"
+                    )
+                elif stage_num == 3:
+                    condicao = (
+                        f"HOLD: {stage_label} (topo em formacao) | "
+                        f"Vender se perder Pivot {pivot:.2f}. Nao abrir novas posicoes."
+                    )
+                elif stage_num == 4:
+                    condicao = (
+                        f"EVITAR: {stage_label} (tendencia de baixa confirmada) | "
+                        f"Aguardar preco retomar MA200 e formar base (Stage 1)"
+                    )
+                elif stage_num == 1:
+                    condicao = (
+                        f"OBSERVAR: {stage_label} (base lateral) | "
+                        f"Breakout = romper R1 {r1:.2f} com volume. Breakdown = perder S1 {s1:.2f}"
+                    )
                 else:
-                    condicao = f"HOLD | Abaixo Pivot {pivot:.2f} | {timing} ({_regime_str})"
+                    condicao = (
+                        f"HOLD: {stage_label} (regime {_regime_str}) | "
+                        f"Pivot {pivot:.2f}, R1 {r1:.2f}, S1 {s1:.2f}"
+                    )
 
             results_apply.append({
                 "Date": pd.to_datetime(dates[i]).strftime("%Y-%m-%d"),
                 "ticker": tkr,
                 "signal": sig,
+                "estagio": estagio,
+                "acao": action_hint,
                 "potencial": potencial,
                 "rank": rank_score,
                 "confidence": round(confidence, 1),
@@ -3352,7 +3554,7 @@ def run():
     df_app = pd.DataFrame(results_apply)
 
     # Schema validation: ensure required columns exist before saving
-    required_apply_cols = {"Date", "ticker", "signal", "confidence", "rank", "close", "entrada", "stop", "alvo", "RR"}
+    required_apply_cols = {"Date", "ticker", "signal", "estagio", "acao", "confidence", "rank", "close", "entrada", "stop", "alvo", "RR", "condicao"}
     required_summary_cols = {"ticker", "test_return", "test_mdd", "test_sharpe", "test_trades", "test_win_rate"}
     if not df_app.empty:
         missing_apply = sorted(required_apply_cols - set(df_app.columns))
@@ -3371,32 +3573,36 @@ def run():
         # -- Promote hold → sell for clearly unfavorable conditions -----------
         # This is DISPLAY ONLY (planilha) — does NOT affect GA training or
         # backtest metrics. Conditions for sell signal:
-        #   1. regime desfavoravel + timing muito cedo (bear trend, no base)
+        #   1. Stage 4 (Queda) = tendencia de baixa confirmada
         #   2. regime desfavoravel + abaixo do pivot + confidence < 35
-        #   3. timing atrasado + regime desfavoravel (overextended in bear)
+        #   3. Stage 3 Topo com regime desfavoravel (distribuicao em bear)
         _sell_mask = pd.Series(False, index=df_app.index)
         _is_hold = df_app["signal"] == "hold"
         _regime_desf = df_app["regime"] == "desfavoravel"
         _below_pivot = df_app["close"] < df_app["pivot"]
         _low_conf = df_app["confidence"] < 35.0
-        # Detect timing from condicao field (timing is now embedded)
-        _cond_str = df_app["condicao"].fillna("").astype(str)
-        _timing_mc = _cond_str.str.contains("Muito cedo", case=False)
-        _timing_atr = _cond_str.str.contains("Atrasado", case=False)
+        # Detect stage from new "estagio" column
+        _estagio_str = df_app["estagio"].fillna("").astype(str)
+        _is_stage4 = _estagio_str.str.contains("Stage 4", case=False)
+        _is_stage3 = _estagio_str.str.contains("Stage 3", case=False)
 
-        # Regra 1: bear trend + sem base formada
-        _sell_mask |= (_is_hold & _regime_desf & _timing_mc)
-        # Regra 2: bear trend + abaixo do pivot + confiança baixa
+        # Regra 1: Stage 4 = tendencia de baixa confirmada (sempre vender/evitar)
+        _sell_mask |= (_is_hold & _is_stage4)
+        # Regra 2: bear trend + abaixo do pivot + confianca baixa
         _sell_mask |= (_is_hold & _regime_desf & _below_pivot & _low_conf)
-        # Regra 3: atrasado em bear (overextended, risco de reversão)
-        _sell_mask |= (_is_hold & _regime_desf & _timing_atr)
+        # Regra 3: Stage 3 com regime desfavoravel (topo em bear)
+        _sell_mask |= (_is_hold & _regime_desf & _is_stage3)
 
         # Apply sell signal and update condicao
         df_app.loc[_sell_mask, "signal"] = "sell"
-        df_app.loc[_sell_mask & _timing_mc, "condicao"] = "SELL | Tendencia de baixa | Muito cedo (desfavoravel)"
-        df_app.loc[_sell_mask & _timing_atr, "condicao"] = "SELL | Atrasado em bear | Risco de reversao"
-        df_app.loc[_sell_mask & ~_timing_mc & ~_timing_atr, "condicao"] = (
-            "SELL | Regime desfavoravel | Abaixo do Pivot | Confianca baixa"
+        df_app.loc[_sell_mask & _is_stage4, "condicao"] = (
+            "VENDER: Stage 4 Queda (tendencia de baixa) | Sair e aguardar nova base acima MA200"
+        )
+        df_app.loc[_sell_mask & _is_stage3, "condicao"] = (
+            "VENDER: Stage 3 Topo + regime desfavoravel | Distribuicao, sair antes do breakdown"
+        )
+        df_app.loc[_sell_mask & ~_is_stage4 & ~_is_stage3, "condicao"] = (
+            "VENDER: Regime desfavoravel + abaixo Pivot + confianca baixa | Evitar posicao"
         )
 
         _n_sells = int(_sell_mask.sum())
