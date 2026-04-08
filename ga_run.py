@@ -3229,16 +3229,38 @@ def run():
             # q_dist (v5): trade return distribution quality — big wins vs big losses
             q_dist = float(np.clip(bt_dist_quality, 0.0, 1.0))
 
-            # -- Pre-compute timing/pivot for use in confidence --
+            # -- Pre-compute Minervini stage (usado por confidence, rank e condicao) --
             _ma50_pre = ma50_apply[i] if i < len(ma50_apply) and np.isfinite(ma50_apply[i]) else np.nan
             _ma200_pre = ma200_apply[i] if i < len(ma200_apply) and np.isfinite(ma200_apply[i]) else np.nan
-            if np.isfinite(_ma50_pre) and np.isfinite(_ma200_pre):
-                _a50 = close_val > _ma50_pre
-                _a200 = close_val > _ma200_pre
-                _aligned = _ma50_pre > _ma200_pre
-                q_timing_pre = 1.0 if (_a200 and _a50 and _aligned) else (0.5 if _a200 else 0.2)
-            else:
-                q_timing_pre = 0.5
+            _ma50_prev_pre = ma50_apply[i - 20] if i >= 20 and np.isfinite(ma50_apply[i - 20]) else np.nan
+            _ma200_prev_pre = ma200_apply[i - 20] if i >= 20 and np.isfinite(ma200_apply[i - 20]) else np.nan
+            _high_20_pre = float(np.nanmax(payload["high"][max(0, i - 19):i + 1])) if i >= 0 else close_val
+
+            _stage_num_pre, _stage_label_pre, _timing_sub_pre, _stage_hint_pre = classify_minervini_stage(
+                close=close_val,
+                ma50=_ma50_pre,
+                ma200=_ma200_pre,
+                ma50_prev=_ma50_prev_pre,
+                ma200_prev=_ma200_prev_pre,
+                high_20=_high_20_pre,
+            )
+
+            # q_timing_pre derivado do stage + sub_timing (0.0 - 1.0)
+            # Granularidade fina reflete qualidade real da oportunidade
+            _timing_quality_map = {
+                (2, "ideal"):        1.00,  # Stage 2 pegada ideal = melhor cenario
+                (2, "momentum"):     0.90,  # Momentum estabelecido
+                (2, "pullback"):     0.75,  # Correcao em tendencia
+                (2, "cedo"):         0.70,  # Cruzamento recente, cautela
+                (2, "atrasado"):     0.55,  # Preco esticado, risco
+                (1, "consolidacao"): 0.45,  # Base lateral, aguardar
+                (3, "evitar"):       0.25,  # Topo em formacao
+                (4, "evitar"):       0.10,  # Queda confirmada
+                (0, "-"):            0.40,  # Dados insuficientes
+            }
+            q_timing_pre = _timing_quality_map.get(
+                (_stage_num_pre, _timing_sub_pre), 0.40
+            )
 
             # Pivot pre-compute for confidence
             _prev_h_pre = float(payload["high"][i]) if i < len(payload["high"]) else close_val
@@ -3252,12 +3274,21 @@ def run():
                 penalty *= 0.6
             if sig == "buy" and rr_ratio < 1.5:
                 penalty *= 0.7
+            # Stage-based penalty: GA buy em Stage 3/4 eh suspeito
+            if sig == "buy" and _stage_num_pre == 3:
+                penalty *= 0.55  # topo em formacao
+            elif sig == "buy" and _stage_num_pre == 4:
+                penalty *= 0.35  # queda confirmada
+            elif sig == "buy" and _stage_num_pre == 2 and _timing_sub_pre == "atrasado":
+                penalty *= 0.70  # preco esticado, aguardar pullback
+            elif sig == "buy" and _stage_num_pre == 1:
+                penalty *= 0.75  # base lateral, aguardar breakout
 
-            # Confidence (0-100): 10 fatores including timing + pivot
+            # Confidence (0-100): 10 fatores including timing + pivot (stage-aware)
             # Improved: higher base (30%) + weighted factors to push median above 60
             raw_conf = (0.10 * q_bt + 0.08 * q_sig + 0.18 * q_wr + 0.10 * q_dist +
                  0.06 * q_agree + 0.08 * q_regime + 0.06 * q_ml + 0.10 * q_viability +
-                 0.14 * q_timing_pre +     # timing (Minervini stage)
+                 0.14 * q_timing_pre +     # timing (Minervini stage - granular)
                  0.10 * q_pivot_pre)       # posicao vs pivot
             # Apply penalty but ensure base floor of 30 for trades with reasonable WR
             base_floor = 25.0 if bt_win_rate > 0.55 else 15.0
@@ -3398,31 +3429,21 @@ def run():
             s1 = round(2 * pivot - _prev_h, 4)
             r2 = round(pivot + (_prev_h - _prev_l), 4)
 
-            # ── TIMING + CONDICAO: integrados e coerentes (Minervini Stages) ──
-            _ma50_val = ma50_apply[i] if i < len(ma50_apply) and np.isfinite(ma50_apply[i]) else np.nan
-            _ma200_val = ma200_apply[i] if i < len(ma200_apply) and np.isfinite(ma200_apply[i]) else np.nan
-            # MAs anteriores (20d atras) para detectar slope
-            _ma50_prev = ma50_apply[i - 20] if i >= 20 and np.isfinite(ma50_apply[i - 20]) else np.nan
-            _ma200_prev = ma200_apply[i - 20] if i >= 20 and np.isfinite(ma200_apply[i - 20]) else np.nan
-            # Maxima dos ultimos 20 dias para detectar breakout
-            _high_20 = float(np.nanmax(payload["high"][max(0, i - 19):i + 1])) if i >= 0 else close_val
+            # ── Reusa classificacao Minervini calculada ANTES da confidence ──
+            # (_stage_num_pre, _stage_label_pre, _timing_sub_pre ja disponiveis)
+            stage_num = _stage_num_pre
+            stage_label = _stage_label_pre
+            timing_sub = _timing_sub_pre
+            _ma50_val = _ma50_pre
+            _ma200_val = _ma200_pre
 
-            # VCP contraction (volatilidade contraindo)
+            # VCP contraction (volatilidade contraindo) - usado apenas para narrativa
             _vcp_score = 0.0
             if i >= 20:
                 _rng_10 = float(np.max(payload["high"][max(0,i-9):i+1]) - np.min(payload["low"][max(0,i-9):i+1]))
                 _rng_20 = float(np.max(payload["high"][max(0,i-19):i+1]) - np.min(payload["low"][max(0,i-19):i+1]))
                 _vcp_score = 1.0 - min(_rng_10 / max(_rng_20, ATR_EPS), 1.0)
 
-            # Classificacao Minervini
-            stage_num, stage_label, timing_sub, _stage_hint = classify_minervini_stage(
-                close=close_val,
-                ma50=_ma50_val,
-                ma200=_ma200_val,
-                ma50_prev=_ma50_prev,
-                ma200_prev=_ma200_prev,
-                high_20=_high_20,
-            )
             # Label composta: "Stage 2 Alta - ideal"
             estagio = f"{stage_label} - {timing_sub}" if timing_sub != "-" else stage_label
             timing = timing_sub if timing_sub != "-" else "indefinido"
@@ -3471,6 +3492,43 @@ def run():
             signal_ga = sig
             # Signal final (que vai para o usuario)
             sig = final_sig
+
+            # ═══════════════════════════════════════════════════════════════
+            # AJUSTE DE RANK/POTENCIAL baseado no signal final
+            # ═══════════════════════════════════════════════════════════════
+            # Rank deve refletir a decisao final, nao apenas o GA:
+            #   - sell (Stage 4 ou 3+bear): rank <= 30 (topo do ranking = oportunidade)
+            #   - hold cautela (Stage 3): rank <= 55
+            #   - hold setup (Stage 2): rank <= 75 (ainda relevante para monitorar)
+            #   - buy (Stage 2 ideal/momentum): rank = full (0-100)
+            if final_sig == "sell":
+                # Sells ficam no bottom do ranking (ordenados por urgencia inversa)
+                rank_score = round(min(rank_score, 30.0), 1)
+            elif final_sig == "hold":
+                if stage_num == 3:
+                    rank_score = round(min(rank_score, 55.0), 1)
+                elif stage_num == 4:
+                    rank_score = round(min(rank_score, 30.0), 1)
+                elif stage_num == 2 and timing_sub == "atrasado":
+                    rank_score = round(min(rank_score, 65.0), 1)
+                elif stage_num == 1:
+                    rank_score = round(min(rank_score, 70.0), 1)
+                # Stage 2 ideal/momentum/cedo/pullback holds: mantem rank (sao bons watchlist)
+            # Buys mantem rank original
+
+            # Potencial tambem reflete signal final
+            if final_sig == "sell":
+                potencial = "-"
+            elif final_sig == "hold":
+                if stage_num == 2 and timing_sub in ("ideal", "momentum"):
+                    potencial = "watchlist"  # bom, aguardando gatilho
+                elif stage_num == 2 and timing_sub in ("cedo", "pullback"):
+                    potencial = "cautela"
+                elif stage_num == 1:
+                    potencial = "observar"
+                else:
+                    potencial = "-"
+            # buys mantem classificacao original (alto/medio/baixo)
 
             # ═══════════════════════════════════════════════════════════════
             # CONDICAO: narrativa coerente com signal + stage + acao
