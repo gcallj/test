@@ -100,6 +100,51 @@ else:
     alpha_ann_med = 0
     pct_beat_bh = 0
 
+# -- Premium/High-Quality subsets: load pre-computed alpha analysis --
+# Shows where the model has REAL edge over full history (more reliable than
+# a single walk-forward test window). Computed by analysis/ticker_alpha_subset.py.
+premium_caption = ""
+premium_json_path = "analysis/ticker_alpha_analysis.json"
+if os.path.exists(premium_json_path):
+    try:
+        with open(premium_json_path, "r", encoding="utf-8") as _fpa:
+            _alpha_data = json.load(_fpa)
+        _all_tk = _alpha_data.get("all_tickers", [])
+
+        def _subset_stats(tickers_list):
+            rows = [r for r in _all_tk if r["ticker"] in set(tickers_list)]
+            if not rows:
+                return None
+            return {
+                "n": len(rows),
+                "wr": float(np.median([r["wr"] for r in rows])) * 100,
+                "ret": float(np.median([r["ret_ann"] for r in rows])) * 100,
+                "alp": float(np.median([r["alpha_ann_pp"] for r in rows])),
+                "mdd": float(np.median([r["mdd"] for r in rows])) * 100,
+            }
+
+        _hq_list = _alpha_data.get("high_quality_subset", {}).get("tickers", [])
+        _prem_list = _alpha_data.get("premium_subset", {}).get("tickers", [])
+        _hq = _subset_stats(_hq_list) if _hq_list else None
+        _prem = _subset_stats(_prem_list) if _prem_list else None
+
+        subset_lines = []
+        if _hq:
+            subset_lines.append(
+                f"\n\nHigh-Quality (n={_hq['n']}, alpha>=0 & WR>=65%):\n"
+                f"  WR {_hq['wr']:.1f}% | Ret {_hq['ret']:+.1f}%a.a. "
+                f"| Alpha {_hq['alp']:+.1f}pp | MDD {_hq['mdd']:.1f}%"
+            )
+        if _prem:
+            subset_lines.append(
+                f"\nPremium (n={_prem['n']}, alpha>=+2pp & WR>=68%):\n"
+                f"  WR {_prem['wr']:.1f}% | Ret {_prem['ret']:+.1f}%a.a. "
+                f"| Alpha {_prem['alp']:+.1f}pp | MDD {_prem['mdd']:.1f}%"
+            )
+        premium_caption = "".join(subset_lines)
+    except Exception as _e:
+        print(f"[WARN] premium subset load failed: {_e}")
+
 # Current checkpoint fitness
 ck = json.load(open("global_ga_checkpoint.json"))
 global_fit = float(ck.get("fitness", 0.0))
@@ -138,6 +183,7 @@ caption = (
     f"Ret a.a.: {ret_ann_med:+.1f}% vs B&H {bh_ann_med:+.1f}% (~{int(n_years)}a)\n"
     f"Alpha a.a.: {alpha_ann_med:+.1f}pp | Batem B&H: {pct_beat_bh:.0f}%\n"
     f"Confidence: {conf_med:.0f} | Fitness: {global_fit:.2f}"
+    f"{premium_caption}"
     f"{top_buys}"
 )
 

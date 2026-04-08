@@ -152,6 +152,13 @@ MIN_VOL_FIN_DAILY = 200_000  # R$200k/dia — focus on liquid tickers to save me
 # Apply output constraints
 MIN_STOP_PCT = 0.02       # 2% minimum stop (avoids unrealistic tight stops)
 MIN_RR_RATIO = 1.5        # Minimum risk-reward ratio
+
+# Minervini Stage gate (opcional, via env var)
+# "off"       = no gate (default, backward compatible)
+# "soft"      = attenuate score_matrix by 50% in Stage 3/4/2atrasado bars
+# "aggressive"= zero score_matrix in bars not in Stage 2 ideal/momentum/pullback
+# "negative"  = zero score_matrix in Stage 4 Queda bars only
+GA_STAGE_GATE = os.environ.get("GA_STAGE_GATE", "off").lower()
 MIN_BUY_CONFIDENCE = 38.0 # Lowered from 50 to allow more buy signals while maintaining quality gate
 
 # Friction — custos realistas Brasil
@@ -849,7 +856,65 @@ def compute_weighted_votes(x: np.ndarray, z_threshold: float, feat_n: int):
     return votes_long, votes_short
 
 
-def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalParams, precomputed: Optional[Dict[str, np.ndarray]] = None) -> Dict[str, float]:
+def _apply_stage_gate_to_score_matrix(
+    x: np.ndarray, c: np.ndarray, mode: str
+) -> np.ndarray:
+    """
+    Pre-processa score_matrix aplicando filtro Minervini Stage.
+
+    Modos:
+      - "soft":      atenua 50% em Stage 3/4/Stage 2 atrasado
+      - "aggressive": zera em bars fora de Stage 2 ideal/momentum/pullback
+      - "negative":  zera em Stage 4 Queda apenas
+      - "off" ou outro: retorna x inalterado
+
+    Para performance, computa ma50/ma200 uma vez e classifica todos os bars
+    em um loop Python (~50ms por ticker). Retorna copia modificada.
+    """
+    if mode == "off" or mode not in ("soft", "aggressive", "negative"):
+        return x
+
+    n = len(c)
+    if n < 50:  # nao tem MA50
+        return x
+
+    ma50 = rolling_mean_np(c, 50, 10)
+    ma200 = rolling_mean_np(c, 200, 50)
+
+    x_out = x.copy()
+    for i in range(n):
+        if not (np.isfinite(ma50[i]) and np.isfinite(ma200[i])):
+            continue
+        ma50_prev = ma50[i - 20] if i >= 20 else np.nan
+        ma200_prev = ma200[i - 20] if i >= 20 else np.nan
+        stage_num, _, timing_sub, _ = classify_minervini_stage(
+            close=float(c[i]),
+            ma50=float(ma50[i]),
+            ma200=float(ma200[i]),
+            ma50_prev=float(ma50_prev) if np.isfinite(ma50_prev) else np.nan,
+            ma200_prev=float(ma200_prev) if np.isfinite(ma200_prev) else np.nan,
+        )
+
+        if mode == "aggressive":
+            allowed = stage_num == 2 and timing_sub in ("ideal", "momentum", "pullback")
+            if not allowed:
+                x_out[i, :] = 0.0
+        elif mode == "negative":
+            if stage_num == 4:
+                x_out[i, :] = 0.0
+        elif mode == "soft":
+            bad = (
+                stage_num == 4
+                or stage_num == 3
+                or (stage_num == 2 and timing_sub == "atrasado")
+            )
+            if bad:
+                x_out[i, :] *= 0.5
+
+    return x_out
+
+
+def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalParams, precomputed: Optional[Dict[str, np.ndarray]] = None, stage_gate: Optional[str] = None) -> Dict[str, float]:
     o = np.asarray(o, dtype=np.float64)
     h = np.asarray(h, dtype=np.float64)
     l = np.asarray(l, dtype=np.float64)
@@ -859,6 +924,11 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
     n = len(c)
     if n < 5 or x.ndim != 2 or x.shape[0] != n:
         return {"total_return": 0.0, "mdd": 0.0, "sharpe": 0.0, "n_trades": 0.0, "win_rate": 0.0, "avg_trade": 0.0}
+
+    # --- Apply Minervini stage gate (opcional) ---
+    _gate = stage_gate if stage_gate is not None else GA_STAGE_GATE
+    if _gate != "off":
+        x = _apply_stage_gate_to_score_matrix(x, c, _gate)
 
     feat_n = max(1, x.shape[1])
     ma = rolling_mean_np(c, int(gp.ma_filter_period), max(20, int(gp.ma_filter_period // 2)))

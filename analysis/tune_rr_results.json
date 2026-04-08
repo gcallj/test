@@ -1,0 +1,312 @@
+{
+  "base": {
+    "fit": 12.84040730846909,
+    "wr_med": 0.6714285714285714,
+    "ret_med": 0.5398628103594221,
+    "mdd_med": 0.1962028540100753,
+    "trades_med": 147.0,
+    "sharpe_med": 0.21727414440833412,
+    "n_ge_70": 29
+  },
+  "best_non_base": {
+    "label": "rr3.0_pt0.1_pt20.2",
+    "fit": 9.937649492687338,
+    "wr_med": 0.5779816513761468,
+    "ret_med": 0.5039922121756131,
+    "mdd_med": 0.19616146605259976,
+    "trades_med": 110.0,
+    "sharpe_med": 0.17446838492386463,
+    "n_ge_70": 5,
+    "genome": [
+      0.15000000000000002,
+      0.15000000000000002,
+      0.15000000000000002,
+      9,
+      1,
+      0.35000000000000003,
+      1.0,
+      3,
+      0.5,
+      0.02,
+      3.0,
+      0.1,
+      0.75,
+      23,
+      0.5,
+      0.0,
+      0.1,
+      300,
+      1,
+      11,
+      0.2,
+      2,
+      0.2,
+      1.5,
+      0.05,
+      2,
+      1,
+      4,
+      0.0,
+      0.35000000000000003
+    ],
+    "overrides": {
+      "reward_risk_ratio": 3.0,
+      "partial_take_pct": 0.1,
+      "partial_take_pct_2": 0.2
+    }
+  },
+  "all_results": [
+    {
+      "label": "base",
+      "fit": 12.84040730846909,
+      "wr_med": 0.6714285714285714,
+      "ret_med": 0.5398628103594221,
+      "mdd_med": 0.1962028540100753,
+      "trades_med": 147.0,
+      "sharpe_med": 0.21727414440833412,
+      "n_ge_70": 29
+    },
+    {
+      "label": "rr1.5_pt0.1_pt20.2",
+      "fit": 10.588689218569801,
+      "wr_med": 0.6304347826086957,
+      "ret_med": 0.34781564953841193,
+      "mdd_med": 0.20127874101704013,
+      "trades_med": 127.0,
+      "sharpe_med": 0.10987541114282222,
+      "n_ge_70": 10,
+      "overrides": {
+        "reward_risk_ratio": 1.5,
+        "partial_take_pct": 0.1,
+        "partial_take_pct_2": 0.2
+      }
+    },
+    {
+      "label": "rr2.0_pt0.1_pt20.2",
+      "fit": 9.39888830317406,
+      "wr_med": 0.603448275862069,
+      "ret_med": 0.37564096352905585,
+      "mdd_med": 0.20101296914742783,
+      "trades_med": 113.0,
+      "sharpe_med": 0.10487818596029287,
+      "n_ge_70": 6,
+      "overrides": {
+        "reward_risk_ratio": 2.0,
+        "partial_take_pct": 0.1,
+        "partial_take_pct_2": 0.2
+      }
+    },
+    {
+      "label": "rr2.5_pt0.1_pt20.2",
+      "fit": 9.74557015327943,
+      "wr_med": 0.5871559633027523,
+      "ret_med": 0.446026147392276,
+      "mdd_med": 0.19682787483685227,
+      "trades_med": 112.0,
+      "sharpe_med": 0.165762692233128,
+      "n_ge_70": 4,
+      "overrides": {
+        "reward_risk_ratio": 2.5,
+        "partial_take_pct": 0.1,
+        "partial_take_pct_2": 0.2
+      }
+    },
+    {
+      "label": "rr3.0_pt0.1_pt20.2",
+      "fit": 9.937649492687338,
+      "wr_med": 0.5779816513761468,
+      "ret_med": 0.5039922121756131,
+      "mdd_med": 0.19616146605259976,
+      "trades_med": 110.0,
+      "sharpe_med": 0.17446838492386463,
+      "n_ge_70": 5,
+      "overrides": {
+        "reward_risk_ratio": 3.0,
+        "partial_take_pct": 0.1,
+        "partial_take_pct_2": 0.2
+      }
+    },
+    {
+      "label": "rr4.0_pt0.1_pt20.2",
+      "fit": 9.465780351050837,
+      "wr_med": 0.5675675675675675,
+      "ret_med": 0.4770774217916285,
+      "mdd_med": 0.19298296559874661,
+      "trades_med": 106.0,
+      "sharpe_med": 0.1473359210291712,
+      "n_ge_70": 3,
+      "overrides": {
+        "reward_risk_ratio": 4.0,
+        "partial_take_pct": 0.1,
+        "partial_take_pct_2": 0.2
+      }
+    },
+    {
+      "label": "rr5.0_pt0.1_pt20.2",
+      "fit": 9.372893968867306,
+      "wr_med": 0.5675675675675675,
+      "ret_med": 0.4770774217916285,
+      "mdd_med": 0.19430711503902998,
+      "trades_med": 98.0,
+      "sharpe_med": 0.12753983875395536,
+      "n_ge_70": 3,
+      "overrides": {
+        "reward_risk_ratio": 5.0,
+        "partial_take_pct": 0.1,
+        "partial_take_pct_2": 0.2
+      }
+    },
+    {
+      "label": "rr2.0_pt0.0_pt20.0",
+      "fit": 8.202813139324505,
+      "wr_med": 0.6011904761904762,
+      "ret_med": 0.29838077287987463,
+      "mdd_med": 0.2051730705024407,
+      "trades_med": 102.0,
+      "sharpe_med": 0.2213654453763898,
+      "n_ge_70": 6,
+      "overrides": {
+        "reward_risk_ratio": 2.0,
+        "partial_take_pct": 0.0,
+        "partial_take_pct_2": 0.0
+      }
+    },
+    {
+      "label": "rr3.0_pt0.0_pt20.0",
+      "fit": 8.819076742540803,
+      "wr_med": 0.5747126436781609,
+      "ret_med": 0.40611617250968957,
+      "mdd_med": 0.20170426731738977,
+      "trades_med": 100.0,
+      "sharpe_med": 0.27918608600192785,
+      "n_ge_70": 5,
+      "overrides": {
+        "reward_risk_ratio": 3.0,
+        "partial_take_pct": 0.0,
+        "partial_take_pct_2": 0.0
+      }
+    },
+    {
+      "label": "rr4.0_pt0.0_pt20.0",
+      "fit": 9.019618980181544,
+      "wr_med": 0.5636363636363636,
+      "ret_med": 0.4052306793526377,
+      "mdd_med": 0.20171938160067815,
+      "trades_med": 93.0,
+      "sharpe_med": 0.284837534762012,
+      "n_ge_70": 3,
+      "overrides": {
+        "reward_risk_ratio": 4.0,
+        "partial_take_pct": 0.0,
+        "partial_take_pct_2": 0.0
+      }
+    },
+    {
+      "label": "rr5.0_pt0.0_pt20.0",
+      "fit": 9.235897164186706,
+      "wr_med": 0.5636363636363636,
+      "ret_med": 0.45945729067109475,
+      "mdd_med": 0.20067046946866807,
+      "trades_med": 92.0,
+      "sharpe_med": 0.29624285750979124,
+      "n_ge_70": 3,
+      "overrides": {
+        "reward_risk_ratio": 5.0,
+        "partial_take_pct": 0.0,
+        "partial_take_pct_2": 0.0
+      }
+    },
+    {
+      "label": "rr3.0_pt0.1_pt20.0",
+      "fit": 9.481042705233905,
+      "wr_med": 0.5783132530120482,
+      "ret_med": 0.4330116654190823,
+      "mdd_med": 0.19905755207321107,
+      "trades_med": 104.0,
+      "sharpe_med": 0.27878781053233126,
+      "n_ge_70": 5,
+      "overrides": {
+        "reward_risk_ratio": 3.0,
+        "partial_take_pct": 0.1,
+        "partial_take_pct_2": 0.0
+      }
+    },
+    {
+      "label": "rr4.0_pt0.1_pt20.0",
+      "fit": 8.827633552302078,
+      "wr_med": 0.5654205607476636,
+      "ret_med": 0.4454297096504807,
+      "mdd_med": 0.19514404671853114,
+      "trades_med": 100.0,
+      "sharpe_med": 0.26257214843303095,
+      "n_ge_70": 4,
+      "overrides": {
+        "reward_risk_ratio": 4.0,
+        "partial_take_pct": 0.1,
+        "partial_take_pct_2": 0.0
+      }
+    },
+    {
+      "label": "rr3.0_pt0.2_pt20.0",
+      "fit": 9.878259849228169,
+      "wr_med": 0.5783132530120482,
+      "ret_med": 0.44216643106441933,
+      "mdd_med": 0.19199969794657,
+      "trades_med": 110.0,
+      "sharpe_med": 0.22749155411108504,
+      "n_ge_70": 5,
+      "overrides": {
+        "reward_risk_ratio": 3.0,
+        "partial_take_pct": 0.2,
+        "partial_take_pct_2": 0.0
+      }
+    },
+    {
+      "label": "rr4.0_pt0.2_pt20.0",
+      "fit": 8.605240518232861,
+      "wr_med": 0.5675675675675675,
+      "ret_med": 0.4255373613309077,
+      "mdd_med": 0.19654037724285656,
+      "trades_med": 102.0,
+      "sharpe_med": 0.1860973559900618,
+      "n_ge_70": 4,
+      "overrides": {
+        "reward_risk_ratio": 4.0,
+        "partial_take_pct": 0.2,
+        "partial_take_pct_2": 0.0
+      }
+    }
+  ],
+  "best_genome": [
+    0.15000000000000002,
+    0.15000000000000002,
+    0.15000000000000002,
+    9,
+    1,
+    0.35000000000000003,
+    1.0,
+    3,
+    0.5,
+    0.02,
+    3.0,
+    0.1,
+    0.75,
+    23,
+    0.5,
+    0.0,
+    0.1,
+    300,
+    1,
+    11,
+    0.2,
+    2,
+    0.2,
+    1.5,
+    0.05,
+    2,
+    1,
+    4,
+    0.0,
+    0.35000000000000003
+  ]
+}

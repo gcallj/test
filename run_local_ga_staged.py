@@ -115,15 +115,20 @@ def open_existing_store():
     gr.GA_AUTO_TUNE = 0
     gr.FAST_MODE = True
 
-    store_dir = os.path.abspath(gr.GA_MEMMAP_DIR)
-    if not os.path.exists(store_dir):
+    # Try primary dir first, fallback to staged if main was cleaned
+    candidates = [
+        os.path.abspath(gr.GA_MEMMAP_DIR),
+        os.path.abspath("output/ga_memmap_staged"),
+    ]
+    store_dir = None
+    for cand in candidates:
+        if os.path.exists(os.path.join(cand, "meta.json")):
+            store_dir = cand
+            break
+    if store_dir is None:
         raise RuntimeError(
-            f"No existing PayloadStore at {store_dir}. "
+            f"No existing PayloadStore found in {candidates}. "
             f"Run 'python ga_run.py' once first (it builds the store during Phase 1)."
-        )
-    if not os.path.exists(os.path.join(store_dir, "meta.json")):
-        raise RuntimeError(
-            f"meta.json missing in {store_dir}. Store is corrupted or incomplete."
         )
 
     print(f"[SETUP] Opening existing PayloadStore at {store_dir}", flush=True)
