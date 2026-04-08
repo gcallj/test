@@ -653,23 +653,26 @@ def compute_final_signal_and_acao(
     sub_timing: str,
     regime_str: str,
     confidence: float = 50.0,
+    score_strength: float = 0.0,
 ) -> Tuple[str, str]:
     """
     Combina o sinal bruto do GA com a classificacao Minervini para gerar
     um sinal final COERENTE com a acao e condicao.
 
+    Regras de override:
+      - GA buy + stage ruim (3/4) -> hold/sell (GA nao viu o topo)
+      - GA hold + Stage 2 ideal/momentum + confidence alta + score positivo -> buy
+        (GA foi conservador demais em momentum claro)
+
     Input:
       - ga_sig: "buy" / "hold" / "sell" (output do GA)
       - stage_num: 0-4
-      - sub_timing: "ideal" / "momentum" / "cedo" / "pullback" / "atrasado" /
-                    "evitar" / "consolidacao" / "-"
+      - sub_timing: "ideal" / "momentum" / "cedo" / "pullback" / "atrasado" / ...
       - regime_str: "favoravel" / "neutro" / "desfavoravel"
       - confidence: 0-100
+      - score_strength: |score_ev| / score95 (0-1, usado p/ promover hold -> buy)
 
     Returns: (final_signal, final_acao)
-      - final_signal: "buy" / "hold" / "sell"
-      - final_acao: "COMPRAR" / "COMPRAR cautela" / "AGUARDAR" /
-                    "OBSERVAR" / "EVITAR" / "VENDER"
     """
     # ===== STAGE 4: Queda confirmada -> SEMPRE sell =====
     if stage_num == 4:
@@ -678,43 +681,50 @@ def compute_final_signal_and_acao(
     # ===== STAGE 3: Topo (distribuicao) =====
     if stage_num == 3:
         if regime_str == "desfavoravel":
-            # Stage 3 + bear regime = sair
             return ("sell", "VENDER")
-        # Stage 3 com regime ok/neutro = aguardar, nao comprar
         return ("hold", "AGUARDAR")
 
     # ===== STAGE 2: Alta (uptrend confirmado) =====
     if stage_num == 2:
         if sub_timing == "atrasado":
-            # Preco esticado, nao entrar agora
             return ("hold", "AGUARDAR pullback")
+
         if sub_timing == "ideal":
-            # Setup perfeito: respeitar GA
             if ga_sig == "buy":
                 return ("buy", "COMPRAR")
+            # Promover GA hold -> buy em Stage 2 ideal quando confidence alta
+            # e score positivo (GA foi conservador demais)
+            if confidence >= 65.0 and score_strength > 0.0 and regime_str != "desfavoravel":
+                return ("buy", "COMPRAR")
             return ("hold", "AGUARDAR setup")
+
         if sub_timing == "momentum":
-            # Tendencia ja em andamento
             if ga_sig == "buy":
                 return ("buy", "COMPRAR")
+            # Promover em momentum estabelecido + confidence alta
+            if confidence >= 65.0 and score_strength > 0.0 and regime_str != "desfavoravel":
+                return ("buy", "COMPRAR")
             return ("hold", "AGUARDAR setup")
+
         if sub_timing == "cedo":
-            # Cruzamento recente: cautela mesmo com GA buy
             if ga_sig == "buy":
                 return ("buy", "COMPRAR cautela")
+            # Stage 2 cedo: nao promover (cruzamento recente exige confirmacao)
             return ("hold", "OBSERVAR")
+
         if sub_timing == "pullback":
-            # Correcao em tendencia: setup valido
             if ga_sig == "buy":
+                return ("buy", "COMPRAR cautela")
+            # Stage 2 pullback: promover apenas com confidence muito alta
+            if confidence >= 70.0 and score_strength > 0.0 and regime_str == "favoravel":
                 return ("buy", "COMPRAR cautela")
             return ("hold", "AGUARDAR suporte")
 
     # ===== STAGE 1: Base lateral =====
     if stage_num == 1:
-        # Stage 1 sempre observar breakout, nao comprar agora
         return ("hold", "OBSERVAR")
 
-    # ===== INDEFINIDO (dados insuficientes) =====
+    # ===== INDEFINIDO =====
     return ("hold", "OBSERVAR")
 
 
@@ -2424,11 +2434,20 @@ def vectorized_signals(payload: Dict[str, Any], gp: GlobalParams, apply_mode: bo
         long_ok = consec_long >= gp.entry_confirmation_days
         short_ok = consec_short >= gp.entry_confirmation_days
 
-        # Structural filters (always applied)
+        # Structural filters — sempre aplicados em backtest, relaxados em apply_mode
         if gp.volatility_filter_percentile > 0 and np.isfinite(vol_rank[i - 1]) and vol_rank[i - 1] < gp.volatility_filter_percentile:
-            continue
-        if gp.vol_regime_mode == 2 and np.isfinite(vol_rank[i - 1]) and vol_rank[i - 1] > 0.85:
-            continue
+            if not apply_mode:
+                continue
+        # vol_regime_mode==2 bloqueia entradas em alta vol.
+        # Em apply_mode, so bloqueamos se for EXTREMA (>0.95), pois Stage 2 + pullback
+        # sao bons em alta vol tambem (o proprio pullback eh alta vol temporaria)
+        if gp.vol_regime_mode == 2 and np.isfinite(vol_rank[i - 1]):
+            if apply_mode:
+                if vol_rank[i - 1] > 0.95:  # apenas volatilidade extrema
+                    continue
+            else:
+                if vol_rank[i - 1] > 0.85:
+                    continue
         if atr[i - 1] < 0.01:
             continue
         # Transient filters (skipped in apply_mode to avoid blocking all signals)
@@ -2446,7 +2465,9 @@ def vectorized_signals(payload: Dict[str, Any], gp: GlobalParams, apply_mode: bo
             if mom_days > 0 and np.isfinite(mom_ret[i - 1]) and mom_ret[i - 1] < 0:
                 continue
         if gp.regime_threshold > 0 and np.isfinite(regime[i - 1]) and regime[i - 1] < gp.regime_threshold:
-            long_ok = False
+            if not apply_mode:
+                long_ok = False
+            # Em apply_mode, regime_threshold nao eh hard block - deixa o stage filter decidir
         if gp.ma_filter_mode == 1 and np.isfinite(ma[i - 1]):
             if c[i - 1] < ma[i - 1]:
                 long_ok = long_ok and (score_ev[i - 1] * 0.5 >= score_pctl[i - 1])
@@ -3481,12 +3502,21 @@ def run():
             # ═══════════════════════════════════════════════════════════════
             # SIGNAL + ACAO COERENTES: override GA com stage analysis
             # ═══════════════════════════════════════════════════════════════
+            # score_strength: |score_ev| / score95 (0-1) no ultimo dia
+            _score_now = float(score_ev[i - 1]) if i >= 1 and np.isfinite(score_ev[i - 1]) else 0.0
+            _score_strength = float(np.clip(abs(_score_now) / max(score95, ATR_EPS), 0.0, 1.0))
+            # Sinal direcional do score (usado na promocao)
+            _score_signed = _score_now / max(score95, ATR_EPS)
+            # Para promover hold->buy, score tem que ser positivo
+            _score_strength_dir = _score_strength if _score_signed > 0 else -1.0
+
             final_sig, acao_final = compute_final_signal_and_acao(
                 ga_sig=sig,
                 stage_num=stage_num,
                 sub_timing=timing_sub,
                 regime_str=_regime_str,
                 confidence=confidence,
+                score_strength=_score_strength_dir,
             )
             # Preservar sinal bruto do GA (para debugging/auditoria)
             signal_ga = sig
@@ -3940,8 +3970,33 @@ def run():
             _conf_med = float(pd.to_numeric(df_app["confidence"], errors="coerce").median()) if not df_app.empty else 0
             _wr_med = float(df_sum["test_win_rate"].median() * 100) if not df_sum.empty else 0
             _mdd_med = float(df_sum["test_mdd"].median() * 100) if not df_sum.empty else 0
-            _ret_med = float(df_sum["test_return"].median() * 100) if not df_sum.empty else 0
             _tickers = len(df_sum) if not df_sum.empty else 0
+
+            # -- Retorno anualizado + alpha vs buy&hold -----------------------
+            # Periodo do backtest: walk-forward sobre historico completo.
+            # B3 equities: ~21 anos (2005-2026). Crypto: ~8 anos.
+            # Usamos 15 anos como estimativa mediana razoavel (conservadora
+            # para equities, generosa para cripto/IPO recentes).
+            _ret_col = df_sum["test_return"]
+            _bh_col = df_sum["buy_hold_return"]
+            _n_years_default = 15.0
+
+            def _annualize_scalar(r, n):
+                if not np.isfinite(r):
+                    return 0.0
+                ratio = max(1.0 + r, 0.001)
+                return ratio ** (1.0 / n) - 1.0
+
+            _ret_ann_series = _ret_col.apply(lambda x: _annualize_scalar(x, _n_years_default))
+            _bh_ann_series = _bh_col.apply(lambda x: _annualize_scalar(x, _n_years_default))
+            _alpha_ann_series = _ret_ann_series - _bh_ann_series
+
+            _ret_ann_med = float(_ret_ann_series.median() * 100) if not df_sum.empty else 0
+            _bh_ann_med = float(_bh_ann_series.median() * 100) if not df_sum.empty else 0
+            _alpha_ann_med = float(_alpha_ann_series.median() * 100) if not df_sum.empty else 0
+
+            # Pct tickers que bateram buy&hold (em retorno total)
+            _pct_beat_bh = float((_ret_col > _bh_col).mean() * 100) if not df_sum.empty else 0
 
             # Top 5 buy signals by confidence
             _top_buys = ""
@@ -3959,7 +4014,9 @@ def run():
                 f"Sinais: {_n_buy} BUY | {_n_hold} HOLD | {_n_sell} SELL\n"
                 f"Tickers: {_tickers}\n"
                 f"\n"
-                f"WR: {_wr_med:.1f}% | MDD: {_mdd_med:.1f}% | Ret: {_ret_med:.1f}%\n"
+                f"WR: {_wr_med:.1f}% | MDD: {_mdd_med:.1f}%\n"
+                f"Ret a.a.: {_ret_ann_med:+.1f}% vs B&H {_bh_ann_med:+.1f}% (~{int(_n_years_default)}a)\n"
+                f"Alpha a.a.: {_alpha_ann_med:+.1f}pp | Batem B&H: {_pct_beat_bh:.0f}%\n"
                 f"Confidence: {_conf_med:.0f} | Fitness: {global_fit:.2f}"
                 f"{_top_buys}"
             )
