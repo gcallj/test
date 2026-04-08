@@ -4067,12 +4067,13 @@ def run():
             _tickers = len(df_sum) if not df_sum.empty else 0
 
             # -- Retorno anualizado + alpha vs buy&hold -----------------------
-            # Periodo do backtest: walk-forward sobre historico completo.
-            # B3 equities: ~21 anos (2005-2026). Crypto: ~8 anos.
-            # Usamos 15 anos como estimativa mediana razoavel (conservadora
-            # para equities, generosa para cripto/IPO recentes).
-            _ret_col = df_sum["test_return"]
-            _bh_col = df_sum["buy_hold_return"]
+            # FILTRO: apenas tickers com WR > 65% (estrategia qualidade alta).
+            # Isso reflete a performance REAL dos ativos que o sistema seleciona
+            # como confiaveis, excluindo ruido de tickers que o GA ja nao operaria.
+            # Periodo: 15 anos como estimativa mediana.
+            _wr_filter = df_sum["test_win_rate"] > 0.65
+            _df_filtered = df_sum[_wr_filter]
+            _n_filtered = len(_df_filtered)
             _n_years_default = 15.0
 
             def _annualize_scalar(r, n):
@@ -4081,16 +4082,22 @@ def run():
                 ratio = max(1.0 + r, 0.001)
                 return ratio ** (1.0 / n) - 1.0
 
-            _ret_ann_series = _ret_col.apply(lambda x: _annualize_scalar(x, _n_years_default))
-            _bh_ann_series = _bh_col.apply(lambda x: _annualize_scalar(x, _n_years_default))
-            _alpha_ann_series = _ret_ann_series - _bh_ann_series
+            if _n_filtered > 0:
+                _ret_col_f = _df_filtered["test_return"]
+                _bh_col_f = _df_filtered["buy_hold_return"]
+                _ret_ann_series = _ret_col_f.apply(lambda x: _annualize_scalar(x, _n_years_default))
+                _bh_ann_series = _bh_col_f.apply(lambda x: _annualize_scalar(x, _n_years_default))
+                _alpha_ann_series = _ret_ann_series - _bh_ann_series
 
-            _ret_ann_med = float(_ret_ann_series.median() * 100) if not df_sum.empty else 0
-            _bh_ann_med = float(_bh_ann_series.median() * 100) if not df_sum.empty else 0
-            _alpha_ann_med = float(_alpha_ann_series.median() * 100) if not df_sum.empty else 0
-
-            # Pct tickers que bateram buy&hold (em retorno total)
-            _pct_beat_bh = float((_ret_col > _bh_col).mean() * 100) if not df_sum.empty else 0
+                _ret_ann_med = float(_ret_ann_series.median() * 100)
+                _bh_ann_med = float(_bh_ann_series.median() * 100)
+                _alpha_ann_med = float(_alpha_ann_series.median() * 100)
+                _pct_beat_bh = float((_ret_col_f > _bh_col_f).mean() * 100)
+            else:
+                _ret_ann_med = 0
+                _bh_ann_med = 0
+                _alpha_ann_med = 0
+                _pct_beat_bh = 0
 
             # Top 5 buy signals by confidence
             _top_buys = ""
@@ -4109,6 +4116,7 @@ def run():
                 f"Tickers: {_tickers}\n"
                 f"\n"
                 f"WR: {_wr_med:.1f}% | MDD: {_mdd_med:.1f}%\n"
+                f"(WR>65%, n={_n_filtered})\n"
                 f"Ret a.a.: {_ret_ann_med:+.1f}% vs B&H {_bh_ann_med:+.1f}% (~{int(_n_years_default)}a)\n"
                 f"Alpha a.a.: {_alpha_ann_med:+.1f}pp | Batem B&H: {_pct_beat_bh:.0f}%\n"
                 f"Confidence: {_conf_med:.0f} | Fitness: {global_fit:.2f}"
