@@ -100,6 +100,27 @@ else:
     alpha_ann_med = 0
     pct_beat_bh = 0
 
+# -- Win-rate breakdown: alvo hits vs other profitable exits --
+# Mostra quantos trades realmente alcancaram o alvo vs foram fechados por
+# trailing stop ou time stop com lucro. Usa analysis/win_rate_deep_dive.json.
+wr_breakdown_caption = ""
+wr_json_path = "analysis/win_rate_deep_dive.json"
+if os.path.exists(wr_json_path):
+    try:
+        with open(wr_json_path, "r", encoding="utf-8") as _fwr:
+            _wr_data = json.load(_fwr)
+        _wr_med = _wr_data.get("win_rate_median", 0)
+        _wr_tgt_med = _wr_data.get("win_rate_target_median", 0)
+        _pct_take = _wr_data.get("pct_exit_take_median", 0)
+        _pct_stop = _wr_data.get("pct_exit_stop_median", 0)
+        wr_breakdown_caption = (
+            f"\n\nWR breakdown (full history):\n"
+            f"  WR total: {_wr_med:.1f}% | WR alvo: {_wr_tgt_med:.1f}%\n"
+            f"  Exits: alvo {_pct_take:.0f}% | stop {_pct_stop:.0f}%"
+        )
+    except Exception as _e:
+        print(f"[WARN] wr_deep_dive load failed: {_e}")
+
 # -- Premium/High-Quality subsets: load pre-computed alpha analysis --
 # Shows where the model has REAL edge over full history (more reliable than
 # a single walk-forward test window). Computed by analysis/ticker_alpha_subset.py.
@@ -183,6 +204,7 @@ caption = (
     f"Ret a.a.: {ret_ann_med:+.1f}% vs B&H {bh_ann_med:+.1f}% (~{int(n_years)}a)\n"
     f"Alpha a.a.: {alpha_ann_med:+.1f}pp | Batem B&H: {pct_beat_bh:.0f}%\n"
     f"Confidence: {conf_med:.0f} | Fitness: {global_fit:.2f}"
+    f"{wr_breakdown_caption}"
     f"{premium_caption}"
     f"{top_buys}"
 )

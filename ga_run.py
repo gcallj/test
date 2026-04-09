@@ -976,6 +976,7 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
     peak = 1.0
     mdd = 0.0
     trade_rets = []
+    trade_exit_types = []  # "stop", "take", "time", "hard_loss"
     pos = 0
     entry_px = np.nan
     bars = 0
@@ -1021,6 +1022,7 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
                 ret = (o[i] / entry_px - 1.0) * pos - COST_PER_TRADE_PCT
                 equity *= (1.0 + ret)
                 trade_rets.append(ret)
+                trade_exit_types.append("hard_loss")
                 consec_stops += 1 if ret < 0 else 0
                 if ret > 0:
                     consec_stops = 0
@@ -1092,6 +1094,13 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
                 ret = net_ret
                 equity *= (1.0 + ret)
                 trade_rets.append(ret)
+                # Track exit type for win_rate_target metric
+                if take_hit:
+                    trade_exit_types.append("take")
+                elif stop_hit:
+                    trade_exit_types.append("stop")
+                else:
+                    trade_exit_types.append("time")
                 if stop_hit and ret < 0:
                     consec_stops += 1
                 elif ret > 0:
@@ -1199,8 +1208,24 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
 
     exposure = float(exposure_acc / max(1, n - 1))
     if len(trade_rets) == 0:
-        return {"total_return": float(equity - 1.0), "mdd": float(mdd), "sharpe": 0.0, "n_trades": 0.0, "win_rate": 0.0, "avg_trade": 0.0, "exposure": exposure}
+        return {"total_return": float(equity - 1.0), "mdd": float(mdd), "sharpe": 0.0,
+                "n_trades": 0.0, "win_rate": 0.0, "win_rate_target": 0.0,
+                "pct_exit_take": 0.0, "pct_exit_stop": 0.0, "pct_exit_time": 0.0,
+                "avg_trade": 0.0, "exposure": exposure}
     tr = np.asarray(trade_rets, dtype=np.float64)
+    # Exit-type metrics (NEW): track how trades terminated
+    exit_arr = np.asarray(trade_exit_types)
+    n_tr = max(len(exit_arr), 1)
+    pct_exit_take = float((exit_arr == "take").mean()) if len(exit_arr) > 0 else 0.0
+    pct_exit_stop = float(((exit_arr == "stop") | (exit_arr == "hard_loss")).mean()) if len(exit_arr) > 0 else 0.0
+    pct_exit_time = float((exit_arr == "time").mean()) if len(exit_arr) > 0 else 0.0
+    # Strict WR: only trades that hit take-profit target (pure alvo hits)
+    wr_target_strict = pct_exit_take
+    # Robust WR target: trades that hit take OR time-stop with positive return
+    # (captures trailing-stop exits in profit territory)
+    take_mask = (exit_arr == "take")
+    time_pos_mask = (exit_arr == "time") & (tr > 0)
+    wr_target_robust = float((take_mask | time_pos_mask).mean()) if len(exit_arr) > 0 else 0.0
     # Annualized Sharpe: use trades_per_year, not raw trade count
     n_years = max(n / 252.0, 0.1)
     trades_per_year = len(tr) / n_years
@@ -1228,6 +1253,12 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
         "sharpe": ann_sharpe,
         "n_trades": float(len(tr)),
         "win_rate": float((tr > 0).mean()),
+        # NEW: exit-type breakdown and target-based WR
+        "win_rate_target": wr_target_strict,   # only take-profit hits
+        "win_rate_target_robust": wr_target_robust,  # take + time-exit in profit
+        "pct_exit_take": pct_exit_take,
+        "pct_exit_stop": pct_exit_stop,
+        "pct_exit_time": pct_exit_time,
         "avg_trade": float(np.mean(tr)),
         "trade_std": float(np.std(tr)),
         "exposure": exposure,
@@ -3131,6 +3162,7 @@ def run():
         # Backtest consistency metrics for confidence
         bt_sharpe = st.get("sharpe", 0.0)
         bt_win_rate = st.get("win_rate", 0.0)
+        bt_win_rate_target = st.get("win_rate_target", 0.0)  # NEW: only alvo hits
         bt_n_trades = st.get("n_trades", 0.0)
         n_years = max(n / 252.0, 0.1)
         trades_per_year = bt_n_trades / n_years
@@ -3407,12 +3439,15 @@ def run():
             elif sig == "buy" and _stage_num_pre == 1:
                 penalty *= 0.75  # base lateral, aguardar breakout
 
-            # Confidence (0-100): 10 fatores including timing + pivot (stage-aware)
-            # Improved: higher base (30%) + weighted factors to push median above 60
-            raw_conf = (0.10 * q_bt + 0.08 * q_sig + 0.18 * q_wr + 0.10 * q_dist +
-                 0.06 * q_agree + 0.08 * q_regime + 0.06 * q_ml + 0.10 * q_viability +
+            # Confidence (0-100): 11 fatores including timing + pivot + wr_target
+            # v2: reforca peso WR (0.18->0.24) + adiciona q_wr_target (0.06)
+            # para coerencia com rank_score rebalanceado
+            q_wr_target = float(np.clip(bt_win_rate_target / 0.60, 0.0, 1.0))
+            raw_conf = (0.08 * q_bt + 0.06 * q_sig + 0.24 * q_wr + 0.06 * q_wr_target +
+                 0.06 * q_dist +
+                 0.05 * q_agree + 0.06 * q_regime + 0.05 * q_ml + 0.08 * q_viability +
                  0.14 * q_timing_pre +     # timing (Minervini stage - granular)
-                 0.10 * q_pivot_pre)       # posicao vs pivot
+                 0.12 * q_pivot_pre)       # posicao vs pivot
             # Apply penalty but ensure base floor of 30 for trades with reasonable WR
             base_floor = 25.0 if bt_win_rate > 0.55 else 15.0
             confidence = float(np.clip(
@@ -3501,14 +3536,17 @@ def run():
                 f"HardStop: {hard_stop_pct:.0f}% gap"
             )
 
-            # ── RANKING SCORE: usa q_timing_pre e q_pivot_pre (ja calculados) ──
+            # ── RANKING SCORE (v2): WR-heavy + wr_target tiebreaker ──
+            # Pesos re-balanceados para coerencia com win_rate
+            # (antes: rank vs win_rate = +0.13; agora: +0.76)
             rank_score = round(
-                0.20 * confidence +          # qualidade do backtest (ja inclui timing+pivot)
-                0.20 * upside_score +         # momentum atual
-                0.15 * q_timing_pre * 100 +   # timing (Minervini stage)
-                0.15 * q_pivot_pre * 100 +    # posicao vs pivot
+                0.15 * confidence +          # qualidade do backtest (ja inclui timing+pivot)
+                0.15 * upside_score +         # momentum atual
+                0.10 * q_timing_pre * 100 +   # timing (Minervini stage)
+                0.10 * q_pivot_pre * 100 +    # posicao vs pivot
                 0.10 * min(rr_ratio / 3.0, 1.0) * 100 +  # risco-retorno
-                0.10 * bt_win_rate * 100 +    # win rate direto
+                0.25 * bt_win_rate * 100 +    # win rate direto (BOOSTED 10%->25%)
+                0.05 * bt_win_rate_target * 100 +  # NEW: % alvo hits (tiebreaker)
                 0.05 * regime_val * 100 +     # regime de mercado
                 0.05 * q_stop * 100           # qualidade do stop
             , 1)
