@@ -2284,6 +2284,47 @@ def _build_history_from_etl(etl_path: str) -> pd.DataFrame:
             print(f"[ETL fallback] Missing column: {col}")
             return None
 
+    # ANTI-FFILL: drop rows where OHLC are all NaN (weekends/holidays)
+    # ou onde close/open/high/low sao NaN (nao houve trading).
+    # Isso remove os precos fantasmas gerados por ffill antigo.
+    _n_before = len(df)
+    _ohlc_cols = [OPEN_COL, HIGH_COL, LOW_COL, CLOSE_COL]
+    df = df.dropna(subset=_ohlc_cols, how="any")
+
+    # FILTRO WEEKEND: B3 nao negocia sabado/domingo. O ETL as vezes tem esses
+    # dias forward-filled vindos de outros mercados (yfinance group_by='column').
+    # Remove Sat/Sun para evitar precos fantasmas na backtest.
+    _dates_parsed = pd.to_datetime(df[DATE_COL], errors="coerce")
+    _weekday = _dates_parsed.dt.dayofweek  # 0=Mon..6=Sun
+    _weekend_mask = (_weekday == 5) | (_weekday == 6)
+    _n_weekend = int(_weekend_mask.sum())
+    if _n_weekend > 0:
+        df = df[~_weekend_mask].copy()
+        print(f"[ETL fallback] Dropped {_n_weekend} rows com data de fim de semana (ghost ffill)")
+
+    # FILTRO FORWARD-FILL: remove dias onde OHLC sao IDENTICOS ao dia anterior
+    # por ticker (sinal de ffill de feriado). Tolerancia: |delta|<1e-8
+    _n_before_ffill = len(df)
+    df = df.sort_values([TICKER_COL, DATE_COL]).reset_index(drop=True)
+    _prev_open = df.groupby(TICKER_COL)[OPEN_COL].shift(1)
+    _prev_high = df.groupby(TICKER_COL)[HIGH_COL].shift(1)
+    _prev_low = df.groupby(TICKER_COL)[LOW_COL].shift(1)
+    _prev_close = df.groupby(TICKER_COL)[CLOSE_COL].shift(1)
+    _same_ohlc = (
+        ((df[OPEN_COL] - _prev_open).abs() < 1e-8)
+        & ((df[HIGH_COL] - _prev_high).abs() < 1e-8)
+        & ((df[LOW_COL] - _prev_low).abs() < 1e-8)
+        & ((df[CLOSE_COL] - _prev_close).abs() < 1e-8)
+    )
+    df = df[~_same_ohlc.fillna(False)].copy()
+    _n_ffill_dropped = _n_before_ffill - len(df)
+    if _n_ffill_dropped > 0:
+        print(f"[ETL fallback] Dropped {_n_ffill_dropped} rows com OHLC identico ao dia anterior (ffill ghost)")
+
+    _n_dropped = _n_before - len(df)
+    if _n_dropped > 0:
+        print(f"[ETL fallback] Total: {_n_dropped} rows removidas (weekends/holidays/ffill)")
+
     print(f"[ETL fallback] Loaded {len(df)} rows, {df[TICKER_COL].nunique()} tickers from ETL")
     return df
 

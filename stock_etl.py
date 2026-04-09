@@ -290,8 +290,11 @@ def run_etl():
     data = data.loc[:, data.columns.get_level_values(0).isin(allowed_columns)].copy()
     data.columns = data.columns.remove_unused_levels()
 
-    # Forward-fill para alinhar calendários; (bfill só nas FEATURES mais adiante)
-    data = data.ffill()
+    # ATENCAO: NAO forward-fill OHLCV - isso criaria precos fantasmas em
+    # fins de semana e feriados (Apr 4-5 2026 etc). Cada ticker deve ter
+    # close=NaN em dias nao-negociados; o apply phase filtra esses dias.
+    # Features derivadas ainda podem usar ffill (veja fill_100pct abaixo).
+    # data = data.ffill()  # REMOVIDO (gerava precos falsos em weekends/feriados)
 
     # Tickers efetivamente presentes
     # Tickers efetivamente presentes (e com preço real, não tudo-NaN)
