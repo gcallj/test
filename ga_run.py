@@ -159,6 +159,12 @@ MIN_RR_RATIO = 1.5        # Minimum risk-reward ratio
 # "aggressive"= zero score_matrix in bars not in Stage 2 ideal/momentum/pullback
 # "negative"  = zero score_matrix in Stage 4 Queda bars only
 GA_STAGE_GATE = os.environ.get("GA_STAGE_GATE", "off").lower()
+
+# Fitness alpha-focus mode (opcional, via env var)
+# "off" (default) = pesos da fitness como antes (1.8 excess, clip -1.0)
+# "on"            = aumenta peso excess para 2.5x, afrouxa clip para -2.5
+# Objetivo: forcar o GA a buscar genoma que reduz underperformance vs B&H
+GA_ALPHA_FOCUS = os.environ.get("GA_ALPHA_FOCUS", "off").lower() == "on"
 MIN_BUY_CONFIDENCE = 38.0 # Lowered from 50 to allow more buy signals while maintaining quality gate
 
 # Friction — custos realistas Brasil
@@ -1394,9 +1400,14 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
         dist_bonus += (mean_pct_gt10 - 0.20) * 12.0  # strong reward
 
     # -- Main fitness (v5) -------------------------------------------------
+    # GA_ALPHA_FOCUS: amplifica sinal de alpha para forcar GA a priorizar
+    # reducao de underperformance vs B&H (clip afrouxado, peso 2.5x)
+    _exc_w_mean = 2.5 if GA_ALPHA_FOCUS else 1.8
+    _exc_w_med = 1.8 if GA_ALPHA_FOCUS else 1.3
+    _exc_clip_lo = -2.5 if GA_ALPHA_FOCUS else -1.0
     fitness = (
-        1.8 * np.clip(mean_excess, -1.0, 5.0) +   # beat B&H: highest weight
-        1.3 * np.clip(med_excess,  -1.0, 5.0) +
+        _exc_w_mean * np.clip(mean_excess, _exc_clip_lo, 5.0) +   # beat B&H
+        _exc_w_med  * np.clip(med_excess,  _exc_clip_lo, 5.0) +
         1.4 * pct_excess_pos +                      # % tickers beating B&H
         0.5 * np.clip(mean_ret,    -1.0, 5.0) +
         0.3 * np.clip(med_ret,     -1.0, 5.0) +
