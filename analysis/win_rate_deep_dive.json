@@ -1,12 +1,12 @@
 {
-  "checkpoint_fit": 22.13144662913838,
+  "checkpoint_fit": 18.453185888275392,
   "n_tickers": 119,
-  "win_rate_median": 67.14,
-  "win_rate_target_median": 45.5,
-  "win_rate_target_robust_median": 45.5,
-  "pct_exit_take_median": 45.5,
-  "pct_exit_stop_median": 54.5,
+  "win_rate_median": 64.15,
+  "win_rate_target_median": 61.11,
+  "win_rate_target_robust_median": 61.11,
+  "pct_exit_take_median": 61.11,
+  "pct_exit_stop_median": 38.64,
   "pct_exit_time_median": 0.0,
-  "delta_wr_strict_pp_median": 22.139999999999993,
-  "delta_wr_robust_pp_median": 22.139999999999993
+  "delta_wr_strict_pp_median": 0.0,
+  "delta_wr_robust_pp_median": 0.0
 }

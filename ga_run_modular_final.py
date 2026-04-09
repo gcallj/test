@@ -376,6 +376,7 @@ def _backtest_stats_global_intraday(
     peak = 1.0
     mdd = 0.0
     trade_rets = []
+    trade_exit_types = []  # v8: track "take", "stop", "time", "hard_loss"
     pos = 0
     entry_px = np.nan
     bars = 0
@@ -421,6 +422,7 @@ def _backtest_stats_global_intraday(
                 ret = (o[i] / entry_px - 1.0) * pos - COST_PER_TRADE_PCT
                 equity *= (1.0 + ret)
                 trade_rets.append(ret)
+                trade_exit_types.append("hard_loss")
                 consec_stops += 1 if ret < 0 else 0
                 if ret > 0:
                     consec_stops = 0
@@ -492,6 +494,13 @@ def _backtest_stats_global_intraday(
                 ret = net_ret
                 equity *= (1.0 + ret)
                 trade_rets.append(ret)
+                # v8: track exit type for win_rate_target computation
+                if take_hit:
+                    trade_exit_types.append("take")
+                elif stop_hit:
+                    trade_exit_types.append("stop")
+                else:
+                    trade_exit_types.append("time")
                 if stop_hit and ret < 0:
                     consec_stops += 1
                 elif ret > 0:
@@ -599,8 +608,17 @@ def _backtest_stats_global_intraday(
 
     exposure = float(exposure_acc / max(1, n - 1))
     if len(trade_rets) == 0:
-        return {"total_return": float(equity - 1.0), "mdd": float(mdd), "sharpe": 0.0, "n_trades": 0.0, "win_rate": 0.0, "avg_trade": 0.0, "exposure": exposure}
+        return {"total_return": float(equity - 1.0), "mdd": float(mdd), "sharpe": 0.0,
+                "n_trades": 0.0, "win_rate": 0.0, "win_rate_target": 0.0,
+                "pct_exit_take": 0.0, "pct_exit_stop": 0.0, "pct_exit_time": 0.0,
+                "avg_trade": 0.0, "exposure": exposure}
     tr = np.asarray(trade_rets, dtype=np.float64)
+    # v8: exit-type metrics
+    exit_arr = np.asarray(trade_exit_types)
+    pct_exit_take = float((exit_arr == "take").mean()) if len(exit_arr) > 0 else 0.0
+    pct_exit_stop = float(((exit_arr == "stop") | (exit_arr == "hard_loss")).mean()) if len(exit_arr) > 0 else 0.0
+    pct_exit_time = float((exit_arr == "time").mean()) if len(exit_arr) > 0 else 0.0
+    wr_target_strict = pct_exit_take  # pure alvo hits
     # Annualized Sharpe: use trades_per_year, not raw trade count
     n_years = max(n / 252.0, 0.1)
     trades_per_year = len(tr) / n_years
@@ -628,6 +646,11 @@ def _backtest_stats_global_intraday(
         "sharpe": ann_sharpe,
         "n_trades": float(len(tr)),
         "win_rate": float((tr > 0).mean()),
+        # v8: exit-type breakdown + strict alvo-hit metric
+        "win_rate_target": wr_target_strict,
+        "pct_exit_take": pct_exit_take,
+        "pct_exit_stop": pct_exit_stop,
+        "pct_exit_time": pct_exit_time,
         "avg_trade": float(np.mean(tr)),
         "trade_std": float(np.std(tr)),
         "exposure": exposure,
@@ -663,6 +686,7 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
     ntr       = np.array([s.get("n_trades", 0.0)      for s in per_ticker_stats], dtype=np.float64)
     exposure  = np.array([s.get("exposure", 0.0)      for s in per_ticker_stats], dtype=np.float64)
     win_rates = np.array([s.get("win_rate", 0.0)      for s in per_ticker_stats], dtype=np.float64)
+    wr_targets = np.array([s.get("win_rate_target", 0.0) for s in per_ticker_stats], dtype=np.float64)  # v8
     dist_qual  = np.array([s.get("dist_quality", 0.5)  for s in per_ticker_stats], dtype=np.float64)
     big_wins   = np.array([s.get("big_wins_pct", 0.0)  for s in per_ticker_stats], dtype=np.float64)
     big_losses = np.array([s.get("big_losses_pct", 0.0) for s in per_ticker_stats], dtype=np.float64)
@@ -680,6 +704,8 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
     mean_exposure     = float(np.mean(exposure))
     mean_win_rate     = float(np.mean(win_rates))
     med_win_rate      = float(np.median(win_rates))
+    mean_wr_target    = float(np.mean(wr_targets))  # v8
+    med_wr_target     = float(np.median(wr_targets))  # v8
     mean_mdd          = float(np.mean(mdd_vals))   # negative
     median_mdd        = float(np.median(mdd_vals)) # negative
 
@@ -759,6 +785,31 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
     if med_win_rate > 0.62:
         win_rate_bonus += (med_win_rate - 0.62) * 6.0
 
+    # -- Win-rate TARGET bonus (v8: reward actual alvo hits) ----------
+    # Strong incentive for GA to find genomes with more take-profit hits.
+    # Baseline mediano atual: 45.5%. Meta: pushing para 55%+.
+    # Calibrado para +10pp no mediano = +15 a fitness (peso comparavel ao
+    # win_rate_bonus em thresholds similares).
+    wr_target_bonus = 0.0
+    if mean_wr_target < 0.35:
+        wr_target_bonus -= (0.35 - mean_wr_target) * 25.0
+    if mean_wr_target > 0.35:
+        wr_target_bonus += (mean_wr_target - 0.35) * 10.0
+    if mean_wr_target > 0.45:
+        wr_target_bonus += (mean_wr_target - 0.45) * 20.0
+    if mean_wr_target > 0.55:
+        wr_target_bonus += (mean_wr_target - 0.55) * 30.0
+    if mean_wr_target > 0.65:
+        wr_target_bonus += (mean_wr_target - 0.65) * 40.0
+    if med_wr_target > 0.40:
+        wr_target_bonus += (med_wr_target - 0.40) * 8.0
+    if med_wr_target > 0.50:
+        wr_target_bonus += (med_wr_target - 0.50) * 25.0
+    if med_wr_target > 0.60:
+        wr_target_bonus += (med_wr_target - 0.60) * 45.0
+    if med_wr_target > 0.70:
+        wr_target_bonus += (med_wr_target - 0.70) * 60.0
+
     # -- Consistency bonus: reward stable per-ticker performance -----------
     consistency_bonus = 0.0
     if len(win_rates) > 5:
@@ -795,7 +846,7 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
     if mean_pct_gt10 > 0.20:
         dist_bonus += (mean_pct_gt10 - 0.20) * 12.0  # strong reward
 
-    # -- Main fitness (v5) -------------------------------------------------
+    # -- Main fitness (v8: adds wr_target_bonus) --------------------------
     fitness = (
         1.8 * np.clip(mean_excess, -1.0, 5.0) +   # beat B&H: highest weight
         1.3 * np.clip(med_excess,  -1.0, 5.0) +
@@ -807,6 +858,7 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
         0.3 * pct_positive +
         # Win rate: use ONLY tiered bonus (no double-counting with direct weight)
         win_rate_bonus +
+        wr_target_bonus +                              # v8: reward alvo hits
         consistency_bonus +
         calmar_bonus +
         dist_bonus +                                   # v5: distribution quality (big wins vs big losses)

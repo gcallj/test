@@ -1290,6 +1290,7 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
     ntr       = np.array([s.get("n_trades", 0.0)      for s in per_ticker_stats], dtype=np.float64)
     exposure  = np.array([s.get("exposure", 0.0)      for s in per_ticker_stats], dtype=np.float64)
     win_rates = np.array([s.get("win_rate", 0.0)      for s in per_ticker_stats], dtype=np.float64)
+    wr_targets = np.array([s.get("win_rate_target", 0.0) for s in per_ticker_stats], dtype=np.float64)  # NEW
     dist_qual  = np.array([s.get("dist_quality", 0.5)  for s in per_ticker_stats], dtype=np.float64)
     big_wins   = np.array([s.get("big_wins_pct", 0.0)  for s in per_ticker_stats], dtype=np.float64)
     big_losses = np.array([s.get("big_losses_pct", 0.0) for s in per_ticker_stats], dtype=np.float64)
@@ -1307,6 +1308,8 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
     mean_exposure     = float(np.mean(exposure))
     mean_win_rate     = float(np.mean(win_rates))
     med_win_rate      = float(np.median(win_rates))
+    mean_wr_target    = float(np.mean(wr_targets))
+    med_wr_target     = float(np.median(wr_targets))
     mean_mdd          = float(np.mean(mdd_vals))   # negative
     median_mdd        = float(np.median(mdd_vals)) # negative
 
@@ -1393,6 +1396,37 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
     if mean_win_rate > 0.68:
         win_rate_bonus += (mean_win_rate - 0.68) * 25.0
 
+    # -- Win-rate TARGET bonus (v8: reward actual alvo hits) ----------
+    # Pushes GA to find genomes where trades actually hit take-profit target,
+    # not just get closed by trailing stop at small profits. Baseline median
+    # across 119 tickers is ~45%; max ~83%. Aggressive gradient above 50%.
+    # Bonus values calibrated so that +10pp on median adds ~15 to fitness
+    # (comparable weight to WR bonus 40-60x at similar thresholds).
+    wr_target_bonus = 0.0
+    # Sub-35% penalty (alvo raramente atingido = modelo nao sabe onde colocar alvo)
+    if mean_wr_target < 0.35:
+        wr_target_bonus -= (0.35 - mean_wr_target) * 25.0
+    # Linear from 35% baseline upward
+    if mean_wr_target > 0.35:
+        wr_target_bonus += (mean_wr_target - 0.35) * 10.0
+    # Tiered: aggressive rewards above 45% (current baseline median)
+    if mean_wr_target > 0.45:
+        wr_target_bonus += (mean_wr_target - 0.45) * 20.0
+    if mean_wr_target > 0.55:
+        wr_target_bonus += (mean_wr_target - 0.55) * 30.0
+    if mean_wr_target > 0.65:
+        wr_target_bonus += (mean_wr_target - 0.65) * 40.0
+    # Median-based reward (consistencia across tickers)
+    if med_wr_target > 0.40:
+        wr_target_bonus += (med_wr_target - 0.40) * 8.0
+    # Aggressive push above current median 45.5%
+    if med_wr_target > 0.50:
+        wr_target_bonus += (med_wr_target - 0.50) * 25.0
+    if med_wr_target > 0.60:
+        wr_target_bonus += (med_wr_target - 0.60) * 45.0
+    if med_wr_target > 0.70:
+        wr_target_bonus += (med_wr_target - 0.70) * 60.0
+
     # -- Consistency bonus: reward stable per-ticker performance -----------
     consistency_bonus = 0.0
     if len(win_rates) > 5:
@@ -1447,6 +1481,7 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
         0.3 * pct_positive +
         # Win rate: use ONLY tiered bonus (no double-counting with direct weight)
         win_rate_bonus +
+        wr_target_bonus +                              # v8: reward alvo hits
         consistency_bonus +
         calmar_bonus +
         dist_bonus +                                   # v5: distribution quality (big wins vs big losses)

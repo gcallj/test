@@ -183,12 +183,14 @@ def evaluate_genome_full(genome, ticker_arrays_cache, gr):
     active = [s for s in stats if s.get("n_trades", 0) > 5]
     all_stats = stats  # unfiltered
     wrs = [s["win_rate"] for s in active]
+    wr_targets = [s.get("win_rate_target", 0) for s in active]  # v8
     mdds = [abs(s["mdd"]) for s in active]
     rets = [s["total_return"] for s in active]
     sharpes = [s["sharpe"] for s in active]
     trades = [s["n_trades"] for s in active]
 
     all_wrs = [s["win_rate"] for s in all_stats]
+    all_wr_targets = [s.get("win_rate_target", 0) for s in all_stats]  # v8
 
     # Also unfiltered median (matches what summary shows: no n_trades > 5 filter)
     return {
@@ -200,11 +202,16 @@ def evaluate_genome_full(genome, ticker_arrays_cache, gr):
         "wr_med": float(np.median(wrs)) if wrs else 0,
         "wr_mean": float(np.mean(wrs)) if wrs else 0,
         "wr_p75": float(np.percentile(wrs, 75)) if wrs else 0,
+        # v8: win_rate_target metrics
+        "wr_target_med_all": float(np.median(all_wr_targets)) if all_wr_targets else 0,
+        "wr_target_mean_all": float(np.mean(all_wr_targets)) if all_wr_targets else 0,
+        "wr_target_med_active": float(np.median(wr_targets)) if wr_targets else 0,
         "mdd_med": float(np.median(mdds)) if mdds else 0,
         "ret_med": float(np.median(rets)) if rets else 0,
         "sharpe_med": float(np.median(sharpes)) if sharpes else 0,
         "trades_med": float(np.median(trades)) if trades else 0,
         "n_ge_70": int(sum(1 for w in all_wrs if w >= 0.70)),
+        "n_ge_50_target": int(sum(1 for w in all_wr_targets if w >= 0.50)),  # v8
     }
 
 
@@ -466,9 +473,14 @@ def main():
         print(f"[CHUNK {chunk_id}] progress saved to {PROGRESS_FILE}", flush=True)
 
         # Print metrics (ASCII-safe)
+        wr_target_all = chunk_metrics.get("wr_target_med_all", 0)
+        base_wr_target = base_metrics.get("wr_target_med_all", 0)
+        delta_wr_target = (wr_target_all - base_wr_target) * 100
         print(f"[CHUNK {chunk_id}] METRICS vs BASE:", flush=True)
         print(f"  fit={chunk_metrics['fit']:.4f} (delta {delta_fit:+.4f})", flush=True)
         print(f"  WR_med_all (summary)={_fmt_pct1(wr_all)} (delta {delta_wr:+.2f}pp)",
+              flush=True)
+        print(f"  WR_target_med_all   ={_fmt_pct1(wr_target_all)} (delta {delta_wr_target:+.2f}pp)",
               flush=True)
         print(f"  WR_mean_all         ={_fmt_pct1(chunk_metrics['wr_mean_all'])}",
               flush=True)
@@ -478,6 +490,8 @@ def main():
         print(f"  Sharpe_med          ={chunk_metrics['sharpe_med']:.3f}", flush=True)
         print(f"  Trades_med          ={chunk_metrics['trades_med']:.0f}", flush=True)
         print(f"  N tickers >= 70% WR ={chunk_metrics['n_ge_70']}/{chunk_metrics['n_tickers_total']}",
+              flush=True)
+        print(f"  N tickers >= 50% WR_tgt={chunk_metrics.get('n_ge_50_target', 0)}/{chunk_metrics['n_tickers_total']}",
               flush=True)
 
         # Clean up per-chunk GA checkpoints AFTER progress is saved
