@@ -2302,24 +2302,57 @@ def _build_history_from_etl(etl_path: str) -> pd.DataFrame:
         df = df[~_weekend_mask].copy()
         print(f"[ETL fallback] Dropped {_n_weekend} rows com data de fim de semana (ghost ffill)")
 
-    # FILTRO FORWARD-FILL: remove dias onde OHLC sao IDENTICOS ao dia anterior
-    # por ticker (sinal de ffill de feriado). Tolerancia: |delta|<1e-8
+    # FILTRO HOLIDAY FFILL: remove dias onde OHLC sao IDENTICOS ao dia anterior
+    # E o gap > 1 dia (indicativo de feriado forward-filled).
+    # Apenas dias 100% flat DURANTE sequencia continua sao preservados (FIIs ilíquidos).
+    # Tolerancia: |delta|<1e-8
     _n_before_ffill = len(df)
     df = df.sort_values([TICKER_COL, DATE_COL]).reset_index(drop=True)
     _prev_open = df.groupby(TICKER_COL)[OPEN_COL].shift(1)
     _prev_high = df.groupby(TICKER_COL)[HIGH_COL].shift(1)
     _prev_low = df.groupby(TICKER_COL)[LOW_COL].shift(1)
     _prev_close = df.groupby(TICKER_COL)[CLOSE_COL].shift(1)
+    _prev_date = df.groupby(TICKER_COL)[DATE_COL].shift(1)
+    _gap_days = (pd.to_datetime(df[DATE_COL]) - pd.to_datetime(_prev_date)).dt.days
     _same_ohlc = (
         ((df[OPEN_COL] - _prev_open).abs() < 1e-8)
         & ((df[HIGH_COL] - _prev_high).abs() < 1e-8)
         & ((df[LOW_COL] - _prev_low).abs() < 1e-8)
         & ((df[CLOSE_COL] - _prev_close).abs() < 1e-8)
     )
-    df = df[~_same_ohlc.fillna(False)].copy()
+    # So remove se OHLC identico E houve gap temporal > 1 dia corrido
+    # (indicativo de forward-fill de feriado, nao flat legitimo)
+    _ffill_ghost = _same_ohlc & (_gap_days > 1)
+    df = df[~_ffill_ghost.fillna(False)].copy()
     _n_ffill_dropped = _n_before_ffill - len(df)
     if _n_ffill_dropped > 0:
-        print(f"[ETL fallback] Dropped {_n_ffill_dropped} rows com OHLC identico ao dia anterior (ffill ghost)")
+        print(f"[ETL fallback] Dropped {_n_ffill_dropped} rows com OHLC identico apos gap>1d (holiday ffill)")
+
+    # FILTRO OUTLIER: remove valores impossiveis por ticker (yfinance as vezes
+    # retorna precos corrompidos - ex: UGPA3 tem R$3.3M Jan-Mai/2007).
+    # Usa mediana ROBUSTA (somente ultimos 3 anos onde dados tem melhor qualidade).
+    # Threshold conservador (100x) para nao remover volatilidade normal.
+    _n_before_outlier = len(df)
+    # Mediana nos ultimos 3 anos por ticker (~750 dias uteis)
+    _dates = pd.to_datetime(df[DATE_COL])
+    _recent_cutoff = _dates.max() - pd.Timedelta(days=3 * 365)
+    _recent_mask = _dates >= _recent_cutoff
+    _recent_df = df[_recent_mask]
+    _recent_med = _recent_df.groupby(TICKER_COL)[CLOSE_COL].median()
+    # Map median back to full df
+    _med_close = df[TICKER_COL].map(_recent_med)
+    # Fallback: se ticker nao tem dados recentes, usa mediana full-history
+    _full_med = df.groupby(TICKER_COL)[CLOSE_COL].transform("median")
+    _med_close = _med_close.fillna(_full_med)
+    _outlier_mask = (
+        (df[CLOSE_COL] > 100.0 * _med_close)  # > 100x = impossivel
+        | (df[CLOSE_COL] < _med_close / 100.0)  # < 1/100 = impossivel
+        | (df[CLOSE_COL] <= 0)
+    )
+    df = df[~_outlier_mask.fillna(False)].copy()
+    _n_outlier = _n_before_outlier - len(df)
+    if _n_outlier > 0:
+        print(f"[ETL fallback] Dropped {_n_outlier} rows com outliers (>100x ou <1/100 mediana-recente)")
 
     _n_dropped = _n_before - len(df)
     if _n_dropped > 0:
