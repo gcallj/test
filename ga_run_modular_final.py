@@ -764,15 +764,18 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
     if mean_ret < 0.0:
         underperf_penalty += abs(mean_ret) * 30.0
 
-    # -- Win-rate bonus (v6: assertive, penalize mediocre) ----------
+    # -- Win-rate bonus (v9: operational floor at 60%) ----------
+    # Rationale: WR < 60% nao deve ser operado (decisao do usuario).
+    # Gradient: hard penalty abaixo de 60% + bonus agressivo acima.
     win_rate_bonus = 0.0
-    # Sub-55% hard penalty (com custos reais, WR < 55% nao e lucrativo)
+    # HARD floor: penalty severa abaixo de 60%
+    if mean_win_rate < 0.60:
+        win_rate_bonus -= (0.60 - mean_win_rate) * 30.0  # 2x antes
     if mean_win_rate < 0.55:
-        win_rate_bonus -= (0.55 - mean_win_rate) * 15.0
-    # Base: linear from 55% upward
-    if mean_win_rate > 0.55:
-        win_rate_bonus += (mean_win_rate - 0.55) * 6.0
-    # Tiered bonuses (cumulative, higher rewards for high WR)
+        win_rate_bonus -= (0.55 - mean_win_rate) * 20.0
+    if mean_win_rate < 0.50:
+        win_rate_bonus -= (0.50 - mean_win_rate) * 40.0
+    # Base: linear from 60% upward
     if mean_win_rate > 0.60:
         win_rate_bonus += (mean_win_rate - 0.60) * 8.0
     if mean_win_rate > 0.65:
@@ -780,10 +783,17 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
     if mean_win_rate > 0.70:
         win_rate_bonus += (mean_win_rate - 0.70) * 15.0
     # Median win rate (consistency across tickers)
-    if med_win_rate > 0.55:
-        win_rate_bonus += (med_win_rate - 0.55) * 4.0
-    if med_win_rate > 0.62:
-        win_rate_bonus += (med_win_rate - 0.62) * 6.0
+    if med_win_rate < 0.60:
+        win_rate_bonus -= (0.60 - med_win_rate) * 10.0
+    if med_win_rate > 0.60:
+        win_rate_bonus += (med_win_rate - 0.60) * 4.0
+    if med_win_rate > 0.65:
+        win_rate_bonus += (med_win_rate - 0.65) * 6.0
+
+    # v9: penalty por pct_sub60 (quantos tickers estao abaixo de 60%)
+    pct_sub60 = float((win_rates < 0.60).mean())
+    if pct_sub60 > 0.30:
+        win_rate_bonus -= (pct_sub60 - 0.30) * 15.0
 
     # -- Win-rate TARGET bonus (v8: reward actual alvo hits) ----------
     # Strong incentive for GA to find genomes with more take-profit hits.

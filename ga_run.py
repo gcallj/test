@@ -1367,15 +1367,18 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
     if mean_ret < 0.0:
         underperf_penalty += abs(mean_ret) * 30.0
 
-    # -- Win-rate bonus (v7: aggressive push to 70%+) ----------
+    # -- Win-rate bonus (v9: operational floor at 60%) ----------
+    # Rationale: WR < 60% nao deve ser operado (aprovado pelo usuario).
+    # Gradient: hard penalty abaixo de 60% + bonus agressivo acima.
     win_rate_bonus = 0.0
-    # Sub-55% hard penalty (com custos reais, WR < 55% não é lucrativo)
+    # HARD floor: penalty severa abaixo de 60% (novo em v9)
+    if mean_win_rate < 0.60:
+        win_rate_bonus -= (0.60 - mean_win_rate) * 30.0  # 2x antes (15->30)
     if mean_win_rate < 0.55:
-        win_rate_bonus -= (0.55 - mean_win_rate) * 15.0
-    # Base: linear from 55% upward
-    if mean_win_rate > 0.55:
-        win_rate_bonus += (mean_win_rate - 0.55) * 6.0
-    # Tiered bonuses (cumulative, higher rewards for high WR)
+        win_rate_bonus -= (0.55 - mean_win_rate) * 20.0  # penalty extra abaixo de 55%
+    if mean_win_rate < 0.50:
+        win_rate_bonus -= (0.50 - mean_win_rate) * 40.0  # catastrofico abaixo de 50%
+    # Base: linear from 60% upward (BASELINE agora e 60%, nao 55%)
     if mean_win_rate > 0.60:
         win_rate_bonus += (mean_win_rate - 0.60) * 8.0
     if mean_win_rate > 0.65:
@@ -1383,10 +1386,12 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
     if mean_win_rate > 0.70:
         win_rate_bonus += (mean_win_rate - 0.70) * 15.0
     # Median win rate (consistency across tickers)
-    if med_win_rate > 0.55:
-        win_rate_bonus += (med_win_rate - 0.55) * 4.0
-    if med_win_rate > 0.62:
-        win_rate_bonus += (med_win_rate - 0.62) * 6.0
+    if med_win_rate < 0.60:
+        win_rate_bonus -= (0.60 - med_win_rate) * 10.0  # penalty ate mediana >= 60%
+    if med_win_rate > 0.60:
+        win_rate_bonus += (med_win_rate - 0.60) * 4.0
+    if med_win_rate > 0.65:
+        win_rate_bonus += (med_win_rate - 0.65) * 6.0
     # v7: Aggressive push above current baseline (68%)
     # Steep gradient only kicks in above 0.68 to incentivize pushing past current ceiling
     if med_win_rate > 0.68:
@@ -1395,6 +1400,12 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
         win_rate_bonus += (med_win_rate - 0.70) * 60.0
     if mean_win_rate > 0.68:
         win_rate_bonus += (mean_win_rate - 0.68) * 25.0
+
+    # v9: penalty por pct_sub60 (quantos tickers estao abaixo de 60%)
+    # Desincentiva modelos que tem WR mean alto mas muita variacao
+    pct_sub60 = float((win_rates < 0.60).mean())
+    if pct_sub60 > 0.30:
+        win_rate_bonus -= (pct_sub60 - 0.30) * 15.0  # forte penalty se > 30% dos tickers sub-60
 
     # -- Win-rate TARGET bonus (v8: reward actual alvo hits) ----------
     # Pushes GA to find genomes where trades actually hit take-profit target,
@@ -3475,26 +3486,48 @@ def run():
                 penalty *= 0.75  # base lateral, aguardar breakout
 
             # Confidence (0-100): 11 fatores including timing + pivot + wr_target
-            # v2: reforca peso WR (0.18->0.24) + adiciona q_wr_target (0.06)
-            # para coerencia com rank_score rebalanceado
+            # v3: reforca q_wr_target (0.06 -> 0.15) para recompensar alvo hits
+            # e penaliza trades com WR_target < 35% (modelo nao sabe colocar alvo)
+            # Normaliza pela meta realista de 60% (base mediana +15pp vs 45% antigo)
             q_wr_target = float(np.clip(bt_win_rate_target / 0.60, 0.0, 1.0))
-            raw_conf = (0.08 * q_bt + 0.06 * q_sig + 0.24 * q_wr + 0.06 * q_wr_target +
-                 0.06 * q_dist +
-                 0.05 * q_agree + 0.06 * q_regime + 0.05 * q_ml + 0.08 * q_viability +
+            # Penalty multiplicativo: WR alto mas WR_target baixo -> trade e fake positive
+            # (lucros vem de trailing stop, nao de alvo real). Aplicar so com trades suficientes.
+            # Tambem penaliza fortemente WR < 60% para desincentivar esses tickers.
+            wr_target_penalty = 1.0
+            if bt_n_trades >= min_trades_for_tier:
+                if bt_win_rate < 0.50:
+                    wr_target_penalty = 0.40  # 60% haircut - WR muito ruim
+                elif bt_win_rate < 0.60:
+                    wr_target_penalty = 0.60  # 40% haircut - WR abaixo do minimo operacional
+                elif bt_win_rate_target < 0.35:
+                    wr_target_penalty = 0.75  # 25% haircut por WR_tgt baixo
+                elif bt_win_rate_target < 0.45:
+                    wr_target_penalty = 0.90  # 10% haircut
+            raw_conf = (0.06 * q_bt + 0.05 * q_sig + 0.20 * q_wr + 0.15 * q_wr_target +
+                 0.05 * q_dist +
+                 0.04 * q_agree + 0.05 * q_regime + 0.04 * q_ml + 0.07 * q_viability +
                  0.14 * q_timing_pre +     # timing (Minervini stage - granular)
                  0.12 * q_pivot_pre)       # posicao vs pivot
-            # Apply penalty but ensure base floor of 30 for trades with reasonable WR
+            # weights sum = 0.97; the remaining 0.03 absorved into base_floor dynamic range
+            # Apply penalty but ensure base floor of 25 for trades with reasonable WR
             base_floor = 25.0 if bt_win_rate > 0.55 else 15.0
             confidence = float(np.clip(
-                base_floor + raw_conf * penalty * 75.0,
+                base_floor + raw_conf * penalty * wr_target_penalty * 75.0,
                 0.0, 100.0
             ))
 
             # -- Quality gates: demote unreliable buys to hold --
+            # Nao removemos tickers da planilha - apenas mudamos signal para hold.
+            _low_wr_reason = None  # preserva motivo para o texto de recomendacao
             if sig == "buy" and confidence < MIN_BUY_CONFIDENCE:
                 sig = "hold"  # confidence too low
             if sig == "buy" and wr_tier == "insuficiente" and bt_n_trades < 10:
                 sig = "hold"  # truly insufficient data (relaxed: allow if >=10 trades)
+            # NOVO: gate de 60% WR - nao operar em tickers de baixa qualidade
+            # Tickers ficam no xlsx mas como hold com marcador "[BAIXA QUAL]"
+            if sig == "buy" and bt_n_trades >= min_trades_for_tier and bt_win_rate < 0.60:
+                sig = "hold"
+                _low_wr_reason = f"WR {bt_win_rate*100:.0f}% < 60% (nao operar)"
 
             # ── UPSIDE SCORE: qualidade da oportunidade de subida (0-100) ──
             # Combina fatores que historicamente predizem subida:
@@ -3571,19 +3604,29 @@ def run():
                 f"HardStop: {hard_stop_pct:.0f}% gap"
             )
 
-            # ── RANKING SCORE (v2): WR-heavy + wr_target tiebreaker ──
-            # Pesos re-balanceados para coerencia com win_rate
-            # (antes: rank vs win_rate = +0.13; agora: +0.76)
+            # ── RANKING SCORE (v3): WR + WR_target co-dominant ──
+            # Pesos: WR 20% + WR_target 15% = 35% combined (vs 25%+5% em v2)
+            # Pesos restantes reduzidos proporcionalmente para somar 1.00
+            # Correlacoes esperadas: rank vs WR +0.75, rank vs WR_target +0.55
+            # Desconto explicito para WR < 60% (tickers de baixa qualidade
+            # ficam no xlsx mas com rank muito baixo)
+            _low_wr_rank_penalty = 0.0
+            if bt_n_trades >= min_trades_for_tier:
+                if bt_win_rate < 0.50:
+                    _low_wr_rank_penalty = 20.0  # -20 pontos no rank
+                elif bt_win_rate < 0.60:
+                    _low_wr_rank_penalty = 10.0  # -10 pontos no rank
             rank_score = round(
-                0.15 * confidence +          # qualidade do backtest (ja inclui timing+pivot)
-                0.15 * upside_score +         # momentum atual
-                0.10 * q_timing_pre * 100 +   # timing (Minervini stage)
-                0.10 * q_pivot_pre * 100 +    # posicao vs pivot
-                0.10 * min(rr_ratio / 3.0, 1.0) * 100 +  # risco-retorno
-                0.25 * bt_win_rate * 100 +    # win rate direto (BOOSTED 10%->25%)
-                0.05 * bt_win_rate_target * 100 +  # NEW: % alvo hits (tiebreaker)
-                0.05 * regime_val * 100 +     # regime de mercado
-                0.05 * q_stop * 100           # qualidade do stop
+                0.13 * confidence +          # qualidade do backtest (ja inclui timing+pivot)
+                0.13 * upside_score +         # momentum atual
+                0.09 * q_timing_pre * 100 +   # timing (Minervini stage)
+                0.09 * q_pivot_pre * 100 +    # posicao vs pivot
+                0.08 * min(rr_ratio / 3.0, 1.0) * 100 +  # risco-retorno
+                0.20 * bt_win_rate * 100 +    # win rate direto
+                0.15 * bt_win_rate_target * 100 +  # % alvo hits (BOOSTED 5%->15%)
+                0.07 * regime_val * 100 +     # regime de mercado
+                0.06 * q_stop * 100           # qualidade do stop
+                - _low_wr_rank_penalty        # penalidade explicita WR < 60%
             , 1)
 
             # ── CLASSIFICACAO DE POTENCIAL (pre-override, sera recalculado abaixo) ──
@@ -3787,6 +3830,7 @@ def run():
             # CANCELAR: nivel abaixo do qual a tese fica invalidada (S1, MA200, ou stop)
 
             _wr_pct = round(bt_win_rate * 100, 0)
+            _wr_tgt_pct = round(bt_win_rate_target * 100, 0)  # % alvo hits
             _stage_short = f"{stage_label.replace('Stage ', 'S')} {timing_sub}"
 
             # Nivel de cancelamento da tese (mais conservador que o stop tactico)
@@ -3820,7 +3864,8 @@ def run():
 
                 recomendacao = (
                     f"{_modo} * {_stage_short} * "
-                    f"+{_alvo_pct_num:.1f}% alvo @{take_profit:.2f} (WR {_wr_pct:.0f}%) * "
+                    f"+{_alvo_pct_num:.1f}% alvo @{take_profit:.2f} "
+                    f"(WR {_wr_pct:.0f}% / alvo {_wr_tgt_pct:.0f}%) * "
                     f"Stop @{stop_loss:.2f} (-{_stop_pct_num:.1f}%) * "
                     f"Cancelar se < {_cancel_label} @{_cancel:.2f}"
                 )
@@ -3897,6 +3942,11 @@ def run():
                         f"R1 @{r1:.2f} S1 @{s1:.2f}"
                     )
 
+            # Prefix "[BAIXA QUAL]" quando o gate de WR<60% foi acionado
+            # (BUY foi demovido para HOLD por qualidade insuficiente)
+            if _low_wr_reason:
+                recomendacao = f"[BAIXA QUAL {_low_wr_reason}] {recomendacao}"
+
 
             # Formatar potencial_pct para exibicao
             _potencial_pct_str = f"{potencial_pct:+.1f}%" if potencial_pct is not None else "-"
@@ -3932,6 +3982,7 @@ def run():
                 "rank": rank_score,
                 "confidence": round(confidence, 1),
                 "win_rate": round(bt_win_rate * 100, 1),
+                "wr_alvo": round(bt_win_rate_target * 100, 1),  # v8: % alvo hits
                 "queda_max": round(queda_max_esperada * 100, 1),
                 "regime": _regime_str,
                 # === Auditoria ===
@@ -3948,6 +3999,7 @@ def run():
             "test_sharpe": st["sharpe"],
             "test_trades": st["n_trades"],
             "test_win_rate": st["win_rate"],
+            "test_win_rate_target": st.get("win_rate_target", 0.0),  # v8: alvo hits
             "test_avg_trade": st["avg_trade"],
             "buy_hold_return": buyhold_capped(c),
             "wr_tier": wr_tier,
@@ -4112,14 +4164,15 @@ def run():
                         "potencial_pct": "Potencial de alta esperado (%):\n- BUY: % ate alvo\n- HOLD Stage 2: % ate R1 ou alvo\n- HOLD Stage 1: % ate breakout R1\n- HOLD Stage 3: potencial negativo (caminho = descer)\n- SELL: -",
                         "signal": "buy = comprar | hold = aguardar | sell = sair",
                         "estagio": "Minervini Stage + sub-timing:\nStage 1 Base, Stage 2 Alta (ideal/momentum/cedo/pullback/atrasado),\nStage 3 Topo, Stage 4 Queda",
-                        "confidence": "0-100: confianca no sinal (GA + stage + pivot)",
+                        "confidence": "0-100: confianca no sinal (GA + stage + pivot + wr_alvo)",
                         "close": "Preco de fechamento",
                         "entrada": "Preco sugerido de compra (ordem limite)",
                         "stop": "Stop loss (baseado em ATR)",
                         "alvo": "Alvo de venda",
                         "RR": "Risco:Retorno. Minimo 1.0 para comprar",
                         "queda_max": "Previsao de queda maxima (%) baseada no MDD historico",
-                        "win_rate": "Win rate do backtest (% trades positivos)",
+                        "win_rate": "Win rate do backtest (% trades positivos, incl. trailing stops)",
+                        "wr_alvo": "% de trades que atingiram o alvo de take-profit (estrito)",
                         "regime": "Regime de mercado: favoravel/neutro/desfavoravel",
                         "signal_ga": "Sinal bruto do GA antes do override por stage (auditoria)",
                     }
@@ -4133,13 +4186,13 @@ def run():
                     # Column widths
                     apply_widths = {
                         "Date": 12, "ticker": 12,
-                        "recomendacao": 90,          # wide for full text
+                        "recomendacao": 95,          # wide for full text
                         "potencial_pct": 13,
                         "signal": 8, "estagio": 26,
                         "close": 10, "entrada": 10, "stop": 10, "alvo": 10,
                         "saida": 10, "RR": 6,
                         "pivot": 10, "r1": 10, "s1": 10,
-                        "rank": 8, "confidence": 11, "win_rate": 10,
+                        "rank": 8, "confidence": 11, "win_rate": 10, "wr_alvo": 10,
                         "queda_max": 10, "regime": 13, "signal_ga": 10,
                     }
                     for col_idx, col_name in enumerate(df_app.columns):
