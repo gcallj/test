@@ -3759,67 +3759,52 @@ def run():
             _above_s1 = close_val > s1
             _regime_str = "favoravel" if regime_val >= 0.6 else ("neutro" if regime_val >= 0.3 else "desfavoravel")
 
-            # ── Entrada/Stop/Alvo em FUNCAO de Pivot/S1/R1 (prioridade) ──
+            # ── Entrada/Stop/Alvo em FUNCAO de Pivot/S1/R1 ──
             # Regra operacional classica:
-            #   - Entrada: Pivot (retomada) ou S1 (pullback) dependendo da posicao atual
-            #   - Stop:    abaixo de S1 (quebra do suporte = tese invalida)
-            #   - Alvo:    R1 (resistencia = primeiro alvo natural de breakout)
-            # ATR e' usado como minimo de seguranca (stop muito tight pode ser ruido)
+            #   - Entrada: Pivot (retomada) ou S1 (pullback) dependendo da posicao
+            #   - Stop:    S1 (quebra do suporte = tese invalida)
+            #   - Alvo:    R1 (resistencia = primeiro alvo natural)
+            # NAO forcamos minimo de stop ou alvo baseado em R:R - respeitamos
+            # exatamente o que os levels indicam (decisao do usuario).
             if sig == "buy":
                 # -- ENTRADA: pivot-based --
                 if close_val > pivot:
                     # Preco acima do pivot: comprar em pullback ate pivot
-                    # (pivot vira suporte intraday)
                     _entry_pivot = round(pivot * 1.002, 4)
-                    # Nao comprar muito abaixo do close atual (max 3% desconto)
                     _entry_pivot = max(_entry_pivot, round(close_val * 0.97, 4))
-                    best_buy = min(best_buy, _entry_pivot)  # whichever is lower
-                    best_buy = max(best_buy, round(close_val * 0.97, 4))  # cap desconto
+                    best_buy = min(best_buy, _entry_pivot)
+                    best_buy = max(best_buy, round(close_val * 0.97, 4))
                 elif close_val > s1:
                     # Preco entre S1 e pivot: comprar perto de S1
                     best_buy = round(max(s1 * 1.002, close_val * 0.995), 4)
                 else:
-                    # Preco abaixo de S1: aguardar retomada (nao forcar)
+                    # Preco abaixo de S1: aguardar retomada
                     best_buy = round(close_val * 0.998, 4)
 
-                # -- STOP: abaixo de S1 (quebra do suporte invalida tese) --
-                # ATR como minimo: se S1 muito longe do entry, usa ATR
-                _stop_s1 = round(s1 * 0.995, 4)  # 0.5% abaixo de S1 (quebra)
-                _stop_atr = round(best_buy - (global_params.stop_atr_mult * atr_val), 4)
-                # Usa o MAIOR (mais apertado) entre S1 e ATR
-                # mas respeita minimo MIN_STOP_PCT
-                _min_stop = round(best_buy * (1.0 - MIN_STOP_PCT), 4)
-                stop_loss = max(_stop_s1, _stop_atr, _min_stop * 0.0)  # pega o stop nao-nulo mais baixo
-                if _stop_s1 > 0 and _stop_atr > 0:
-                    stop_loss = max(_stop_s1, _stop_atr)  # mais apertado = mais alto
-                elif _stop_s1 > 0:
-                    stop_loss = _stop_s1
+                # -- STOP: abaixo de S1 (quebra do suporte) --
+                # Usa S1 diretamente; se S1 >= best_buy (raro), usa ATR
+                if s1 > 0 and s1 < best_buy:
+                    stop_loss = round(s1 * 0.995, 4)  # 0.5% abaixo de S1
                 else:
-                    stop_loss = _stop_atr
-                # Respeita distancia minima
-                if (best_buy - stop_loss) / max(best_buy, ATR_EPS) < MIN_STOP_PCT:
-                    stop_loss = _min_stop
-                stop_loss = round(stop_loss, 4)
+                    # S1 invalido: fallback ATR
+                    stop_loss = round(best_buy - (global_params.stop_atr_mult * atr_val), 4)
+                # Garantir que stop_loss e' positivo e abaixo do entry
+                if stop_loss <= 0 or stop_loss >= best_buy:
+                    stop_loss = round(best_buy * 0.99, 4)  # ultimo fallback: 1% abaixo
 
                 # -- ALVO: R1 como primeiro alvo natural --
-                # Se R1 > best_buy, usar R1 (com margem de 0.2% para execucao)
-                # Fallback: usar alvo statistical/resistance (ATR-based)
-                if r1 > best_buy * 1.01:  # R1 pelo menos 1% acima do entry
-                    _alvo_r1 = round(r1 * 0.998, 4)
-                    take_profit = _alvo_r1
-                # (se R1 muito proximo, mantem take_profit ATR-based anterior)
+                if r1 > best_buy:
+                    take_profit = round(r1 * 0.998, 4)  # 0.2% abaixo de R1
+                else:
+                    # R1 invalido/abaixo do entry: mantem take_profit ATR-based anterior
+                    pass
 
-                # Recalcula R:R coerente com novos levels
+                # Recalcula R:R informativo (sem forcar ajuste)
                 entry_ref = best_buy
                 stop_risk = entry_ref - stop_loss
                 take_reward = take_profit - entry_ref
                 if stop_risk > 0:
                     rr_ratio = take_reward / stop_risk
-                    # Se R:R muito baixo, estender alvo proporcionalmente
-                    if rr_ratio < MIN_RR_RATIO:
-                        take_reward = stop_risk * MIN_RR_RATIO
-                        take_profit = round(entry_ref + take_reward, 4)
-                        rr_ratio = MIN_RR_RATIO
                     rr_display = round(rr_ratio, 1)
 
             best_sell = round(min(take_profit * 0.99, close_val * 1.02), 4) if sig == "buy" else round(close_val, 4)
