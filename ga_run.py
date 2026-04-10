@@ -3237,6 +3237,24 @@ def run():
     results_summary: List[Dict[str, Any]] = []
     results_apply: List[Dict[str, Any]] = []
 
+    # Load universe quality tags (Premium/HighQuality/Regular)
+    # baseados em analysis/ticker_alpha_analysis.json (pre-computed)
+    _universe_quality = {}
+    _analysis_path = "analysis/ticker_alpha_analysis.json"
+    if os.path.exists(_analysis_path):
+        try:
+            with open(_analysis_path, "r", encoding="utf-8") as _fq:
+                _q_data = json.load(_fq)
+            _prem = set(_q_data.get("premium_subset", {}).get("tickers", []))
+            _hq = set(_q_data.get("high_quality_subset", {}).get("tickers", []))
+            for _t in _hq:
+                _universe_quality[_t] = "HIGH_QUAL"
+            for _t in _prem:
+                _universe_quality[_t] = "PREMIUM"  # overrides HQ if both
+            print(f"[UNIVERSE] loaded: {len(_prem)} PREMIUM + {len(_hq)} HIGH_QUAL tags")
+        except Exception as _e:
+            print(f"[WARN] universe tags load failed: {_e}")
+
     n_tickers_phase3 = len(store.tickers)
     for ix_tkr, tkr in enumerate(store.tickers, 1):
         arrays = store.get_ticker_arrays(tkr)
@@ -3603,6 +3621,12 @@ def run():
                 sig = "hold"
                 _low_wr_reason = f"WR {bt_win_rate*100:.0f}% < 60% (nao operar)"
 
+            # NOVO: gate de universe quality - priorizar PREMIUM/HIGH_QUAL
+            # Tickers REGULAR nao sao demovidos automaticamente, apenas marcados
+            # no texto (usuario decide). Isso porque o modelo ainda pode ter
+            # edge em algum regime mesmo em tickers nao-premium.
+            _univ_tag = _universe_quality.get(tkr, "REGULAR")
+
             # ── UPSIDE SCORE: qualidade da oportunidade de subida (0-100) ──
             # Combina fatores que historicamente predizem subida:
             #   1. Proximity to support (quanto mais perto do suporte, melhor entrada)
@@ -3690,6 +3714,17 @@ def run():
                     _low_wr_rank_penalty = 20.0  # -20 pontos no rank
                 elif bt_win_rate < 0.60:
                     _low_wr_rank_penalty = 10.0  # -10 pontos no rank
+
+            # Boost rank para tickers com edge real
+            # PREMIUM (alpha>+2pp): +15 pontos
+            # HIGH_QUAL (alpha>=0): +8 pontos
+            # REGULAR: 0
+            _universe_boost = 0.0
+            if _univ_tag == "PREMIUM":
+                _universe_boost = 15.0
+            elif _univ_tag == "HIGH_QUAL":
+                _universe_boost = 8.0
+
             rank_score = round(
                 0.13 * confidence +          # qualidade do backtest (ja inclui timing+pivot)
                 0.13 * upside_score +         # momentum atual
@@ -3700,7 +3735,8 @@ def run():
                 0.15 * bt_win_rate_target * 100 +  # % alvo hits (BOOSTED 5%->15%)
                 0.07 * regime_val * 100 +     # regime de mercado
                 0.06 * q_stop * 100           # qualidade do stop
-                - _low_wr_rank_penalty        # penalidade explicita WR < 60%
+                - _low_wr_rank_penalty        # penalidade WR < 60%
+                + _universe_boost             # boost universe quality
             , 1)
 
             # ── CLASSIFICACAO DE POTENCIAL (pre-override, sera recalculado abaixo) ──
@@ -4046,6 +4082,15 @@ def run():
             if _low_wr_reason:
                 recomendacao = f"[BAIXA QUAL {_low_wr_reason}] {recomendacao}"
 
+            # Prefix universe tag para BUYs:
+            # PREMIUM = modelo tem edge real (alpha>+2pp)
+            # HIGH_QUAL = modelo bate B&H (alpha>=0)
+            # REGULAR = cuidado, tende a underperformar B&H
+            if sig == "buy" and _univ_tag != "REGULAR":
+                recomendacao = f"[{_univ_tag}] {recomendacao}"
+            elif sig == "buy" and _univ_tag == "REGULAR":
+                recomendacao = f"[REGULAR-cuidado] {recomendacao}"
+
 
             # Formatar potencial_pct para exibicao
             _potencial_pct_str = f"{potencial_pct:+.1f}%" if potencial_pct is not None else "-"
@@ -4082,6 +4127,7 @@ def run():
                 "confidence": round(confidence, 1),
                 "win_rate": round(bt_win_rate * 100, 2),
                 "wr_alvo": round(bt_win_rate_target * 100, 2),  # v8: % alvo hits (2 decimais)
+                "universe": _universe_quality.get(tkr, "REGULAR"),  # PREMIUM/HIGH_QUAL/REGULAR
                 "queda_max": round(queda_max_esperada * 100, 1),
                 "regime": _regime_str,
                 # === Auditoria ===
@@ -4272,6 +4318,7 @@ def run():
                         "queda_max": "Previsao de queda maxima (%) baseada no MDD historico",
                         "win_rate": "Win rate do backtest (% trades positivos, incl. trailing stops)",
                         "wr_alvo": "% de trades que atingiram o alvo de take-profit (estrito)",
+                        "universe": "Qualidade do universo:\nPREMIUM = alpha>+2pp & WR>68% (7 tickers)\nHIGH_QUAL = alpha>=0 & WR>=65% (15 tickers)\nREGULAR = demais (tende a nao bater B&H)",
                         "regime": "Regime de mercado: favoravel/neutro/desfavoravel",
                         "signal_ga": "Sinal bruto do GA antes do override por stage (auditoria)",
                     }
@@ -4292,6 +4339,7 @@ def run():
                         "saida": 10, "RR": 6,
                         "pivot": 10, "r1": 10, "s1": 10,
                         "rank": 8, "confidence": 11, "win_rate": 10, "wr_alvo": 10,
+                        "universe": 11,
                         "queda_max": 10, "regime": 13, "signal_ga": 10,
                     }
                     for col_idx, col_name in enumerate(df_app.columns):
