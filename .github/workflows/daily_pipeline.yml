@@ -2,8 +2,8 @@ name: Daily Stock Pipeline
 
 on:
   schedule:
-    - cron: '30 21 * * 1-5'   # 21:30 UTC = 18:30 BRT (apos fechamento B3)
-  workflow_dispatch:            # permite rodar manualmente pelo GitHub
+    - cron: '30 21 * * *'    # 21:30 UTC = 18:30 BRT (TODOS os dias, incl. fins de semana)
+  workflow_dispatch:           # permite rodar manualmente pelo GitHub
 
 jobs:
   pipeline:
@@ -38,22 +38,36 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Verify checkpoint exists (from git)
+      - name: Verify checkpoint exists
         run: |
           echo "Checkpoint file:"
           cat global_ga_checkpoint.json | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'  fitness={d[\"fitness\"]:.4f}  genome_len={len(d[\"genome\"])}')"
-          echo "Models dir:"
-          ls -1 output/data/models/*.json output/data/models/*.cbm 2>/dev/null | head -5
-          echo "  total files: $(ls output/data/models/ | wc -l)"
 
-      - name: Run daily pipeline (ETL + GA causal — skips BIN/REG)
+      - name: Run daily pipeline (ETL + GA causal)
         run: python -u predict_daily.py
 
-      - name: Verify outputs before upload
+      - name: Send enhanced Telegram (WR breakdown + subsets)
+        if: success()
+        run: |
+          python -u send_telegram.py || echo "WARNING: send_telegram.py failed, basic Telegram already sent by ga_run.py"
+
+      - name: Verify outputs
         if: always()
         run: |
           echo "=== Output files ==="
           ls -lh summary_latest.xlsx apply_last_*d__H*.csv 2>/dev/null || echo "WARNING: output files missing!"
+          echo "=== Date in xlsx ==="
+          python3 -c "
+          from openpyxl import load_workbook
+          wb = load_workbook('summary_latest.xlsx', read_only=True)
+          ws = wb['Apply']
+          h = [c.value for c in next(ws.rows)]
+          r = next(ws.iter_rows(min_row=2, values_only=True))
+          d = dict(zip(h, r))
+          print(f'Date: {d[\"Date\"]}')
+          print(f'Signal count: {sum(1 for _ in ws.iter_rows(min_row=2))} rows')
+          wb.close()
+          " || echo "Could not parse xlsx"
 
       - name: Upload artifacts
         if: always()
