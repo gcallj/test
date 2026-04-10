@@ -705,18 +705,19 @@ def compute_final_signal_and_acao(
         if sub_timing == "ideal":
             if ga_sig == "buy":
                 return ("buy", "COMPRAR")
-            # Promover GA hold -> buy em Stage 2 ideal quando confidence alta
-            # e score positivo (GA foi conservador demais)
-            if confidence >= 65.0 and score_strength > 0.0 and regime_str != "desfavoravel":
-                return ("buy", "COMPRAR")
+            # Promover GA hold -> buy em Stage 2 ideal: exigir condicoes mais
+            # restritivas (antes: confidence>=65, agora: >=75 + regime favoravel)
+            # para evitar excesso de promocoes (19/20 BUYs eram hold promovidos)
+            if confidence >= 75.0 and score_strength > 0.2 and regime_str == "favoravel":
+                return ("buy", "COMPRAR (promovido)")
             return ("hold", "AGUARDAR setup")
 
         if sub_timing == "momentum":
             if ga_sig == "buy":
                 return ("buy", "COMPRAR")
-            # Promover em momentum estabelecido + confidence alta
-            if confidence >= 65.0 and score_strength > 0.0 and regime_str != "desfavoravel":
-                return ("buy", "COMPRAR")
+            # Promover em momentum: mesmos criterios restritivos
+            if confidence >= 75.0 and score_strength > 0.2 and regime_str == "favoravel":
+                return ("buy", "COMPRAR (promovido)")
             return ("hold", "AGUARDAR setup")
 
         if sub_timing == "cedo":
@@ -3621,10 +3622,9 @@ def run():
                 sig = "hold"
                 _low_wr_reason = f"WR {bt_win_rate*100:.0f}% < 60% (nao operar)"
 
-            # NOVO: gate de universe quality - priorizar PREMIUM/HIGH_QUAL
-            # Tickers REGULAR nao sao demovidos automaticamente, apenas marcados
-            # no texto (usuario decide). Isso porque o modelo ainda pode ter
-            # edge em algum regime mesmo em tickers nao-premium.
+            # (gate de potencial minimo movido para APOS pivot override + coerce)
+
+            # Universe quality tag
             _univ_tag = _universe_quality.get(tkr, "REGULAR")
 
             # ── UPSIDE SCORE: qualidade da oportunidade de subida (0-100) ──
@@ -3868,6 +3868,15 @@ def run():
             signal_ga = sig
             # Signal final (que vai para o usuario)
             sig = final_sig
+
+            # Gate de potencial minimo (APOS coerce + pivot override)
+            # Usa take_profit final (ja ajustado por R1/pivot)
+            # Abaixo de 5% nao compensa custos (0.55% + 15% IR)
+            if sig == "buy":
+                _final_alvo_pct = (take_profit - best_buy) / max(best_buy, ATR_EPS)
+                if _final_alvo_pct < 0.05:
+                    sig = "hold"
+                    _low_wr_reason = f"Potencial {_final_alvo_pct*100:.1f}% < 5% (nao compensa custos)"
 
             # ═══════════════════════════════════════════════════════════════
             # AJUSTE DE RANK/POTENCIAL baseado no signal final

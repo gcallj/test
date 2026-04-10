@@ -1,196 +1,153 @@
 # Pipeline de Sinais de Trading — B3
 
-Sistema de geracao de sinais de compra/venda para ~119 ativos brasileiros (acoes, FIIs, crypto). Pipeline de 5 etapas com modelos ML, otimizacao genetica (GA) walk-forward, custos realistas (corretagem + B3 + slippage + IR 15%) e **auditoria causal** que bloqueia features contaminadas.
+Sistema de geracao de sinais de compra/venda para ~119 ativos brasileiros (acoes, FIIs, crypto). Pipeline com otimizacao genetica (GA) walk-forward, custos realistas (corretagem + B3 + slippage + IR 15%) e **auditoria causal** que bloqueia features contaminadas.
 
-> **Ultima atualizacao: 06/Abr/2026**
-> Win Rate: **63.7%** | MDD: **-20.4%** | Confidence: **61+** | GA Fitness: **4.66**
-> Features: **48 causais** (222 geradas, 48 usadas, 48 bloqueadas por auditoria)
+> **Ultima atualizacao: 10/Abr/2026**
+> Win Rate: **64.2%** | WR Alvo: **61.1%** | MDD: **-13.0%** | Fitness: **18.45**
+> Features: **80 causais** (OHLCV-derived + ETL)
 > Custos: R$7 corretagem + B3 0.065% + slippage 0.10%/lado + IR 15%
 
 ---
 
-## Fluxo do Pipeline
+## Metricas de Performance
 
-### Operacional (diario) — ETL + GA direto
-
-```
-+-----------+                                        +--------------+
-|  ETL      |--------------------------------------->|  GA          |
-|stock_etl  |   48 features causais (OHLCV-derived)  | ga_run.py    |
-|  .py      |   27 internas + 21 ETL                 |  (load mode) |
-+-----------+                                        +--------------+
-  ~30 min                                              ~10 min
-
-Output: summary_latest.xlsx + apply_last_5d__H5.csv -> Telegram
-```
-
-O GA usa **apenas features causais** derivadas de OHLCV. Steps BIN/REG/FINAL sao
-desnecessarios no fluxo diario porque seus outputs (p_up20, EV_buy, buy_trust, etc.)
-sao **bloqueados pela auditoria causal**.
-
-### Pesquisa (completo) — inclui BIN/REG/FINAL
-
-```
- STEP 1          STEP 2            STEP 3          STEP 4            STEP 5
-+-----------+   +--------------+   +-----------+   +--------------+   +--------------+
-|  ETL      |-->|  BIN Models  |-->| Regressao |-->| Final Output |-->|  GA          |
-|stock_etl  |   |stock_bin_    |   |stock_reg_ |   |stock_final_  |   | ga_run.py    |
-|  .py      |   |models.py     |   |models.py  |   |output.py     |   |              |
-+-----------+   +--------------+   +-----------+   +--------------+   +--------------+
-  ~30 min          ~2.5 h            ~10 min          ~5 min            ~4-8h (train)
-```
-
-Usar `python predict_daily.py --full` ou `python run_pipeline.py` para rodar completo.
-BIN/REG geram probabilidades e previsoes de preco que ficam em `history_consolidated.parquet`
-para analise futura, mas **nao alimentam** a operacao diaria.
-
----
-
-## Auditoria Causal
-
-O GA usa **apenas features causais** (derivadas de OHLCV). Uma blocklist automatica impede contaminacao por model outputs:
-
-| Categoria | Qtd | Status |
-|-----------|-----|--------|
-| Features tecnicas (RSI, MACD, BB, CCI, etc.) | 27 | Permitidas |
-| Features ETL (Minervini, SMA slopes, patterns) | 21 | Permitidas |
-| Model outputs (p_up20, EV_buy, buy_trust, etc.) | 22 | **Bloqueadas** |
-| Snapshot fundamentals (PE, PB, DY, market_cap) | 16 | **Bloqueadas** |
-| Metadata (Date, ticker, split, signal) | 10 | Excluidas |
-
-Script de auditoria: `analysis/leakage_audit.py`
-
----
-
-## Metricas de Performance (OOS)
-
-### Global
+### Global (full history, 119 tickers)
 
 | Metrica | Valor |
 |---------|-------|
-| Win Rate (mean / median) | 63.7% / 66.3% |
-| MDD (median) | -20.4% |
-| Confidence (median) | 61+ |
-| GA Fitness | 4.66 |
-| Trades/ticker (mean) | 140 |
-| % tickers com retorno positivo | 74.6% |
+| Win Rate (median) | 64.2% |
+| Win Rate Alvo (% trades que atingem take-profit) | 61.1% |
+| MDD (median) | -13.0% |
+| GA Fitness | 18.45 |
+| Trades/ticker (median) | 61 |
 
-### Por Segmento (equal-weight)
+### Por Universe Quality
 
-| Segmento | Tickers | Win Rate | Retorno | MDD |
-|----------|---------|----------|---------|-----|
-| Industrials/Exporters | 4 | 73.2% | +558% | -18.2% |
-| Crypto | 6 | 67.9% | +394% | -28.1% |
-| Defensives/Health | 8 | 66.0% | +257% | -22.0% |
-| Domestic Cyclicals | 14 | 67.9% | +182% | -20.9% |
-| Other Equity | 8 | 67.0% | +87% | -17.3% |
-| Commodity Largecap | 13 | 65.2% | +69% | -20.9% |
-| Tech/Growth | 5 | 67.8% | +43% | -21.2% |
-| Utilities/Infra | 13 | 64.4% | +20% | -21.2% |
-| Agro | 3 | 61.1% | +18% | -21.2% |
-| Financials | 9 | 64.5% | +14% | -21.8% |
-| FII | 35 | 66.5% | +11% | -13.3% |
+O modelo tem **alpha real** concentrado em 7 tickers premium:
 
-Segmentacao definida em `ticker_metadata.py`.
+| Universe | N | WR | Ret a.a. | Alpha | Beat B&H | MDD |
+|----------|---|-----|----------|-------|----------|-----|
+| **PREMIUM** | 7 | 72.2% | +3.4% | **+5.5pp** | **100%** | 13.6% |
+| HIGH_QUAL | 15 | 70.3% | +1.6% | +5.0pp | 100% | 12.9% |
+| ALL | 119 | 64.2% | - | -11.5pp | 19% | 13.0% |
+
+**Recomendacao: priorizar sinais BUY em tickers PREMIUM e HIGH_QUAL.**
 
 ---
 
-## Arquivos do Projeto
+## Fluxo Operacional (diario ~30 min)
 
-### Pipeline principal
+```
++-----------+         +--------------+         +-----------+
+|  ETL      |-------->|  GA          |-------->| Telegram  |
+|stock_etl  |  80 feat| ga_run.py    | xlsx    | summary_  |
+|  .py      |  causais|  (load mode) |         | latest    |
++-----------+         +--------------+         +-----------+
+```
 
-| Arquivo | Funcao | Step |
-|---------|--------|------|
-| `stock_etl.py` | Download OHLCV (yfinance), ~222 features, targets | 1 |
-| `stock_bin_models.py` | Ensemble classificadores (LGBM, HGB, RF, ET, XGB, CatBoost) | 2 |
-| `stock_reg_models.py` | Previsoes de preco com bandas de erro | 3 |
-| `stock_final_output.py` | Consolida BIN + REG, calcula Expected Value | 4 |
-| `ga_run.py` | GA 30-param, walk-forward 2-stage, sinais finais | 5 |
-| `run_pipeline.py` | Orquestrador Steps 1-4 (`--steps`, `--mode`, `--ga-only`) | - |
-| `predict_daily.py` | Pipeline diario: ETL + BIN refresh + REG + FINAL + GA load | - |
-| `numeric_utils.py` | Conversao float32 segura | lib |
-| `payload_store.py` | Payloads por ticker em memmap (economia de RAM) | lib |
-| `auto_tune.py` | AutoTuner: ajusta pop/ngen/workers por RAM disponivel | lib |
-| `ga_run_modular_final.py` | GA two-stage modular (S1 exploracao + S2 refinamento) | lib |
-| `ticker_metadata.py` | Mapa setorial: 80+ tickers B3 em 11 segmentos | lib |
+```bash
+python predict_daily.py     # ETL + GA load → summary_latest.xlsx → Telegram
+```
 
-### Analise e auditoria
+---
+
+## Sinais e Niveis Operacionais
+
+### Classificacao Minervini Stage
+
+| Stage | Sub-timing | Preco vs MA50 | Acao |
+|-------|-----------|---------------|------|
+| **Stage 2 Alta - ideal** | Close a 0-3% da MA50 | Colado a MA50 (melhor entrada) | **COMPRAR** |
+| **Stage 2 Alta - momentum** | Close a 3-15% da MA50 | Tendencia confirmada | **COMPRAR** |
+| Stage 2 Alta - atrasado | Close > 15% da MA50 | Esticado | AGUARDAR pullback |
+| Stage 2 Alta - pullback | Close < MA50 > MA200 | Correcao saudavel | COMPRAR cautela |
+| Stage 2 Alta - cedo | MA50 cruzou MA200 < 3% | Transicao recente | OBSERVAR |
+| Stage 1 Base | MA50 plana | Lateralidade | OBSERVAR |
+| Stage 3 Topo | MA50 caindo | Distribuicao | AGUARDAR / VENDER |
+| Stage 4 Queda | Close < MA200 | Downtrend | VENDER |
+
+### Niveis de Entrada/Stop/Alvo (pivot-based)
+
+| Nivel | Calculo | Logica |
+|-------|---------|--------|
+| **Entrada** | Pivot (pullback) ou S1+0.2% | Comprar em suporte |
+| **Stop** | S1-0.5% (quebra suporte) | ATR fallback se S1 muito tight |
+| **Alvo** | R1-0.2% (resistencia) | ATR fallback se R1 muito perto |
+| **R:R** | Informativo (sem forcagem) | Resultado natural dos levels |
+
+### Quality Gates (BUY → HOLD)
+
+| Gate | Criterio | Motivo |
+|------|----------|--------|
+| WR < 60% | Backtest win rate insuficiente | Nao compensa custos |
+| Potencial < 5% | Alvo muito proximo | Custos reais 0.55%+IR consomem lucro |
+| Confidence < MIN | GA + stage + pivot baixos | Sinal fraco |
+
+### Promocao hold → buy
+
+GA disse HOLD mas Stage 2 ideal/momentum indica oportunidade? Promove SE:
+- confidence >= 75 (antes era 65 — era permissivo demais)
+- score_strength > 0.2
+- regime == "favoravel"
+
+---
+
+## Colunas do Apply (xlsx)
+
+| Campo | Descricao |
+|-------|-----------|
+| `signal` | buy / hold / sell (final, pos-coerce + gates) |
+| `signal_ga` | Sinal bruto do GA (antes dos overrides) |
+| `recomendacao` | Texto unificado: [PREMIUM] MODO * Stage * potencial alvo (WR X% / alvo Y%) |
+| `entrada` | Preco de compra (pivot/S1 based) |
+| `stop` | Stop-loss (abaixo de S1) |
+| `alvo` | Take-profit (proximo de R1) |
+| `win_rate` | % trades positivos (inclui trailing stops) |
+| `wr_alvo` | % trades que atingiram o alvo take-profit (estrito) |
+| `universe` | PREMIUM / HIGH_QUAL / REGULAR (baseado em alpha historico) |
+| `confidence` | 0-100 (11 fatores: WR, WR_target, timing, pivot, regime, R:R, etc.) |
+| `rank` | Score ponderado (WR 20% + WR_target 15% + confidence + timing + regime) |
+
+---
+
+## Arquivos Principais
 
 | Arquivo | Funcao |
 |---------|--------|
-| `analysis/leakage_audit.py` | Scanner de contaminacao: model outputs, snapshot fundamentals, split |
+| `predict_daily.py` | Pipeline diario: ETL + GA load → Telegram |
+| `ga_run.py` | GA 30-param, walk-forward 2-stage, sinais finais, Telegram |
+| `stock_etl.py` | Download OHLCV (yfinance), features tecnicas |
+| `send_telegram.py` | Caption enriquecido: WR breakdown + subsets Premium/HQ |
+| `run_local_ga_staged.py` | Retrain seeded (chunks × gens × pop × windows) |
+| `ga_run_modular_final.py` | GA two-stage modular (exploração + refinamento) |
+| `payload_store.py` | Payloads por ticker em memmap (economia de RAM) |
+| `ticker_metadata.py` | Mapa setorial: 119 tickers B3 em 11 segmentos |
+| `global_ga_checkpoint.json` | Checkpoint GA (30 genes, fitness) |
 
-### Ferramentas opcionais
-
-| Arquivo | Funcao |
-|---------|--------|
-| `run_local.py` | Runner local com metricas e envio Telegram |
-| `run_stages.py` | GA em stages como subprocessos |
-| `chart_petr4.py` / `chart_top_signals.py` | Graficos de sinais |
-| `compare_v3_v4.py` | Compara versoes do pipeline |
-| `retrain_codespace.py` | Retreino em GitHub Codespaces |
-| `main_cell_v3.py` | Pipeline GA standalone (legado, importado por payload_store) |
-
-### Testes
+### Analise (analysis/)
 
 | Arquivo | Funcao |
 |---------|--------|
-| `tests/test_notebooks.py` | Contratos I/O: ga_run.py, notebooks, checkpoint format |
+| `ticker_alpha_subset.py` | Identifica tickers PREMIUM/HIGH_QUAL por alpha historico |
+| `win_rate_deep_dive.py` | Compara WR total vs WR alvo (exit type tracking) |
+| `sweep_chunk3_variants.py` | Parameter sweep post-hoc (rr, trailing, partial) |
+| `sweep_universe_subset.py` | Avalia modelo em subsets do universo |
+| `validate_stage_filter.py` | Valida Minervini Stage gate no backtest |
 
 ---
 
 ## Como Executar
 
-### Pipeline completa (treina tudo)
-
 ```bash
-# Steps 1-4 (ETL + ML models + consolidacao) — ~3-4 horas
-python run_pipeline.py
+# Diario (~30 min)
+python predict_daily.py
 
-# Step 5 (GA train — otimizacao genetica) — ~4-8 horas
+# Retrain seeded (usa checkpoint atual como semente)
+python retrain_with_wr_target.py    # 3 chunks × 3 gens × 24 pop
+
+# Pipeline completa (treina tudo, ~4-8h)
 python ga_run.py
 ```
-
-### Atualizacao diaria (~40 min)
-
-```bash
-python predict_daily.py                   # ETL + GA load (default, rapido)
-# Resultado: summary_latest.xlsx enviado ao Telegram
-```
-
-### Pipeline de pesquisa (~3.5h, inclui BIN/REG)
-
-```bash
-python predict_daily.py --full            # ETL + BIN + REG + FINAL + GA
-python run_pipeline.py                    # Alternativa: Steps 1-4 + GA
-python run_pipeline.py --mode full        # Treina tudo
-python run_pipeline.py --steps 1,4        # Steps especificos
-```
-
----
-
-## Saidas
-
-### `summary_latest.xlsx`
-
-| Aba | Conteudo |
-|-----|---------|
-| **Apply** | Sinais do dia: ticker, signal, confidence, entrada (alinhada com S1), stop, alvo (R1), R:R, condicao unificada |
-| **Summary** | Metricas OOS por ticker: test_return, test_mdd, test_sharpe, test_win_rate, segment_key |
-| **Feature_Importance** | Top features por ticker com relevance_score |
-
-### Formato da aba Apply
-
-| Campo | Descricao |
-|-------|-----------|
-| `signal` | buy / hold / sell |
-| `entrada` | Preco de compra (alinhado com S1 - suporte) |
-| `stop` | Stop-loss (abaixo de S1) |
-| `alvo` | Take-profit (proximo de R1 - resistencia) |
-| `pivot`, `r1`, `s1` | Niveis de pivot diario |
-| `condicao` | Campo unificado: `BUY 66.74 \| Acima Pivot \| Regime OK \| Stop 62.66 Alvo 75.11` |
-| `confidence` | Score 0-100 (10 fatores: backtest, WR, timing, pivot, regime, R:R, liquidez) |
-| `regime` | favoravel / neutro / desfavoravel |
 
 ---
 
@@ -206,26 +163,13 @@ Total:       ~0.55% por trade (sem IR)
 
 ---
 
-## GA: Algoritmo Genetico em 2 Estagios
-
-```
-Stage 1 (Exploracao)                    Stage 2 (Refinamento)
-  pop=64, ngen=25                         pop=24, ngen=20
-  4 walk-forward windows                  8 walk-forward windows
-  Varre espaco amplo                      Valida robustez OOS
-  Top 6 genomas transferidos  -------->   Refina com mais periodos
-```
-
-- **30 parametros** otimizados: stops, take-profits, trailing, partial takes, volatility filter, timing
-- **Fitness multi-objetivo**: retorno excess, Sharpe, MDD (softplus), win rate, consistencia
-- **Warm-start**: checkpoint permite retomar de run anterior
-- **AutoTuner**: ajusta pop/ngen/workers automaticamente por RAM disponivel
-
----
-
 ## Telegram
 
-O `ga_run.py` envia `summary_latest.xlsx` via Telegram automaticamente.
+Caption enriquecido com:
+- Sinais: X BUY | Y HOLD | Z SELL
+- WR breakdown: WR total vs WR alvo + exit types (alvo/stop)
+- Subsets: Premium (alpha>+2pp) e High-Quality (alpha>=0)
+- Top BUYs por rank com entrada/alvo/potencial
 
 Configurar:
 ```bash
@@ -233,18 +177,14 @@ export TELEGRAM_BOT_TOKEN="seu_token"
 export TELEGRAM_CHAT_ID="seu_chat_id"
 ```
 
-Fallback hardcoded no codigo para uso sem env vars.
-
 ---
 
 ## GitHub Actions
 
 Workflow: `.github/workflows/daily_pipeline.yml`
-
-- **Schedule:** Dias uteis, 18:30 BRT (21:30 UTC)
-- **Modo:** `predict_daily.py` (ETL + GA load — BIN/REG pulados)
-- **Outputs:** summary_latest.xlsx -> Telegram + GitHub Artifacts (30 dias)
-- **Retrain:** `.github/workflows/retrain_ga.yml` (manual, staged)
+- **Schedule:** Diariamente 18:30 BRT (21:30 UTC) + fins de semana
+- **Modo:** `predict_daily.py` (ETL + GA load)
+- **Output:** summary_latest.xlsx → Telegram + GitHub Artifacts
 
 ---
 
@@ -254,46 +194,7 @@ Workflow: `.github/workflows/daily_pipeline.yml`
 - Core: `pandas`, `numpy`, `scikit-learn`, `deap`, `numba`, `scipy`, `xlsxwriter`, `pyarrow`
 - ML: `lightgbm`, `xgboost`, `catboost`
 - Dados: `yfinance`, `ta`
-- Opcional: `optuna`
 
 ```bash
 pip install pandas numpy scikit-learn deap numba scipy xlsxwriter pyarrow lightgbm yfinance ta
-```
-
----
-
-## Estrutura
-
-```
-test/
-|-- ga_run.py                    # GA optimization (pipeline principal)
-|-- run_pipeline.py              # Orquestrador Steps 1-4
-|-- predict_daily.py             # Pipeline diario
-|-- stock_etl.py                 # Step 1: ETL
-|-- stock_bin_models.py          # Step 2: Binary classification
-|-- stock_reg_models.py          # Step 3: Regression
-|-- stock_final_output.py        # Step 4: Final consolidation
-|-- numeric_utils.py             # Utilidades numericas
-|-- payload_store.py             # Memmap payload store
-|-- auto_tune.py                 # AutoTuner RAM-aware
-|-- ga_run_modular_final.py      # GA two-stage
-|-- ticker_metadata.py           # Mapa setorial B3
-|-- analysis/
-|   |-- leakage_audit.py         # Scanner de contaminacao
-|-- tests/
-|   |-- test_notebooks.py        # Testes de contrato I/O
-|-- .github/workflows/
-|   |-- daily_pipeline.yml       # Diario 18:30 BRT
-|   |-- retrain_ga.yml           # Retrain manual staged
-|   |-- test.yml                 # CI tests
-|-- global_ga_checkpoint.json    # Checkpoint GA
-|-- summary_latest.xlsx          # Output principal
-|-- apply_last_5d__H5.csv        # Sinais em CSV
-|-- output/
-|   |-- data/
-|   |   |-- expanded_stock_reduced.parquet
-|   |   |-- models/
-|   |-- history_consolidated.parquet
-|   |-- ga_memmap/               # Payloads memmap
-|-- .env                         # Telegram + API keys (nao commitado)
 ```
