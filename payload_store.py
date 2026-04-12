@@ -369,14 +369,20 @@ class PayloadStore:
         return pd.Timestamp(int(valid.max()), unit="ns")
 
     # ------------------------------------------------------------------
+    # Close / Cleanup
+    # ------------------------------------------------------------------
+    def close(self):
+        """Release open memmap handles without deleting the store directory."""
+        for name in list(self._arrays.keys()):
+            del self._arrays[name]
+        self._arrays.clear()
+
+    # ------------------------------------------------------------------
     # Cleanup
     # ------------------------------------------------------------------
     def cleanup(self):
         """Delete the store directory and all memmap files."""
-        # Close memmap references
-        for name in list(self._arrays.keys()):
-            del self._arrays[name]
-        self._arrays.clear()
+        self.close()
 
         if os.path.isdir(self.store_dir):
             shutil.rmtree(self.store_dir, ignore_errors=True)

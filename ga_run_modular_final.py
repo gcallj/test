@@ -59,6 +59,7 @@ COST_PER_TRADE_PCT = (2 * BROKERAGE_PER_ORDER / DEFAULT_POSITION_SIZE) + B3_FEES
 MIN_PRICE = 0.01
 CAP_DAILY_RET = 0.30
 CAP_TRADE_RET = 3.00
+GA_ALPHA_FOCUS = os.environ.get("GA_ALPHA_FOCUS", "off").lower() == "on"
 
 GLOBAL_PARAM_SPECS = [
     ("vote_threshold_long", 0.15, 0.55, 0.05, False),
@@ -302,6 +303,157 @@ def compute_weighted_votes(x: np.ndarray, z_threshold: float, feat_n: int):
     return votes_long, votes_short
 
 
+def _safe_metric_ratio(numerator: float, denominator: float, cap: float = 10.0) -> float:
+    num = float(numerator) if np.isfinite(numerator) else 0.0
+    den = float(denominator) if np.isfinite(denominator) else 0.0
+    if abs(den) < 1e-12:
+        if num > 0:
+            return float(cap)
+        if num < 0:
+            return float(-cap)
+        return 0.0
+    return float(np.clip(num / den, -cap, cap))
+
+
+def _safe_positive_ratio(numerator: float, denominator: float, cap: float = 10.0) -> float:
+    num = float(numerator) if np.isfinite(numerator) else 0.0
+    den = float(denominator) if np.isfinite(denominator) else 0.0
+    if num <= 0:
+        return 0.0
+    if abs(den) < 1e-12:
+        return float(cap)
+    return float(np.clip(num / den, 0.0, cap))
+
+
+def _compute_cagr(total_return: float, n_bars: int) -> float:
+    n_years = max(float(n_bars) / 252.0, 1.0 / 252.0)
+    equity = 1.0 + float(total_return)
+    if not np.isfinite(equity):
+        return 0.0
+    if equity <= 0:
+        return -1.0
+    return float(np.clip(equity ** (1.0 / n_years) - 1.0, -1.0, 10.0))
+
+
+def _finalize_backtest_stats(
+    trade_rets: List[float],
+    trade_exit_types: List[str],
+    exposure: float,
+    total_return: float,
+    mdd: float,
+    n_bars: int,
+    max_drawdown_duration: int,
+) -> Dict[str, float]:
+    base_stats = {
+        "total_return": float(total_return),
+        "mdd": float(mdd),
+        "sharpe": 0.0,
+        "sortino": 0.0,
+        "profit_factor": 0.0,
+        "expectancy": 0.0,
+        "payoff_ratio": 0.0,
+        "max_drawdown_duration": float(max_drawdown_duration),
+        "cagr": _compute_cagr(total_return, n_bars),
+        "n_trades": 0.0,
+        "win_rate": 0.0,
+        "win_rate_target": 0.0,
+        "win_rate_target_robust": 0.0,
+        "pct_exit_take": 0.0,
+        "pct_exit_stop": 0.0,
+        "pct_exit_time": 0.0,
+        "avg_trade": 0.0,
+        "trade_std": 0.0,
+        "exposure": float(exposure),
+        "pct_gt15": 0.0,
+        "pct_10_15": 0.0,
+        "pct_5_10": 0.0,
+        "pct_2_5": 0.0,
+        "pct_0_2": 0.0,
+        "pct_n2_0": 0.0,
+        "pct_n5_n2": 0.0,
+        "pct_n10_n5": 0.0,
+        "pct_lt_n10": 0.0,
+        "dist_quality": 0.0,
+        "big_wins_pct": 0.0,
+        "big_losses_pct": 0.0,
+    }
+    if len(trade_rets) == 0:
+        return base_stats
+
+    tr = np.asarray(trade_rets, dtype=np.float64)
+    exit_arr = np.asarray(trade_exit_types)
+    n_years = max(float(n_bars) / 252.0, 0.1)
+    trades_per_year = len(tr) / n_years
+    ann_factor = np.sqrt(min(trades_per_year, 252.0))
+    mean_tr = float(np.mean(tr))
+    std_tr = float(np.std(tr))
+    downside = np.minimum(tr, 0.0)
+    downside_dev = float(np.sqrt(np.mean(np.square(downside)))) if len(downside) > 0 else 0.0
+
+    pct_exit_take = float((exit_arr == "take").mean()) if len(exit_arr) > 0 else 0.0
+    pct_exit_stop = float(((exit_arr == "stop") | (exit_arr == "hard_loss")).mean()) if len(exit_arr) > 0 else 0.0
+    pct_exit_time = float((exit_arr == "time").mean()) if len(exit_arr) > 0 else 0.0
+    take_mask = (exit_arr == "take")
+    time_pos_mask = (exit_arr == "time") & (tr > 0)
+    wr_target_robust = float((take_mask | time_pos_mask).mean()) if len(exit_arr) > 0 else 0.0
+
+    wins = tr[tr > 0]
+    losses = tr[tr < 0]
+    avg_win = float(np.mean(wins)) if len(wins) > 0 else 0.0
+    avg_loss = abs(float(np.mean(losses))) if len(losses) > 0 else 0.0
+    gross_profit = float(np.sum(wins)) if len(wins) > 0 else 0.0
+    gross_loss = abs(float(np.sum(losses))) if len(losses) > 0 else 0.0
+    win_rate = float((tr > 0).mean())
+    expectancy = float(np.clip(win_rate * avg_win - (1.0 - win_rate) * avg_loss, -1.0, 1.0))
+    ann_sharpe = float(np.clip(_safe_metric_ratio(mean_tr, std_tr, cap=10.0) * ann_factor, -10.0, 10.0))
+    ann_sortino = float(np.clip(_safe_metric_ratio(mean_tr, downside_dev, cap=10.0) * ann_factor, -10.0, 10.0))
+    profit_factor = _safe_positive_ratio(gross_profit, gross_loss, cap=10.0)
+    payoff_ratio = _safe_positive_ratio(avg_win, avg_loss, cap=10.0)
+
+    pct_gt15 = float((tr > 0.15).mean())
+    pct_10_15 = float(((tr > 0.10) & (tr <= 0.15)).mean())
+    pct_5_10 = float(((tr > 0.05) & (tr <= 0.10)).mean())
+    pct_2_5 = float(((tr > 0.02) & (tr <= 0.05)).mean())
+    pct_0_2 = float(((tr > 0.00) & (tr <= 0.02)).mean())
+    pct_n2_0 = float(((tr > -0.02) & (tr <= 0.00)).mean())
+    pct_n5_n2 = float(((tr > -0.05) & (tr <= -0.02)).mean())
+    pct_n10_n5 = float(((tr > -0.10) & (tr <= -0.05)).mean())
+    pct_lt_n10 = float((tr <= -0.10).mean())
+    big_wins = pct_gt15 + pct_10_15 + pct_5_10
+    big_losses = pct_lt_n10 + pct_n10_n5 + pct_n5_n2
+    dist_quality = float(np.clip((big_wins - big_losses + 0.5), 0.0, 1.0))
+
+    base_stats.update({
+        "sharpe": ann_sharpe,
+        "sortino": ann_sortino,
+        "profit_factor": profit_factor,
+        "expectancy": expectancy,
+        "payoff_ratio": payoff_ratio,
+        "n_trades": float(len(tr)),
+        "win_rate": win_rate,
+        "win_rate_target": pct_exit_take,
+        "win_rate_target_robust": wr_target_robust,
+        "pct_exit_take": pct_exit_take,
+        "pct_exit_stop": pct_exit_stop,
+        "pct_exit_time": pct_exit_time,
+        "avg_trade": mean_tr,
+        "trade_std": std_tr,
+        "pct_gt15": pct_gt15,
+        "pct_10_15": pct_10_15,
+        "pct_5_10": pct_5_10,
+        "pct_2_5": pct_2_5,
+        "pct_0_2": pct_0_2,
+        "pct_n2_0": pct_n2_0,
+        "pct_n5_n2": pct_n5_n2,
+        "pct_n10_n5": pct_n10_n5,
+        "pct_lt_n10": pct_lt_n10,
+        "dist_quality": dist_quality,
+        "big_wins_pct": big_wins,
+        "big_losses_pct": big_losses,
+    })
+    return base_stats
+
+
 def buyhold_capped(close: np.ndarray) -> float:
     n = len(close)
     if n < 2:
@@ -388,6 +540,8 @@ def _backtest_stats_global_intraday(
     consec_stops = 0
     cooldown = 0
     exposure_acc = 0.0
+    current_drawdown_duration = 0
+    max_drawdown_duration = 0
 
     for i in range(1, n):
         if cooldown > 0:
@@ -601,66 +755,27 @@ def _backtest_stats_global_intraday(
                     max_fav = 0.0
 
         peak = max(peak, equity)
-        mdd = min(mdd, (equity / max(peak, ATR_EPS)) - 1.0)
+        drawdown = (equity / max(peak, ATR_EPS)) - 1.0
+        mdd = min(mdd, drawdown)
+        if drawdown < -1e-12:
+            current_drawdown_duration += 1
+            max_drawdown_duration = max(max_drawdown_duration, current_drawdown_duration)
+        else:
+            current_drawdown_duration = 0
         # Equity drawdown circuit-breaker (progressive re-entry: 20 bars, was 30)
-        if gp.equity_drawdown_stop_pct > 0 and (equity / max(peak, ATR_EPS)) - 1.0 < -gp.equity_drawdown_stop_pct:
+        if gp.equity_drawdown_stop_pct > 0 and drawdown < -gp.equity_drawdown_stop_pct:
             cooldown = max(cooldown, 20)  # ~1 month pause after DD exceeds threshold
 
     exposure = float(exposure_acc / max(1, n - 1))
-    if len(trade_rets) == 0:
-        return {"total_return": float(equity - 1.0), "mdd": float(mdd), "sharpe": 0.0,
-                "n_trades": 0.0, "win_rate": 0.0, "win_rate_target": 0.0,
-                "pct_exit_take": 0.0, "pct_exit_stop": 0.0, "pct_exit_time": 0.0,
-                "avg_trade": 0.0, "exposure": exposure}
-    tr = np.asarray(trade_rets, dtype=np.float64)
-    # v8: exit-type metrics
-    exit_arr = np.asarray(trade_exit_types)
-    pct_exit_take = float((exit_arr == "take").mean()) if len(exit_arr) > 0 else 0.0
-    pct_exit_stop = float(((exit_arr == "stop") | (exit_arr == "hard_loss")).mean()) if len(exit_arr) > 0 else 0.0
-    pct_exit_time = float((exit_arr == "time").mean()) if len(exit_arr) > 0 else 0.0
-    wr_target_strict = pct_exit_take  # pure alvo hits
-    # Annualized Sharpe: use trades_per_year, not raw trade count
-    n_years = max(n / 252.0, 0.1)
-    trades_per_year = len(tr) / n_years
-    ann_factor = np.sqrt(min(trades_per_year, 252))
-    ann_sharpe = float(np.mean(tr) / (np.std(tr) + 1e-12) * ann_factor)
-    # -- Trade return distribution buckets (v5) --
-    # Faixas: >15%, 10-15%, 5-10%, 2-5%, 0-2%, -2-0%, -5 to -2%, -10 to -5%, <-10%
-    pct_gt15  = float((tr > 0.15).mean())
-    pct_10_15 = float(((tr > 0.10) & (tr <= 0.15)).mean())
-    pct_5_10  = float(((tr > 0.05) & (tr <= 0.10)).mean())
-    pct_2_5   = float(((tr > 0.02) & (tr <= 0.05)).mean())
-    pct_0_2   = float(((tr > 0.00) & (tr <= 0.02)).mean())
-    pct_n2_0  = float(((tr > -0.02) & (tr <= 0.00)).mean())
-    pct_n5_n2 = float(((tr > -0.05) & (tr <= -0.02)).mean())
-    pct_n10_n5= float(((tr > -0.10) & (tr <= -0.05)).mean())
-    pct_lt_n10= float((tr <= -0.10).mean())
-    # Quality score from distribution: big wins vs big losses ratio
-    big_wins = pct_gt15 + pct_10_15 + pct_5_10  # trades > +5%
-    big_losses = pct_lt_n10 + pct_n10_n5 + pct_n5_n2  # trades < -2%
-    dist_quality = float(np.clip((big_wins - big_losses + 0.5), 0.0, 1.0))  # 0.5 = neutral
-
-    return {
-        "total_return": float(equity - 1.0),
-        "mdd": float(mdd),
-        "sharpe": ann_sharpe,
-        "n_trades": float(len(tr)),
-        "win_rate": float((tr > 0).mean()),
-        # v8: exit-type breakdown + strict alvo-hit metric
-        "win_rate_target": wr_target_strict,
-        "pct_exit_take": pct_exit_take,
-        "pct_exit_stop": pct_exit_stop,
-        "pct_exit_time": pct_exit_time,
-        "avg_trade": float(np.mean(tr)),
-        "trade_std": float(np.std(tr)),
-        "exposure": exposure,
-        # Distribution buckets
-        "pct_gt15": pct_gt15, "pct_10_15": pct_10_15, "pct_5_10": pct_5_10,
-        "pct_2_5": pct_2_5, "pct_0_2": pct_0_2, "pct_n2_0": pct_n2_0,
-        "pct_n5_n2": pct_n5_n2, "pct_n10_n5": pct_n10_n5, "pct_lt_n10": pct_lt_n10,
-        "dist_quality": dist_quality,
-        "big_wins_pct": big_wins, "big_losses_pct": big_losses,
-    }
+    return _finalize_backtest_stats(
+        trade_rets=trade_rets,
+        trade_exit_types=trade_exit_types,
+        exposure=exposure,
+        total_return=float(equity - 1.0),
+        mdd=float(mdd),
+        n_bars=n,
+        max_drawdown_duration=max_drawdown_duration,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -677,26 +792,44 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
     """
     if len(per_ticker_stats) == 0:
         return -1e9
-    sharpe    = np.array([s.get("sharpe", 0.0)       for s in per_ticker_stats], dtype=np.float64)
-    ret       = np.array([s.get("total_return", 0.0)  for s in per_ticker_stats], dtype=np.float64)
+    sharpe    = np.array([s.get("sharpe", 0.0) for s in per_ticker_stats], dtype=np.float64)
+    sortino   = np.array([s.get("sortino", 0.0) for s in per_ticker_stats], dtype=np.float64)
+    ret       = np.array([s.get("total_return", 0.0) for s in per_ticker_stats], dtype=np.float64)
     excess    = np.array([s.get("excess_return", s.get("total_return", 0.0)) for s in per_ticker_stats], dtype=np.float64)
-    mdd_vals  = np.array([s.get("mdd", 0.0)           for s in per_ticker_stats], dtype=np.float64)
+    expectancy_vals = np.array([s.get("expectancy", s.get("avg_trade", 0.0)) for s in per_ticker_stats], dtype=np.float64)
+    payoff_vals = np.array([s.get("payoff_ratio", 0.0) for s in per_ticker_stats], dtype=np.float64)
+    profit_factor_vals = np.array([s.get("profit_factor", 0.0) for s in per_ticker_stats], dtype=np.float64)
+    cagr_vals = np.array([s.get("cagr", 0.0) for s in per_ticker_stats], dtype=np.float64)
+    mdd_duration_vals = np.array([s.get("max_drawdown_duration", 0.0) for s in per_ticker_stats], dtype=np.float64)
+    mdd_vals  = np.array([s.get("mdd", 0.0) for s in per_ticker_stats], dtype=np.float64)
     # Phase 1.3: Cap extreme MDD at -60% to prevent outliers (-99%) from destroying median
     mdd_vals  = np.clip(mdd_vals, -0.60, 0.0)
-    ntr       = np.array([s.get("n_trades", 0.0)      for s in per_ticker_stats], dtype=np.float64)
-    exposure  = np.array([s.get("exposure", 0.0)      for s in per_ticker_stats], dtype=np.float64)
-    win_rates = np.array([s.get("win_rate", 0.0)      for s in per_ticker_stats], dtype=np.float64)
-    wr_targets = np.array([s.get("win_rate_target", 0.0) for s in per_ticker_stats], dtype=np.float64)  # v8
-    dist_qual  = np.array([s.get("dist_quality", 0.5)  for s in per_ticker_stats], dtype=np.float64)
-    big_wins   = np.array([s.get("big_wins_pct", 0.0)  for s in per_ticker_stats], dtype=np.float64)
+    ntr       = np.array([s.get("n_trades", 0.0) for s in per_ticker_stats], dtype=np.float64)
+    exposure  = np.array([s.get("exposure", 0.0) for s in per_ticker_stats], dtype=np.float64)
+    win_rates = np.array([s.get("win_rate", 0.0) for s in per_ticker_stats], dtype=np.float64)
+    wr_targets = np.array([s.get("win_rate_target", 0.0) for s in per_ticker_stats], dtype=np.float64)
+    dist_qual  = np.array([s.get("dist_quality", 0.5) for s in per_ticker_stats], dtype=np.float64)
+    big_wins   = np.array([s.get("big_wins_pct", 0.0) for s in per_ticker_stats], dtype=np.float64)
     big_losses = np.array([s.get("big_losses_pct", 0.0) for s in per_ticker_stats], dtype=np.float64)
 
     med_sharpe        = float(np.median(sharpe))
     mean_sharpe       = float(np.mean(sharpe))
+    med_sortino       = float(np.median(sortino))
+    mean_sortino      = float(np.mean(sortino))
     mean_ret          = float(np.mean(ret))
     med_ret           = float(np.median(ret))
     mean_excess       = float(np.mean(excess))
     med_excess        = float(np.median(excess))
+    mean_expectancy   = float(np.mean(expectancy_vals))
+    med_expectancy    = float(np.median(expectancy_vals))
+    mean_payoff       = float(np.mean(payoff_vals))
+    med_payoff        = float(np.median(payoff_vals))
+    mean_profit_factor = float(np.mean(profit_factor_vals))
+    med_profit_factor = float(np.median(profit_factor_vals))
+    mean_cagr         = float(np.mean(cagr_vals))
+    med_cagr          = float(np.median(cagr_vals))
+    mean_mdd_duration = float(np.mean(mdd_duration_vals))
+    med_mdd_duration  = float(np.median(mdd_duration_vals))
     pct_positive      = float((ret > 0).mean())
     pct_excess_pos    = float((excess > 0).mean())
     med_trades        = float(np.median(ntr))
@@ -704,12 +837,14 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
     mean_exposure     = float(np.mean(exposure))
     mean_win_rate     = float(np.mean(win_rates))
     med_win_rate      = float(np.median(win_rates))
-    mean_wr_target    = float(np.mean(wr_targets))  # v8
-    med_wr_target     = float(np.median(wr_targets))  # v8
+    mean_wr_target    = float(np.mean(wr_targets))
+    med_wr_target     = float(np.median(wr_targets))
     mean_mdd          = float(np.mean(mdd_vals))   # negative
     median_mdd        = float(np.median(mdd_vals)) # negative
 
     # -- Activity bonus/penalty --------------------------------------------
+    # Target: 15-80 trades per year per ticker. Penalise extremes.
+    # Tighter target range (was 100) to reduce churn and cost drag.
     trade_bonus = 0.0
     if med_trades < 8:
         trade_bonus -= (8 - med_trades) * 0.10   # hard penalty for near-zero trades
@@ -724,30 +859,27 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
     if mean_exposure < 0.40:
         trade_bonus -= (0.40 - mean_exposure) * 2.0
 
-    # -- MDD penalty (v5 -- HARD constraint at 25%) -------------------------
+    # -- MDD penalty (v7 -- smooth softplus, no hard walls) ------------------
+    # Softplus replaces piecewise linear to avoid discontinuities in GA landscape
+    def _softplus(x, k=5.0):
+        """Smooth penalty: 0 when x<0, rises steeply when x>0."""
+        cx = max(min(float(k * x), 50.0), -50.0)
+        return math.log1p(math.exp(cx)) / k
+
     mdd_penalty = 0.0
     abs_mdd = abs(median_mdd)
-    if abs_mdd > 0.08:
-        mdd_penalty += (abs_mdd - 0.08) * 8.0    # gentle above 8%
-    if abs_mdd > 0.15:
-        mdd_penalty += (abs_mdd - 0.15) * 20.0   # moderate above 15%
-    if abs_mdd > 0.20:
-        mdd_penalty += (abs_mdd - 0.20) * 60.0   # steep above 20%
-    if abs_mdd > 0.22:
-        mdd_penalty += (abs_mdd - 0.22) * 200.0  # HARD WALL tightened from 25% to 22%
-    if abs_mdd > 0.28:
-        mdd_penalty += (abs_mdd - 0.28) * 400.0  # nuclear penalty above 28%
-    # Bonus for excellent MDD control
+    # Primary: smooth ramp centered at 15%, steep above 20%
+    mdd_penalty += 1.6 * _softplus((abs_mdd - 0.15) / 0.03, k=5.0)
+    # Bonus for excellent control
     if abs_mdd < 0.18:
-        mdd_penalty -= 4.0  # reward strategies with MDD < 18%
+        mdd_penalty -= 4.0
     if abs_mdd < 0.12:
-        mdd_penalty -= 3.0  # extra reward for MDD < 12%
+        mdd_penalty -= 3.0
 
-    # Tail-risk penalty: worst-quartile MDD (much stronger)
+    # Tail-risk penalty (worst-quartile): smooth ramp above 22%
     mdd_p25 = float(np.percentile(mdd_vals, 25))
     abs_mdd_tail = abs(mdd_p25)
-    if abs_mdd_tail > 0.20:
-        mdd_penalty += (abs_mdd_tail - 0.20) * 25.0
+    mdd_penalty += 0.8 * _softplus((abs_mdd_tail - 0.22) / 0.04, k=5.0)
     if abs_mdd_tail > 0.30:
         mdd_penalty += (abs_mdd_tail - 0.30) * 60.0
     if abs_mdd_tail > 0.40:
@@ -765,17 +897,17 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
         underperf_penalty += abs(mean_ret) * 30.0
 
     # -- Win-rate bonus (v9: operational floor at 60%) ----------
-    # Rationale: WR < 60% nao deve ser operado (decisao do usuario).
+    # Rationale: WR < 60% nao deve ser operado (aprovado pelo usuario).
     # Gradient: hard penalty abaixo de 60% + bonus agressivo acima.
     win_rate_bonus = 0.0
-    # HARD floor: penalty severa abaixo de 60%
+    # HARD floor: penalty severa abaixo de 60% (novo em v9)
     if mean_win_rate < 0.60:
-        win_rate_bonus -= (0.60 - mean_win_rate) * 30.0  # 2x antes
+        win_rate_bonus -= (0.60 - mean_win_rate) * 30.0  # 2x antes (15->30)
     if mean_win_rate < 0.55:
-        win_rate_bonus -= (0.55 - mean_win_rate) * 20.0
+        win_rate_bonus -= (0.55 - mean_win_rate) * 20.0  # penalty extra abaixo de 55%
     if mean_win_rate < 0.50:
-        win_rate_bonus -= (0.50 - mean_win_rate) * 40.0
-    # Base: linear from 60% upward
+        win_rate_bonus -= (0.50 - mean_win_rate) * 40.0  # catastrofico abaixo de 50%
+    # Base: linear from 60% upward (BASELINE agora e 60%, nao 55%)
     if mean_win_rate > 0.60:
         win_rate_bonus += (mean_win_rate - 0.60) * 8.0
     if mean_win_rate > 0.65:
@@ -784,35 +916,50 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
         win_rate_bonus += (mean_win_rate - 0.70) * 15.0
     # Median win rate (consistency across tickers)
     if med_win_rate < 0.60:
-        win_rate_bonus -= (0.60 - med_win_rate) * 10.0
+        win_rate_bonus -= (0.60 - med_win_rate) * 10.0  # penalty ate mediana >= 60%
     if med_win_rate > 0.60:
         win_rate_bonus += (med_win_rate - 0.60) * 4.0
     if med_win_rate > 0.65:
         win_rate_bonus += (med_win_rate - 0.65) * 6.0
+    # v7: Aggressive push above current baseline (68%)
+    # Steep gradient only kicks in above 0.68 to incentivize pushing past current ceiling
+    if med_win_rate > 0.68:
+        win_rate_bonus += (med_win_rate - 0.68) * 40.0
+    if med_win_rate > 0.70:
+        win_rate_bonus += (med_win_rate - 0.70) * 60.0
+    if mean_win_rate > 0.68:
+        win_rate_bonus += (mean_win_rate - 0.68) * 25.0
 
     # v9: penalty por pct_sub60 (quantos tickers estao abaixo de 60%)
+    # Desincentiva modelos que tem WR mean alto mas muita variacao
     pct_sub60 = float((win_rates < 0.60).mean())
     if pct_sub60 > 0.30:
-        win_rate_bonus -= (pct_sub60 - 0.30) * 15.0
+        win_rate_bonus -= (pct_sub60 - 0.30) * 15.0  # forte penalty se > 30% dos tickers sub-60
 
     # -- Win-rate TARGET bonus (v8: reward actual alvo hits) ----------
-    # Strong incentive for GA to find genomes with more take-profit hits.
-    # Baseline mediano atual: 45.5%. Meta: pushing para 55%+.
-    # Calibrado para +10pp no mediano = +15 a fitness (peso comparavel ao
-    # win_rate_bonus em thresholds similares).
+    # Pushes GA to find genomes where trades actually hit take-profit target,
+    # not just get closed by trailing stop at small profits. Baseline median
+    # across 119 tickers is ~45%; max ~83%. Aggressive gradient above 50%.
+    # Bonus values calibrated so that +10pp on median adds ~15 to fitness
+    # (comparable weight to WR bonus 40-60x at similar thresholds).
     wr_target_bonus = 0.0
+    # Sub-35% penalty (alvo raramente atingido = modelo nao sabe onde colocar alvo)
     if mean_wr_target < 0.35:
         wr_target_bonus -= (0.35 - mean_wr_target) * 25.0
+    # Linear from 35% baseline upward
     if mean_wr_target > 0.35:
         wr_target_bonus += (mean_wr_target - 0.35) * 10.0
+    # Tiered: aggressive rewards above 45% (current baseline median)
     if mean_wr_target > 0.45:
         wr_target_bonus += (mean_wr_target - 0.45) * 20.0
     if mean_wr_target > 0.55:
         wr_target_bonus += (mean_wr_target - 0.55) * 30.0
     if mean_wr_target > 0.65:
         wr_target_bonus += (mean_wr_target - 0.65) * 40.0
+    # Median-based reward (consistencia across tickers)
     if med_wr_target > 0.40:
         wr_target_bonus += (med_wr_target - 0.40) * 8.0
+    # Aggressive push above current median 45.5%
     if med_wr_target > 0.50:
         wr_target_bonus += (med_wr_target - 0.50) * 25.0
     if med_wr_target > 0.60:
@@ -856,10 +1003,60 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
     if mean_pct_gt10 > 0.20:
         dist_bonus += (mean_pct_gt10 - 0.20) * 12.0  # strong reward
 
-    # -- Main fitness (v8: adds wr_target_bonus) --------------------------
+    # -- Trade quality bonus (P0 metrics) ----------------------------------
+    sortino_bonus = 0.0
+    if mean_sortino > 0.0:
+        sortino_bonus += 0.35 * float(np.clip(mean_sortino, 0.0, 4.0))
+    if med_sortino > 0.0:
+        sortino_bonus += 0.25 * float(np.clip(med_sortino, 0.0, 4.0))
+
+    profit_factor_bonus = 0.0
+    if mean_profit_factor > 1.0:
+        profit_factor_bonus += 0.40 * float(np.clip(mean_profit_factor - 1.0, 0.0, 2.0))
+    if med_profit_factor > 1.0:
+        profit_factor_bonus += 0.30 * float(np.clip(med_profit_factor - 1.0, 0.0, 2.0))
+    if mean_payoff > 1.0:
+        profit_factor_bonus += 0.10 * float(np.clip(mean_payoff - 1.0, 0.0, 2.0))
+    if med_payoff > 1.0:
+        profit_factor_bonus += 0.10 * float(np.clip(med_payoff - 1.0, 0.0, 2.0))
+
+    expectancy_bonus = 0.0
+    if mean_expectancy > 0.0:
+        expectancy_bonus += 30.0 * float(np.clip(mean_expectancy, 0.0, 0.03))
+    if med_expectancy > 0.0:
+        expectancy_bonus += 18.0 * float(np.clip(med_expectancy, 0.0, 0.03))
+    if mean_cagr > 0.0:
+        expectancy_bonus += 0.10 * float(np.clip(mean_cagr, 0.0, 2.0))
+    if med_cagr > 0.0:
+        expectancy_bonus += 0.08 * float(np.clip(med_cagr, 0.0, 2.0))
+
+    drawdown_duration_penalty = 0.0
+    med_mdd_duration_years = med_mdd_duration / 252.0
+    mean_mdd_duration_years = mean_mdd_duration / 252.0
+    if med_mdd_duration_years > 0.15:
+        drawdown_duration_penalty += (med_mdd_duration_years - 0.15) * 2.0
+    if med_mdd_duration_years > 0.35:
+        drawdown_duration_penalty += (med_mdd_duration_years - 0.35) * 4.0
+    if mean_mdd_duration_years > 0.20:
+        drawdown_duration_penalty += (mean_mdd_duration_years - 0.20) * 1.5
+
+    quality_bonus = sortino_bonus + profit_factor_bonus + expectancy_bonus
+    alpha_quality_scale = 1.0
+    if mean_excess < 0.0:
+        alpha_quality_scale *= 0.35
+    if pct_excess_pos < 0.50:
+        alpha_quality_scale *= 0.70
+    quality_bonus *= alpha_quality_scale
+
+    # -- Main fitness (v5) -------------------------------------------------
+    # GA_ALPHA_FOCUS: amplifica sinal de alpha para forcar GA a priorizar
+    # reducao de underperformance vs B&H (clip afrouxado, peso 2.5x)
+    _exc_w_mean = 2.5 if GA_ALPHA_FOCUS else 1.8
+    _exc_w_med = 1.8 if GA_ALPHA_FOCUS else 1.3
+    _exc_clip_lo = -2.5 if GA_ALPHA_FOCUS else -1.0
     fitness = (
-        1.8 * np.clip(mean_excess, -1.0, 5.0) +   # beat B&H: highest weight
-        1.3 * np.clip(med_excess,  -1.0, 5.0) +
+        _exc_w_mean * np.clip(mean_excess, _exc_clip_lo, 5.0) +   # beat B&H
+        _exc_w_med  * np.clip(med_excess,  _exc_clip_lo, 5.0) +
         1.4 * pct_excess_pos +                      # % tickers beating B&H
         0.5 * np.clip(mean_ret,    -1.0, 5.0) +
         0.3 * np.clip(med_ret,     -1.0, 5.0) +
@@ -871,8 +1068,10 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
         wr_target_bonus +                              # v8: reward alvo hits
         consistency_bonus +
         calmar_bonus +
+        quality_bonus +
         dist_bonus +                                   # v5: distribution quality (big wins vs big losses)
         trade_bonus -
+        drawdown_duration_penalty -
         mdd_penalty -
         underperf_penalty
     )
@@ -898,6 +1097,99 @@ def _evaluate_genome_on_payloads(
         st["excess_return"] = st["total_return"] - st["buy_hold_return"]
         stats.append(st)
     return global_fitness_from_stats(stats), stats
+
+
+def _summarize_window_stats(stats: List[Dict[str, float]], fitness: float) -> Dict[str, float]:
+    if not stats:
+        return {
+            "fitness": float(fitness),
+            "ticker_count": 0,
+            "win_rate": 0.0,
+            "win_rate_target": 0.0,
+            "mdd": 0.0,
+            "excess_return": 0.0,
+        }
+    win_rates = np.array([s.get("win_rate", 0.0) for s in stats], dtype=np.float64)
+    wr_targets = np.array([s.get("win_rate_target", 0.0) for s in stats], dtype=np.float64)
+    mdd_vals = np.array([s.get("mdd", 0.0) for s in stats], dtype=np.float64)
+    excess_vals = np.array([s.get("excess_return", s.get("total_return", 0.0)) for s in stats], dtype=np.float64)
+    return {
+        "fitness": float(fitness),
+        "ticker_count": int(len(stats)),
+        "win_rate": float(np.median(win_rates)) if len(win_rates) else 0.0,
+        "win_rate_target": float(np.median(wr_targets)) if len(wr_targets) else 0.0,
+        "mdd": float(np.median(mdd_vals)) if len(mdd_vals) else 0.0,
+        "excess_return": float(np.mean(excess_vals)) if len(excess_vals) else 0.0,
+    }
+
+
+def compute_walkforward_diagnostics(
+    genome: List[float],
+    store: PayloadStore,
+    window_plans: List[WindowPlan],
+    window_indices: List[int],
+) -> Dict[str, Any]:
+    gp = decode_global_params(genome)
+    window_metrics: List[Dict[str, Any]] = []
+    train_summaries: List[Dict[str, float]] = []
+    oos_summaries: List[Dict[str, float]] = []
+
+    for wi in window_indices:
+        wp = window_plans[wi]
+        train_payloads, test_payloads = store.get_window_payloads(wp)
+        if not train_payloads or not test_payloads:
+            continue
+        tr_fit, tr_stats = _evaluate_genome_on_payloads(gp, train_payloads)
+        te_fit, te_stats = _evaluate_genome_on_payloads(gp, test_payloads)
+        tr_summary = _summarize_window_stats(tr_stats, tr_fit)
+        te_summary = _summarize_window_stats(te_stats, te_fit)
+        train_summaries.append(tr_summary)
+        oos_summaries.append(te_summary)
+        window_metrics.append({
+            "window_index": int(wi),
+            "train_start": str(wp.train_start) if wp.train_start is not None else None,
+            "train_end": str(wp.train_end) if wp.train_end is not None else None,
+            "test_start": str(wp.test_start) if wp.test_start is not None else None,
+            "test_end": str(wp.test_end) if wp.test_end is not None else None,
+            "train": tr_summary,
+            "oos": te_summary,
+        })
+
+    def _mean_summary(items: List[Dict[str, float]]) -> Dict[str, float]:
+        if not items:
+            return {
+                "fitness": 0.0,
+                "win_rate": 0.0,
+                "win_rate_target": 0.0,
+                "mdd": 0.0,
+                "excess_return": 0.0,
+            }
+        return {
+            "fitness": float(np.mean([item["fitness"] for item in items])),
+            "win_rate": float(np.mean([item["win_rate"] for item in items])),
+            "win_rate_target": float(np.mean([item["win_rate_target"] for item in items])),
+            "mdd": float(np.mean([item["mdd"] for item in items])),
+            "excess_return": float(np.mean([item["excess_return"] for item in items])),
+        }
+
+    train_mean = _mean_summary(train_summaries)
+    oos_mean = _mean_summary(oos_summaries)
+    gap_summary = {
+        "fitness_gap": float(train_mean["fitness"] - oos_mean["fitness"]),
+        "win_rate_gap": float(train_mean["win_rate"] - oos_mean["win_rate"]),
+        "win_rate_target_gap": float(train_mean["win_rate_target"] - oos_mean["win_rate_target"]),
+        "mdd_gap": float(train_mean["mdd"] - oos_mean["mdd"]),
+        "excess_return_gap": float(train_mean["excess_return"] - oos_mean["excess_return"]),
+    }
+
+    return {
+        "selected_window_indices": [int(wi) for wi in window_indices],
+        "window_count": int(len(window_metrics)),
+        "train_mean": train_mean,
+        "oos_mean": oos_mean,
+        "gap_summary": gap_summary,
+        "window_metrics": window_metrics,
+    }
 
 
 def _evaluate_walkforward(

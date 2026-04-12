@@ -769,6 +769,162 @@
         0.0,
         0.35000013305734395
       ]
+    },
+    {
+      "chunk_id": 15,
+      "timestamp": "2026-04-12T17:04:39.963268",
+      "chunk_time_s": 183.3,
+      "metrics": {
+        "fit": -99.93231984840135,
+        "n_tickers_total": 119,
+        "n_tickers_active": 100,
+        "wr_med_all": 0.6410256410256411,
+        "wr_mean_all": 0.6312794541566175,
+        "wr_med": 0.6458140253320976,
+        "wr_mean": 0.6453892171130414,
+        "wr_p75": 0.7152597402597403,
+        "wr_target_med_all": 0.5180722891566265,
+        "wr_target_mean_all": 0.4892844743609487,
+        "wr_target_med_active": 0.5181035020912665,
+        "mean_excess": -10.226078390092608,
+        "med_excess": -1.8001474448993495,
+        "mdd_med": 0.11985807804467757,
+        "ret_med": 0.09874625312846053,
+        "sharpe_med": 0.11591238796859905,
+        "sortino_med": 0.16610885272473988,
+        "profit_factor_med": 1.1783931748849579,
+        "expectancy_med": 0.002115883405265014,
+        "payoff_ratio_med": 0.6437728561012872,
+        "mdd_duration_med": 231.0,
+        "cagr_med": 0.008389177609780418,
+        "trades_med": 30.0,
+        "n_ge_70": 38,
+        "n_ge_50_target": 67,
+        "eval_time_s": 22.1
+      },
+      "delta_fit_vs_base": 30.3857,
+      "delta_wr_vs_base_pp": 30.77,
+      "acceptance_vs_base": {
+        "wr_med_all_up": true,
+        "wr_target_med_all_up": true,
+        "mdd_med_not_worse": false,
+        "mean_excess_non_negative": false,
+        "trades_med_floor": true,
+        "all_pass": false
+      },
+      "selected_window_indices": [
+        0,
+        18
+      ],
+      "oos_diagnostics": {
+        "selected_window_indices": [
+          0,
+          18
+        ],
+        "window_count": 2,
+        "train_mean": {
+          "fitness": -29.128041671209207,
+          "win_rate": 0.2554347826086957,
+          "win_rate_target": 0.16666666666666666,
+          "mdd": -0.02255165599158812,
+          "excess_return": -0.6253107226335309
+        },
+        "oos_mean": {
+          "fitness": -44.088801906465456,
+          "win_rate": 0.0,
+          "win_rate_target": 0.0,
+          "mdd": 0.0,
+          "excess_return": -0.0903011575260739
+        },
+        "gap_summary": {
+          "fitness_gap": 14.960760235256249,
+          "win_rate_gap": 0.2554347826086957,
+          "win_rate_target_gap": 0.16666666666666666,
+          "mdd_gap": -0.02255165599158812,
+          "excess_return_gap": -0.535009565107457
+        },
+        "window_metrics": [
+          {
+            "window_index": 0,
+            "train_start": "2005-01-04 00:00:00",
+            "train_end": "2008-01-03 00:00:00",
+            "test_start": "2008-01-04 00:00:00",
+            "test_end": "2008-07-03 00:00:00",
+            "train": {
+              "fitness": -46.09594624526069,
+              "ticker_count": 52,
+              "win_rate": 0.0,
+              "win_rate_target": 0.0,
+              "mdd": 0.0,
+              "excess_return": -0.9942439956372778
+            },
+            "oos": {
+              "fitness": -49.9385140120557,
+              "ticker_count": 54,
+              "win_rate": 0.0,
+              "win_rate_target": 0.0,
+              "mdd": 0.0,
+              "excess_return": 0.012190086342689309
+            }
+          },
+          {
+            "window_index": 18,
+            "train_start": "2014-01-04 00:00:00",
+            "train_end": "2017-01-03 00:00:00",
+            "test_start": "2017-01-04 00:00:00",
+            "test_end": "2017-07-03 00:00:00",
+            "train": {
+              "fitness": -12.160137097157724,
+              "ticker_count": 78,
+              "win_rate": 0.5108695652173914,
+              "win_rate_target": 0.3333333333333333,
+              "mdd": -0.04510331198317624,
+              "excess_return": -0.2563774496297841
+            },
+            "oos": {
+              "fitness": -38.23908980087521,
+              "ticker_count": 79,
+              "win_rate": 0.0,
+              "win_rate_target": 0.0,
+              "mdd": 0.0,
+              "excess_return": -0.1927924013948371
+            }
+          }
+        ],
+        "eval_time_s": 5.1
+      },
+      "best_genome": [
+        0.15000000000000002,
+        0.2,
+        0.15000000000000002,
+        8,
+        1,
+        0.35000000000000003,
+        1.0,
+        7.852233495841292,
+        0.5,
+        0.03,
+        1.0,
+        0.1,
+        0.75,
+        23,
+        0.5,
+        0.028700612563102253,
+        0.2,
+        300,
+        1,
+        11,
+        0.2,
+        2,
+        0.2,
+        1.5,
+        0.0,
+        2,
+        1,
+        4,
+        0.14521005628874642,
+        0.35000000000000003
+      ]
     }
   ],
   "best_so_far": null,

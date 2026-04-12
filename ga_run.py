@@ -80,21 +80,60 @@ import json
 import gc
 import multiprocessing
 from concurrent.futures import ProcessPoolExecutor
-import matplotlib.pyplot as plt
+try:
+    import matplotlib.pyplot as plt
+except ImportError:
+    plt = None
 
 # --- Modular GA pipeline imports ---
 from payload_store import PayloadStore, build_window_plans
 from ga_run_modular_final import run_global_ga_two_stage
 from auto_tune import AutoTuner
 
-from deap import base, creator, tools, algorithms
+try:
+    from deap import base, creator, tools, algorithms
+except ImportError:
+    base = creator = tools = algorithms = None
 
-from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor
-from sklearn.model_selection import TimeSeriesSplit
-from sklearn.metrics import roc_auc_score, accuracy_score, log_loss, brier_score_loss
-from scipy.stats import spearmanr, pointbiserialr
-from sklearn.feature_selection import mutual_info_classif
-from numba import njit
+
+def _missing_optional_dependency(name: str):
+    def _raiser(*args, **kwargs):
+        raise ImportError(f"Optional dependency '{name}' is required for this operation")
+    return _raiser
+
+
+try:
+    from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor
+    from sklearn.model_selection import TimeSeriesSplit
+    from sklearn.metrics import roc_auc_score, accuracy_score, log_loss, brier_score_loss
+    from sklearn.feature_selection import mutual_info_classif
+except ImportError:
+    HistGradientBoostingClassifier = None
+    HistGradientBoostingRegressor = None
+    TimeSeriesSplit = None
+    roc_auc_score = _missing_optional_dependency("sklearn")
+    accuracy_score = _missing_optional_dependency("sklearn")
+    log_loss = _missing_optional_dependency("sklearn")
+    brier_score_loss = _missing_optional_dependency("sklearn")
+    mutual_info_classif = _missing_optional_dependency("sklearn")
+
+try:
+    from scipy.stats import spearmanr, pointbiserialr
+except ImportError:
+    spearmanr = _missing_optional_dependency("scipy")
+    pointbiserialr = _missing_optional_dependency("scipy")
+
+try:
+    from numba import njit
+except ImportError:
+    def njit(*args, **kwargs):
+        if args and callable(args[0]) and len(args) == 1 and not kwargs:
+            return args[0]
+
+        def _decorator(func):
+            return func
+
+        return _decorator
 
 
 # ==============================================================================
@@ -323,11 +362,14 @@ GA_TIME_BUDGET_HOURS = float(os.environ.get("GA_TIME_BUDGET_HOURS", "6.0"))
 GA_RAM_RESERVE_GB = float(os.environ.get("GA_RAM_RESERVE_GB", "2.0"))
 GA_MEMMAP_DIR = os.environ.get("GA_MEMMAP_DIR", "./output/ga_memmap")
 GA_WORKERS_OVERRIDE = os.environ.get("GA_WORKERS_OVERRIDE", None)
+GA_KEEP_MEMMAP = os.environ.get("GA_KEEP_MEMMAP", "1").lower() in ("1", "true", "yes", "on")
 
 # ==============================================================================
 # 1) DEAP SETUP
 # ==============================================================================
 def setup_global_deap():
+    if base is None or creator is None or not hasattr(base, "Fitness"):
+        return
     if not hasattr(creator, "FitnessMax_PT"):
         creator.create("FitnessMax_PT", base.Fitness, weights=(1.0,))
     if not hasattr(creator, "Individual_PT"):
@@ -921,6 +963,157 @@ def _apply_stage_gate_to_score_matrix(
     return x_out
 
 
+def _safe_metric_ratio(numerator: float, denominator: float, cap: float = 10.0) -> float:
+    num = float(numerator) if np.isfinite(numerator) else 0.0
+    den = float(denominator) if np.isfinite(denominator) else 0.0
+    if abs(den) < 1e-12:
+        if num > 0:
+            return float(cap)
+        if num < 0:
+            return float(-cap)
+        return 0.0
+    return float(np.clip(num / den, -cap, cap))
+
+
+def _safe_positive_ratio(numerator: float, denominator: float, cap: float = 10.0) -> float:
+    num = float(numerator) if np.isfinite(numerator) else 0.0
+    den = float(denominator) if np.isfinite(denominator) else 0.0
+    if num <= 0:
+        return 0.0
+    if abs(den) < 1e-12:
+        return float(cap)
+    return float(np.clip(num / den, 0.0, cap))
+
+
+def _compute_cagr(total_return: float, n_bars: int) -> float:
+    n_years = max(float(n_bars) / 252.0, 1.0 / 252.0)
+    equity = 1.0 + float(total_return)
+    if not np.isfinite(equity):
+        return 0.0
+    if equity <= 0:
+        return -1.0
+    return float(np.clip(equity ** (1.0 / n_years) - 1.0, -1.0, 10.0))
+
+
+def _finalize_backtest_stats(
+    trade_rets: List[float],
+    trade_exit_types: List[str],
+    exposure: float,
+    total_return: float,
+    mdd: float,
+    n_bars: int,
+    max_drawdown_duration: int,
+) -> Dict[str, float]:
+    base_stats = {
+        "total_return": float(total_return),
+        "mdd": float(mdd),
+        "sharpe": 0.0,
+        "sortino": 0.0,
+        "profit_factor": 0.0,
+        "expectancy": 0.0,
+        "payoff_ratio": 0.0,
+        "max_drawdown_duration": float(max_drawdown_duration),
+        "cagr": _compute_cagr(total_return, n_bars),
+        "n_trades": 0.0,
+        "win_rate": 0.0,
+        "win_rate_target": 0.0,
+        "win_rate_target_robust": 0.0,
+        "pct_exit_take": 0.0,
+        "pct_exit_stop": 0.0,
+        "pct_exit_time": 0.0,
+        "avg_trade": 0.0,
+        "trade_std": 0.0,
+        "exposure": float(exposure),
+        "pct_gt15": 0.0,
+        "pct_10_15": 0.0,
+        "pct_5_10": 0.0,
+        "pct_2_5": 0.0,
+        "pct_0_2": 0.0,
+        "pct_n2_0": 0.0,
+        "pct_n5_n2": 0.0,
+        "pct_n10_n5": 0.0,
+        "pct_lt_n10": 0.0,
+        "dist_quality": 0.0,
+        "big_wins_pct": 0.0,
+        "big_losses_pct": 0.0,
+    }
+    if len(trade_rets) == 0:
+        return base_stats
+
+    tr = np.asarray(trade_rets, dtype=np.float64)
+    exit_arr = np.asarray(trade_exit_types)
+    n_years = max(float(n_bars) / 252.0, 0.1)
+    trades_per_year = len(tr) / n_years
+    ann_factor = np.sqrt(min(trades_per_year, 252.0))
+    mean_tr = float(np.mean(tr))
+    std_tr = float(np.std(tr))
+    downside = np.minimum(tr, 0.0)
+    downside_dev = float(np.sqrt(np.mean(np.square(downside)))) if len(downside) > 0 else 0.0
+
+    pct_exit_take = float((exit_arr == "take").mean()) if len(exit_arr) > 0 else 0.0
+    pct_exit_stop = float(((exit_arr == "stop") | (exit_arr == "hard_loss")).mean()) if len(exit_arr) > 0 else 0.0
+    pct_exit_time = float((exit_arr == "time").mean()) if len(exit_arr) > 0 else 0.0
+    take_mask = (exit_arr == "take")
+    time_pos_mask = (exit_arr == "time") & (tr > 0)
+    wr_target_robust = float((take_mask | time_pos_mask).mean()) if len(exit_arr) > 0 else 0.0
+
+    wins = tr[tr > 0]
+    losses = tr[tr < 0]
+    avg_win = float(np.mean(wins)) if len(wins) > 0 else 0.0
+    avg_loss = abs(float(np.mean(losses))) if len(losses) > 0 else 0.0
+    gross_profit = float(np.sum(wins)) if len(wins) > 0 else 0.0
+    gross_loss = abs(float(np.sum(losses))) if len(losses) > 0 else 0.0
+    win_rate = float((tr > 0).mean())
+    expectancy = float(np.clip(win_rate * avg_win - (1.0 - win_rate) * avg_loss, -1.0, 1.0))
+    ann_sharpe = float(np.clip(_safe_metric_ratio(mean_tr, std_tr, cap=10.0) * ann_factor, -10.0, 10.0))
+    ann_sortino = float(np.clip(_safe_metric_ratio(mean_tr, downside_dev, cap=10.0) * ann_factor, -10.0, 10.0))
+    profit_factor = _safe_positive_ratio(gross_profit, gross_loss, cap=10.0)
+    payoff_ratio = _safe_positive_ratio(avg_win, avg_loss, cap=10.0)
+
+    pct_gt15 = float((tr > 0.15).mean())
+    pct_10_15 = float(((tr > 0.10) & (tr <= 0.15)).mean())
+    pct_5_10 = float(((tr > 0.05) & (tr <= 0.10)).mean())
+    pct_2_5 = float(((tr > 0.02) & (tr <= 0.05)).mean())
+    pct_0_2 = float(((tr > 0.00) & (tr <= 0.02)).mean())
+    pct_n2_0 = float(((tr > -0.02) & (tr <= 0.00)).mean())
+    pct_n5_n2 = float(((tr > -0.05) & (tr <= -0.02)).mean())
+    pct_n10_n5 = float(((tr > -0.10) & (tr <= -0.05)).mean())
+    pct_lt_n10 = float((tr <= -0.10).mean())
+    big_wins = pct_gt15 + pct_10_15 + pct_5_10
+    big_losses = pct_lt_n10 + pct_n10_n5 + pct_n5_n2
+    dist_quality = float(np.clip((big_wins - big_losses + 0.5), 0.0, 1.0))
+
+    base_stats.update({
+        "sharpe": ann_sharpe,
+        "sortino": ann_sortino,
+        "profit_factor": profit_factor,
+        "expectancy": expectancy,
+        "payoff_ratio": payoff_ratio,
+        "n_trades": float(len(tr)),
+        "win_rate": win_rate,
+        "win_rate_target": pct_exit_take,
+        "win_rate_target_robust": wr_target_robust,
+        "pct_exit_take": pct_exit_take,
+        "pct_exit_stop": pct_exit_stop,
+        "pct_exit_time": pct_exit_time,
+        "avg_trade": mean_tr,
+        "trade_std": std_tr,
+        "pct_gt15": pct_gt15,
+        "pct_10_15": pct_10_15,
+        "pct_5_10": pct_5_10,
+        "pct_2_5": pct_2_5,
+        "pct_0_2": pct_0_2,
+        "pct_n2_0": pct_n2_0,
+        "pct_n5_n2": pct_n5_n2,
+        "pct_n10_n5": pct_n10_n5,
+        "pct_lt_n10": pct_lt_n10,
+        "dist_quality": dist_quality,
+        "big_wins_pct": big_wins,
+        "big_losses_pct": big_losses,
+    })
+    return base_stats
+
+
 def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalParams, precomputed: Optional[Dict[str, np.ndarray]] = None, stage_gate: Optional[str] = None) -> Dict[str, float]:
     o = np.asarray(o, dtype=np.float64)
     h = np.asarray(h, dtype=np.float64)
@@ -989,6 +1182,8 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
     consec_stops = 0
     cooldown = 0
     exposure_acc = 0.0
+    current_drawdown_duration = 0
+    max_drawdown_duration = 0
 
     for i in range(1, n):
         if cooldown > 0:
@@ -1202,74 +1397,27 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
                     max_fav = 0.0
 
         peak = max(peak, equity)
-        mdd = min(mdd, (equity / max(peak, ATR_EPS)) - 1.0)
+        drawdown = (equity / max(peak, ATR_EPS)) - 1.0
+        mdd = min(mdd, drawdown)
+        if drawdown < -1e-12:
+            current_drawdown_duration += 1
+            max_drawdown_duration = max(max_drawdown_duration, current_drawdown_duration)
+        else:
+            current_drawdown_duration = 0
         # Equity drawdown circuit-breaker (progressive re-entry: 20 bars, was 30)
-        if gp.equity_drawdown_stop_pct > 0 and (equity / max(peak, ATR_EPS)) - 1.0 < -gp.equity_drawdown_stop_pct:
+        if gp.equity_drawdown_stop_pct > 0 and drawdown < -gp.equity_drawdown_stop_pct:
             cooldown = max(cooldown, 20)  # ~1 month pause after DD exceeds threshold
 
     exposure = float(exposure_acc / max(1, n - 1))
-    if len(trade_rets) == 0:
-        return {"total_return": float(equity - 1.0), "mdd": float(mdd), "sharpe": 0.0,
-                "n_trades": 0.0, "win_rate": 0.0, "win_rate_target": 0.0,
-                "pct_exit_take": 0.0, "pct_exit_stop": 0.0, "pct_exit_time": 0.0,
-                "avg_trade": 0.0, "exposure": exposure}
-    tr = np.asarray(trade_rets, dtype=np.float64)
-    # Exit-type metrics (NEW): track how trades terminated
-    exit_arr = np.asarray(trade_exit_types)
-    n_tr = max(len(exit_arr), 1)
-    pct_exit_take = float((exit_arr == "take").mean()) if len(exit_arr) > 0 else 0.0
-    pct_exit_stop = float(((exit_arr == "stop") | (exit_arr == "hard_loss")).mean()) if len(exit_arr) > 0 else 0.0
-    pct_exit_time = float((exit_arr == "time").mean()) if len(exit_arr) > 0 else 0.0
-    # Strict WR: only trades that hit take-profit target (pure alvo hits)
-    wr_target_strict = pct_exit_take
-    # Robust WR target: trades that hit take OR time-stop with positive return
-    # (captures trailing-stop exits in profit territory)
-    take_mask = (exit_arr == "take")
-    time_pos_mask = (exit_arr == "time") & (tr > 0)
-    wr_target_robust = float((take_mask | time_pos_mask).mean()) if len(exit_arr) > 0 else 0.0
-    # Annualized Sharpe: use trades_per_year, not raw trade count
-    n_years = max(n / 252.0, 0.1)
-    trades_per_year = len(tr) / n_years
-    ann_factor = np.sqrt(min(trades_per_year, 252))
-    ann_sharpe = float(np.mean(tr) / (np.std(tr) + 1e-12) * ann_factor)
-    # -- Trade return distribution buckets (v5) --
-    # Faixas: >15%, 10-15%, 5-10%, 2-5%, 0-2%, -2-0%, -5 to -2%, -10 to -5%, <-10%
-    pct_gt15  = float((tr > 0.15).mean())
-    pct_10_15 = float(((tr > 0.10) & (tr <= 0.15)).mean())
-    pct_5_10  = float(((tr > 0.05) & (tr <= 0.10)).mean())
-    pct_2_5   = float(((tr > 0.02) & (tr <= 0.05)).mean())
-    pct_0_2   = float(((tr > 0.00) & (tr <= 0.02)).mean())
-    pct_n2_0  = float(((tr > -0.02) & (tr <= 0.00)).mean())
-    pct_n5_n2 = float(((tr > -0.05) & (tr <= -0.02)).mean())
-    pct_n10_n5= float(((tr > -0.10) & (tr <= -0.05)).mean())
-    pct_lt_n10= float((tr <= -0.10).mean())
-    # Quality score from distribution: big wins vs big losses ratio
-    big_wins = pct_gt15 + pct_10_15 + pct_5_10  # trades > +5%
-    big_losses = pct_lt_n10 + pct_n10_n5 + pct_n5_n2  # trades < -2%
-    dist_quality = float(np.clip((big_wins - big_losses + 0.5), 0.0, 1.0))  # 0.5 = neutral
-
-    return {
-        "total_return": float(equity - 1.0),
-        "mdd": float(mdd),
-        "sharpe": ann_sharpe,
-        "n_trades": float(len(tr)),
-        "win_rate": float((tr > 0).mean()),
-        # NEW: exit-type breakdown and target-based WR
-        "win_rate_target": wr_target_strict,   # only take-profit hits
-        "win_rate_target_robust": wr_target_robust,  # take + time-exit in profit
-        "pct_exit_take": pct_exit_take,
-        "pct_exit_stop": pct_exit_stop,
-        "pct_exit_time": pct_exit_time,
-        "avg_trade": float(np.mean(tr)),
-        "trade_std": float(np.std(tr)),
-        "exposure": exposure,
-        # Distribution buckets
-        "pct_gt15": pct_gt15, "pct_10_15": pct_10_15, "pct_5_10": pct_5_10,
-        "pct_2_5": pct_2_5, "pct_0_2": pct_0_2, "pct_n2_0": pct_n2_0,
-        "pct_n5_n2": pct_n5_n2, "pct_n10_n5": pct_n10_n5, "pct_lt_n10": pct_lt_n10,
-        "dist_quality": dist_quality,
-        "big_wins_pct": big_wins, "big_losses_pct": big_losses,
-    }
+    return _finalize_backtest_stats(
+        trade_rets=trade_rets,
+        trade_exit_types=trade_exit_types,
+        exposure=exposure,
+        total_return=float(equity - 1.0),
+        mdd=float(mdd),
+        n_bars=n,
+        max_drawdown_duration=max_drawdown_duration,
+    )
 
 
 def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float:
@@ -1282,10 +1430,16 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
     """
     if len(per_ticker_stats) == 0:
         return -1e9
-    sharpe    = np.array([s.get("sharpe", 0.0)       for s in per_ticker_stats], dtype=np.float64)
-    ret       = np.array([s.get("total_return", 0.0)  for s in per_ticker_stats], dtype=np.float64)
+    sharpe    = np.array([s.get("sharpe", 0.0) for s in per_ticker_stats], dtype=np.float64)
+    sortino   = np.array([s.get("sortino", 0.0) for s in per_ticker_stats], dtype=np.float64)
+    ret       = np.array([s.get("total_return", 0.0) for s in per_ticker_stats], dtype=np.float64)
     excess    = np.array([s.get("excess_return", s.get("total_return", 0.0)) for s in per_ticker_stats], dtype=np.float64)
-    mdd_vals  = np.array([s.get("mdd", 0.0)           for s in per_ticker_stats], dtype=np.float64)
+    expectancy_vals = np.array([s.get("expectancy", s.get("avg_trade", 0.0)) for s in per_ticker_stats], dtype=np.float64)
+    payoff_vals = np.array([s.get("payoff_ratio", 0.0) for s in per_ticker_stats], dtype=np.float64)
+    profit_factor_vals = np.array([s.get("profit_factor", 0.0) for s in per_ticker_stats], dtype=np.float64)
+    cagr_vals = np.array([s.get("cagr", 0.0) for s in per_ticker_stats], dtype=np.float64)
+    mdd_duration_vals = np.array([s.get("max_drawdown_duration", 0.0) for s in per_ticker_stats], dtype=np.float64)
+    mdd_vals  = np.array([s.get("mdd", 0.0) for s in per_ticker_stats], dtype=np.float64)
     # Phase 1.3: Cap extreme MDD at -60% to prevent outliers (-99%) from destroying median
     mdd_vals  = np.clip(mdd_vals, -0.60, 0.0)
     ntr       = np.array([s.get("n_trades", 0.0)      for s in per_ticker_stats], dtype=np.float64)
@@ -1298,10 +1452,22 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
 
     med_sharpe        = float(np.median(sharpe))
     mean_sharpe       = float(np.mean(sharpe))
+    med_sortino       = float(np.median(sortino))
+    mean_sortino      = float(np.mean(sortino))
     mean_ret          = float(np.mean(ret))
     med_ret           = float(np.median(ret))
     mean_excess       = float(np.mean(excess))
     med_excess        = float(np.median(excess))
+    mean_expectancy   = float(np.mean(expectancy_vals))
+    med_expectancy    = float(np.median(expectancy_vals))
+    mean_payoff       = float(np.mean(payoff_vals))
+    med_payoff        = float(np.median(payoff_vals))
+    mean_profit_factor = float(np.mean(profit_factor_vals))
+    med_profit_factor = float(np.median(profit_factor_vals))
+    mean_cagr         = float(np.mean(cagr_vals))
+    med_cagr          = float(np.median(cagr_vals))
+    mean_mdd_duration = float(np.mean(mdd_duration_vals))
+    med_mdd_duration  = float(np.median(mdd_duration_vals))
     pct_positive      = float((ret > 0).mean())
     pct_excess_pos    = float((excess > 0).mean())
     med_trades        = float(np.median(ntr))
@@ -1476,6 +1642,51 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
     if mean_pct_gt10 > 0.20:
         dist_bonus += (mean_pct_gt10 - 0.20) * 12.0  # strong reward
 
+    # -- Trade quality bonus (P0 metrics) ----------------------------------
+    sortino_bonus = 0.0
+    if mean_sortino > 0.0:
+        sortino_bonus += 0.35 * float(np.clip(mean_sortino, 0.0, 4.0))
+    if med_sortino > 0.0:
+        sortino_bonus += 0.25 * float(np.clip(med_sortino, 0.0, 4.0))
+
+    profit_factor_bonus = 0.0
+    if mean_profit_factor > 1.0:
+        profit_factor_bonus += 0.40 * float(np.clip(mean_profit_factor - 1.0, 0.0, 2.0))
+    if med_profit_factor > 1.0:
+        profit_factor_bonus += 0.30 * float(np.clip(med_profit_factor - 1.0, 0.0, 2.0))
+    if mean_payoff > 1.0:
+        profit_factor_bonus += 0.10 * float(np.clip(mean_payoff - 1.0, 0.0, 2.0))
+    if med_payoff > 1.0:
+        profit_factor_bonus += 0.10 * float(np.clip(med_payoff - 1.0, 0.0, 2.0))
+
+    expectancy_bonus = 0.0
+    if mean_expectancy > 0.0:
+        expectancy_bonus += 30.0 * float(np.clip(mean_expectancy, 0.0, 0.03))
+    if med_expectancy > 0.0:
+        expectancy_bonus += 18.0 * float(np.clip(med_expectancy, 0.0, 0.03))
+    if mean_cagr > 0.0:
+        expectancy_bonus += 0.10 * float(np.clip(mean_cagr, 0.0, 2.0))
+    if med_cagr > 0.0:
+        expectancy_bonus += 0.08 * float(np.clip(med_cagr, 0.0, 2.0))
+
+    drawdown_duration_penalty = 0.0
+    med_mdd_duration_years = med_mdd_duration / 252.0
+    mean_mdd_duration_years = mean_mdd_duration / 252.0
+    if med_mdd_duration_years > 0.15:
+        drawdown_duration_penalty += (med_mdd_duration_years - 0.15) * 2.0
+    if med_mdd_duration_years > 0.35:
+        drawdown_duration_penalty += (med_mdd_duration_years - 0.35) * 4.0
+    if mean_mdd_duration_years > 0.20:
+        drawdown_duration_penalty += (mean_mdd_duration_years - 0.20) * 1.5
+
+    quality_bonus = sortino_bonus + profit_factor_bonus + expectancy_bonus
+    alpha_quality_scale = 1.0
+    if mean_excess < 0.0:
+        alpha_quality_scale *= 0.35
+    if pct_excess_pos < 0.50:
+        alpha_quality_scale *= 0.70
+    quality_bonus *= alpha_quality_scale
+
     # -- Main fitness (v5) -------------------------------------------------
     # GA_ALPHA_FOCUS: amplifica sinal de alpha para forcar GA a priorizar
     # reducao de underperformance vs B&H (clip afrouxado, peso 2.5x)
@@ -1496,8 +1707,10 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
         wr_target_bonus +                              # v8: reward alvo hits
         consistency_bonus +
         calmar_bonus +
+        quality_bonus +
         dist_bonus +                                   # v5: distribution quality (big wins vs big losses)
         trade_bonus -
+        drawdown_duration_penalty -
         mdd_penalty -
         underperf_penalty
     )
@@ -3163,7 +3376,11 @@ def run():
 
     if global_params is None and run_mode == "load":
         print("[FATAL] load mode but no valid checkpoint found!")
-        store.cleanup()
+        if GA_KEEP_MEMMAP:
+            store.close()
+            print(f"[STORE] kept memmap store at {store.store_path}")
+        else:
+            store.cleanup()
         raise SystemExit(1)
 
     if global_params is None:
@@ -4150,7 +4367,13 @@ def run():
             "asset_class": _tkr_meta["asset_class"],
             "test_return": st["total_return"],
             "test_mdd": st["mdd"],
+            "test_mdd_duration": st.get("max_drawdown_duration", 0.0),
             "test_sharpe": st["sharpe"],
+            "test_sortino": st.get("sortino", 0.0),
+            "test_profit_factor": st.get("profit_factor", 0.0),
+            "test_expectancy": st.get("expectancy", 0.0),
+            "test_payoff_ratio": st.get("payoff_ratio", 0.0),
+            "test_cagr": st.get("cagr", 0.0),
             "test_trades": st["n_trades"],
             "test_win_rate": st["win_rate"],
             "test_win_rate_target": st.get("win_rate_target", 0.0),  # v8: alvo hits
@@ -4198,7 +4421,10 @@ def run():
         ).drop(columns=["_is_buy", "_is_sell"]).reset_index(drop=True)
 
     if not df_sum.empty:
-        df_sum = df_sum.sort_values("test_sharpe", ascending=False)
+        df_sum = df_sum.sort_values(
+            ["test_sortino", "test_win_rate", "test_profit_factor"],
+            ascending=[False, False, False],
+        )
 
         # -- Objective validation summary ----------------------------------
         pct_ret_pos    = (df_sum["test_return"] > 0).mean() * 100
@@ -4298,8 +4524,23 @@ def run():
                 hdr_fmt = wb.add_format({"bold": True, "bg_color": "#1F4E79", "font_color": "#FFFFFF", "border": 1})
                 num2 = wb.add_format({"num_format": "0.00"})
                 pct2 = wb.add_format({"num_format": "0.00%"})
-                sum_widths = {"ticker": 10, "test_return": 13, "test_mdd": 10, "test_sharpe": 12,
-                              "test_trades": 12, "test_win_rate": 13, "test_avg_trade": 13, "buy_hold_return": 15}
+                sum_widths = {
+                    "ticker": 10,
+                    "test_return": 13,
+                    "test_mdd": 10,
+                    "test_mdd_duration": 16,
+                    "test_sharpe": 12,
+                    "test_sortino": 12,
+                    "test_profit_factor": 16,
+                    "test_expectancy": 14,
+                    "test_payoff_ratio": 16,
+                    "test_cagr": 12,
+                    "test_trades": 12,
+                    "test_win_rate": 13,
+                    "test_win_rate_target": 16,
+                    "test_avg_trade": 13,
+                    "buy_hold_return": 15,
+                }
                 for col_idx, col_name in enumerate(df_sum.columns):
                     ws_sum.write(0, col_idx, col_name, hdr_fmt)
                     ws_sum.set_column(col_idx, col_idx, sum_widths.get(col_name, 12))
@@ -4413,8 +4654,12 @@ def run():
 
     print(f"Saved: {out_xlsx} | {out_apply_csv}")
 
-    # Cleanup memmap store
-    store.cleanup()
+    # Preserve the memmap store by default so staged runs can reuse it.
+    if GA_KEEP_MEMMAP:
+        store.close()
+        print(f"[STORE] kept memmap store at {store.store_path}")
+    else:
+        store.cleanup()
 
     # -- Send to Telegram with metrics summary -----------------------------
     if os.path.exists(out_xlsx):

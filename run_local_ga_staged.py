@@ -67,6 +67,20 @@ def _fmt_pct1(x):
     return f"{x*100:.1f}%"
 
 
+def _compute_acceptance(chunk_metrics, base_metrics):
+    base_trades = float(base_metrics.get("trades_med", 0.0) or 0.0)
+    trades_floor = 0.70 * base_trades if base_trades > 0 else 0.0
+    acceptance = {
+        "wr_med_all_up": bool(chunk_metrics.get("wr_med_all", 0.0) > base_metrics.get("wr_med_all", 0.0) + 1e-9),
+        "wr_target_med_all_up": bool(chunk_metrics.get("wr_target_med_all", 0.0) > base_metrics.get("wr_target_med_all", 0.0) + 1e-9),
+        "mdd_med_not_worse": bool(chunk_metrics.get("mdd_med", 0.0) <= base_metrics.get("mdd_med", 0.0) + 1e-9),
+        "mean_excess_non_negative": bool(chunk_metrics.get("mean_excess", 0.0) >= 0.0),
+        "trades_med_floor": bool(chunk_metrics.get("trades_med", 0.0) >= trades_floor - 1e-9),
+    }
+    acceptance["all_pass"] = all(acceptance.values())
+    return acceptance
+
+
 def _load_main():
     with open(MAIN_CHECKPOINT, "r") as f:
         return json.load(f)
@@ -164,7 +178,8 @@ def open_existing_store():
 def evaluate_genome_full(genome, ticker_arrays_cache, gr):
     """
     Run full backtest of a genome across all tickers (single process).
-    Returns dict with WR_med, WR_mean, MDD_med, ret_med, sharpe_med, n_trades_med, fit.
+    Returns dict with WR_med, WR_mean, MDD_med, ret_med, sharpe_med, fit, and
+    the new P0 metric medians used for staged reporting.
     """
     gp = gr.decode_global_params(genome)
     stats = []
@@ -174,6 +189,8 @@ def evaluate_genome_full(genome, ticker_arrays_cache, gr):
             p["score_matrix"], p["atr"], gp,
             precomputed=p,
         )
+        st["buy_hold_return"] = gr.buyhold_capped(p["close"])
+        st["excess_return"] = st["total_return"] - st["buy_hold_return"]
         stats.append(st)
 
     # Overall fitness uses ALL stats (same as training)
@@ -187,10 +204,17 @@ def evaluate_genome_full(genome, ticker_arrays_cache, gr):
     mdds = [abs(s["mdd"]) for s in active]
     rets = [s["total_return"] for s in active]
     sharpes = [s["sharpe"] for s in active]
+    sortinos = [s.get("sortino", 0.0) for s in active]
+    profit_factors = [s.get("profit_factor", 0.0) for s in active]
+    expectancies = [s.get("expectancy", 0.0) for s in active]
+    payoff_ratios = [s.get("payoff_ratio", 0.0) for s in active]
+    mdd_durations = [s.get("max_drawdown_duration", 0.0) for s in active]
+    cagrs = [s.get("cagr", 0.0) for s in active]
     trades = [s["n_trades"] for s in active]
 
     all_wrs = [s["win_rate"] for s in all_stats]
     all_wr_targets = [s.get("win_rate_target", 0) for s in all_stats]  # v8
+    all_excess = [s.get("excess_return", 0.0) for s in all_stats]
 
     # Also unfiltered median (matches what summary shows: no n_trades > 5 filter)
     return {
@@ -206,9 +230,17 @@ def evaluate_genome_full(genome, ticker_arrays_cache, gr):
         "wr_target_med_all": float(np.median(all_wr_targets)) if all_wr_targets else 0,
         "wr_target_mean_all": float(np.mean(all_wr_targets)) if all_wr_targets else 0,
         "wr_target_med_active": float(np.median(wr_targets)) if wr_targets else 0,
+        "mean_excess": float(np.mean(all_excess)) if all_excess else 0,
+        "med_excess": float(np.median(all_excess)) if all_excess else 0,
         "mdd_med": float(np.median(mdds)) if mdds else 0,
         "ret_med": float(np.median(rets)) if rets else 0,
         "sharpe_med": float(np.median(sharpes)) if sharpes else 0,
+        "sortino_med": float(np.median(sortinos)) if sortinos else 0,
+        "profit_factor_med": float(np.median(profit_factors)) if profit_factors else 0,
+        "expectancy_med": float(np.median(expectancies)) if expectancies else 0,
+        "payoff_ratio_med": float(np.median(payoff_ratios)) if payoff_ratios else 0,
+        "mdd_duration_med": float(np.median(mdd_durations)) if mdd_durations else 0,
+        "cagr_med": float(np.median(cagrs)) if cagrs else 0,
         "trades_med": float(np.median(trades)) if trades else 0,
         "n_ge_70": int(sum(1 for w in all_wrs if w >= 0.70)),
         "n_ge_50_target": int(sum(1 for w in all_wr_targets if w >= 0.50)),  # v8
@@ -251,7 +283,7 @@ def run_chunk(
     resume_ckpt=None,
     window_offset=0,
 ):
-    """Run one GA chunk (ngen generations). Returns (best_genome, best_fit, hof)."""
+    """Run one GA chunk (ngen generations). Returns best genome, HOF, and selected windows."""
     import pickle
     from ga_run_modular_final import (
         _run_stage, _load_latest_checkpoint, GACheckpoint,
@@ -302,7 +334,7 @@ def run_chunk(
     print(f"[CHUNK {chunk_id}] completed {ngen} gens in {elapsed/60:.1f}m "
           f"| hof[0].fit={best_fit:.4f}", flush=True)
 
-    return best_genome, best_fit, hof, elapsed
+    return best_genome, best_fit, hof, elapsed, window_indices
 
 
 def main():
@@ -418,7 +450,7 @@ def main():
         resume_ckpt = _load_latest_checkpoint(CHECKPOINT_DIR)
 
         try:
-            best_genome, best_fit_train, hof, chunk_time = run_chunk(
+            best_genome, best_fit_train, hof, chunk_time, chunk_window_indices = run_chunk(
                 chunk_id=chunk_id,
                 ngen=args.ngen_per_chunk,
                 pop_size=args.pop_size,
@@ -452,6 +484,32 @@ def main():
             traceback.print_exc()
             break
 
+        print(f"[CHUNK {chunk_id}] collecting walk-forward diagnostics...",
+              flush=True)
+        t_diag = time.time()
+        try:
+            from ga_run_modular_final import compute_walkforward_diagnostics
+            oos_diagnostics = compute_walkforward_diagnostics(
+                best_genome,
+                store,
+                window_plans,
+                chunk_window_indices,
+            )
+            oos_diagnostics["eval_time_s"] = round(time.time() - t_diag, 1)
+        except Exception as e:
+            print(f"[CHUNK {chunk_id}] diagnostics WARN: {e}", flush=True)
+            oos_diagnostics = {
+                "selected_window_indices": list(chunk_window_indices),
+                "window_count": 0,
+                "train_mean": {},
+                "oos_mean": {},
+                "gap_summary": {},
+                "window_metrics": [],
+                "error": str(e),
+            }
+
+        acceptance = _compute_acceptance(chunk_metrics, base_metrics)
+
         # Progress
         wr_all = chunk_metrics["wr_med_all"]
         wr_base = base_metrics["wr_med_all"]
@@ -466,6 +524,9 @@ def main():
             "metrics": chunk_metrics,
             "delta_fit_vs_base": round(delta_fit, 4),
             "delta_wr_vs_base_pp": round(delta_wr, 2),
+            "acceptance_vs_base": acceptance,
+            "selected_window_indices": list(chunk_window_indices),
+            "oos_diagnostics": oos_diagnostics,
             "best_genome": list(best_genome),
         }
         progress["chunks"].append(chunk_entry)
@@ -488,11 +549,25 @@ def main():
         print(f"  MDD_med             ={_fmt_pct1(chunk_metrics['mdd_med'])}", flush=True)
         print(f"  Return_med          ={chunk_metrics['ret_med']:.3f}", flush=True)
         print(f"  Sharpe_med          ={chunk_metrics['sharpe_med']:.3f}", flush=True)
+        print(f"  Sortino_med         ={chunk_metrics.get('sortino_med', 0.0):.3f}", flush=True)
+        print(f"  ProfitFactor_med    ={chunk_metrics.get('profit_factor_med', 0.0):.3f}", flush=True)
+        print(f"  Expectancy_med      ={chunk_metrics.get('expectancy_med', 0.0):.4f}", flush=True)
+        print(f"  PayoffRatio_med     ={chunk_metrics.get('payoff_ratio_med', 0.0):.3f}", flush=True)
+        print(f"  MDD_duration_med    ={chunk_metrics.get('mdd_duration_med', 0.0):.0f} bars", flush=True)
+        print(f"  CAGR_med            ={_fmt_pct1(chunk_metrics.get('cagr_med', 0.0))}", flush=True)
+        print(f"  Mean_excess         ={chunk_metrics.get('mean_excess', 0.0):+.4f}", flush=True)
         print(f"  Trades_med          ={chunk_metrics['trades_med']:.0f}", flush=True)
         print(f"  N tickers >= 70% WR ={chunk_metrics['n_ge_70']}/{chunk_metrics['n_tickers_total']}",
               flush=True)
         print(f"  N tickers >= 50% WR_tgt={chunk_metrics.get('n_ge_50_target', 0)}/{chunk_metrics['n_tickers_total']}",
               flush=True)
+        gap_summary = oos_diagnostics.get("gap_summary", {})
+        if gap_summary:
+            print(f"  OOS gap fitness     ={gap_summary.get('fitness_gap', 0.0):+.4f}", flush=True)
+            print(f"  OOS gap WR          ={gap_summary.get('win_rate_gap', 0.0) * 100:+.2f}pp", flush=True)
+            print(f"  OOS gap WR_tgt      ={gap_summary.get('win_rate_target_gap', 0.0) * 100:+.2f}pp", flush=True)
+            print(f"  OOS gap excess      ={gap_summary.get('excess_return_gap', 0.0):+.4f}", flush=True)
+        print(f"  Acceptance vs base  ={acceptance['all_pass']}", flush=True)
 
         # Clean up per-chunk GA checkpoints AFTER progress is saved
         if os.path.exists(CHECKPOINT_DIR):
