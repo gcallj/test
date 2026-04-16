@@ -126,6 +126,72 @@ Decision:
 - `promote = false`
 - the hybrid was valuable because it showed the local frontier clearly: alpha can improve, but the current search space tends to pay for that with too much `WR` degradation
 
+## Automated Attempts
+
+The manual experiments above were not the only search path in this cycle. The main incumbent gains actually came from repeated automated staged runs and overnight refinement loops that reused the same swing-trade acceptance rules.
+
+Tracked automation-related code:
+
+- [`run_local_ga_staged.py`](/C:/Users/gabri/.codex/worktrees/0b30/test/run_local_ga_staged.py)
+- [`overnight_alpha_until_0600.py`](/C:/Users/gabri/.codex/worktrees/0b30/test/overnight_alpha_until_0600.py)
+- [`ensure_daily_telegram_file.py`](/C:/Users/gabri/.codex/worktrees/0b30/test/ensure_daily_telegram_file.py)
+
+Current tracked state artifacts:
+
+- [`global_ga_checkpoint.json`](/C:/Users/gabri/.codex/worktrees/0b30/test/global_ga_checkpoint.json)
+- [`local_ga_best_so_far.json`](/C:/Users/gabri/.codex/worktrees/0b30/test/local_ga_best_so_far.json)
+- [`local_ga_chunk_progress.json`](/C:/Users/gabri/.codex/worktrees/0b30/test/local_ga_chunk_progress.json)
+
+### Promotion ladder from automated search
+
+The automatic staged / overnight search promoted the checkpoint repeatedly. The saved promotion snapshots show this monotonic fitness climb:
+
+| Promotion snapshot | `fitness` |
+| --- | ---: |
+| `2026-04-15 14:11` | `1.6316` |
+| `2026-04-15 16:48` | `1.9077` |
+| `2026-04-15 20:13` | `3.4112` |
+| `2026-04-15 20:49` | `9.0748` |
+| `2026-04-15 23:32` | `11.1951` |
+| `2026-04-16 02:21` | `12.5071` |
+| `2026-04-16 16:48` | `12.5656` |
+
+This is the clearest evidence that the automated runner was the most effective optimizer in practice during this cycle.
+
+### Key automated milestones
+
+Pre-automation and early-automation snapshots preserved in the backup area show the progression of the incumbent:
+
+| Snapshot | `fit` | `WR_med_all` |
+| --- | ---: | ---: |
+| automation start / pre-stage1 | `0.0773` | `64.96%` |
+| continue pre-run | `6.0867` | `66.67%` |
+| pre-alpha-on phase | `12.5071` | `66.67%` |
+| current tracked incumbent | `12.5656` | `66.67%` |
+
+Reading this operationally:
+
+- the automated search delivered the big jump from roughly `fit ~= 0.08` to `fit ~= 12.57`
+- hit rate improved early and then stayed stable while later rounds mainly refined alpha, risk shape, and guardrail compliance
+- later manual alternative optimizers were tested against this much stronger incumbent and could not beat it
+
+### What is committed vs left out
+
+The repository commit includes the useful, replayable artifacts from automated search:
+
+- the current checkpoint and staged progress files
+- the automation scripts that produced and governed those runs
+- this human-readable summary
+
+The following are intentionally not committed:
+
+- `.local_ga_backups/**`
+- raw promotion backup pairs
+- transient `.bak` snapshots
+- large operational logs
+
+Those files are useful locally for forensic replay, but they add a lot of noise to repository history. The committed checkpoint/progress JSON plus this summary preserve the meaningful automated-attempt record without carrying the entire scratch space.
+
 ## Operational Changes Added During These Attempts
 
 These attempts were not only about alternative optimizers. The search/evaluation stack was also hardened:
@@ -169,6 +235,7 @@ Across the alternative optimizers tested in this cycle:
 - pure pattern search: no improvement
 - pure TPE / Optuna: no validated improvement
 - stronger hybrid GA -> TPE: no improvement over the incumbent
+- automated staged / overnight GA refinement: the only search path that consistently improved the incumbent
 
 The current incumbent remains the best operating point for the present swing-trade objective:
 
