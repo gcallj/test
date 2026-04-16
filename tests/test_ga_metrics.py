@@ -4,9 +4,11 @@ import sys
 import tempfile
 import types
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
+from openpyxl import Workbook
 
 if "matplotlib" not in sys.modules:
     matplotlib_stub = types.ModuleType("matplotlib")
@@ -36,8 +38,10 @@ if "deap" not in sys.modules:
     sys.modules["deap.tools"] = tools_stub
     sys.modules["deap.algorithms"] = algorithms_stub
 
+import ensure_daily_telegram_file as telegram_daily_file
 import ga_run
 import ga_run_modular_final as ga_run_modular
+import overnight_alpha_until_0600 as overnight_runner
 import payload_store
 import run_local_ga_staged as staged_runner
 
@@ -83,10 +87,15 @@ def _sample_stat(**overrides):
         "sortino": 1.0,
         "total_return": 0.12,
         "excess_return": 0.04,
+        "alpha_ann": 0.03,
         "expectancy": 0.010,
         "payoff_ratio": 1.2,
         "profit_factor": 1.4,
         "cagr": 0.10,
+        "buy_hold_cagr": 0.07,
+        "avg_hold_bars": 7.0,
+        "median_hold_bars": 6.0,
+        "max_hold_bars": 18.0,
         "max_drawdown_duration": 40.0,
         "mdd": -0.10,
         "n_trades": 24.0,
@@ -104,14 +113,28 @@ def _sample_stat(**overrides):
 
 
 class TestBacktestMetricHelpers(unittest.TestCase):
+    def test_attach_benchmark_stats_computes_annualized_alpha(self):
+        stats = {"total_return": 0.21, "cagr": ga_run._compute_cagr(0.21, 252)}
+        close = np.array([100.0, 110.0, 121.0], dtype=np.float64)
+        enriched = ga_run._attach_benchmark_stats(stats, close)
+        self.assertIn("buy_hold_cagr", enriched)
+        self.assertIn("alpha_ann", enriched)
+        self.assertAlmostEqual(
+            enriched["alpha_ann"],
+            enriched["cagr"] - enriched["buy_hold_cagr"],
+            places=9,
+        )
+
     def test_no_trade_metrics_are_zero_and_finite(self):
-        stats = ga_run._finalize_backtest_stats([], [], 0.25, 0.0, 0.0, 252, 0)
+        stats = ga_run._finalize_backtest_stats([], [], [], 0.25, 0.0, 0.0, 252, 0)
         self.assertEqual(stats["sortino"], 0.0)
         self.assertEqual(stats["profit_factor"], 0.0)
         self.assertEqual(stats["expectancy"], 0.0)
         self.assertEqual(stats["payoff_ratio"], 0.0)
         self.assertEqual(stats["max_drawdown_duration"], 0.0)
         self.assertEqual(stats["cagr"], 0.0)
+        self.assertEqual(stats["avg_hold_bars"], 0.0)
+        self.assertEqual(stats["median_hold_bars"], 0.0)
         for value in stats.values():
             if isinstance(value, float):
                 self.assertTrue(np.isfinite(value))
@@ -120,6 +143,7 @@ class TestBacktestMetricHelpers(unittest.TestCase):
         stats = ga_run._finalize_backtest_stats(
             [0.02, 0.03, 0.01],
             ["take", "time", "take"],
+            [4, 6, 3],
             0.60,
             0.061,
             -0.01,
@@ -132,11 +156,13 @@ class TestBacktestMetricHelpers(unittest.TestCase):
         self.assertEqual(stats["payoff_ratio"], 10.0)
         self.assertGreater(stats["expectancy"], 0.0)
         self.assertGreater(stats["cagr"], 0.0)
+        self.assertAlmostEqual(stats["avg_hold_bars"], 13.0 / 3.0, places=6)
 
     def test_all_loss_metrics_are_bounded_and_negative(self):
         stats = ga_run._finalize_backtest_stats(
             [-0.02, -0.03, -0.01],
             ["stop", "hard_loss", "time"],
+            [8, 5, 4],
             0.60,
             -0.059,
             -0.08,
@@ -148,11 +174,13 @@ class TestBacktestMetricHelpers(unittest.TestCase):
         self.assertEqual(stats["payoff_ratio"], 0.0)
         self.assertLess(stats["expectancy"], 0.0)
         self.assertEqual(stats["max_drawdown_duration"], 7.0)
+        self.assertEqual(stats["max_hold_bars"], 8.0)
 
     def test_mixed_trade_metrics_match_expected_ratios(self):
         stats = ga_run._finalize_backtest_stats(
             [0.02, -0.01, 0.03, -0.02],
             ["take", "stop", "time", "hard_loss"],
+            [5, 3, 9, 4],
             0.55,
             0.018,
             -0.06,
@@ -163,10 +191,11 @@ class TestBacktestMetricHelpers(unittest.TestCase):
         self.assertAlmostEqual(stats["payoff_ratio"], 0.025 / 0.015, places=6)
         self.assertAlmostEqual(stats["expectancy"], 0.005, places=6)
         self.assertEqual(stats["max_drawdown_duration"], 5.0)
+        self.assertEqual(stats["median_hold_bars"], 4.5)
 
     def test_recovered_and_unrecovered_drawdown_durations_are_preserved(self):
-        recovered = ga_run._finalize_backtest_stats([0.01, -0.02, 0.03], ["time"] * 3, 0.4, 0.018, -0.05, 252, 4)
-        unrecovered = ga_run._finalize_backtest_stats([0.01, -0.02, -0.01], ["time"] * 3, 0.4, -0.020, -0.08, 252, 9)
+        recovered = ga_run._finalize_backtest_stats([0.01, -0.02, 0.03], ["time"] * 3, [3, 6, 4], 0.4, 0.018, -0.05, 252, 4)
+        unrecovered = ga_run._finalize_backtest_stats([0.01, -0.02, -0.01], ["time"] * 3, [2, 8, 9], 0.4, -0.020, -0.08, 252, 9)
         self.assertEqual(recovered["max_drawdown_duration"], 4.0)
         self.assertEqual(unrecovered["max_drawdown_duration"], 9.0)
 
@@ -175,8 +204,9 @@ class TestParityAndFitness(unittest.TestCase):
     def test_metric_helper_parity_between_ga_modules(self):
         trade_rets = [0.02, -0.01, 0.03, -0.02]
         exit_types = ["take", "stop", "time", "hard_loss"]
-        main_stats = ga_run._finalize_backtest_stats(trade_rets, exit_types, 0.55, 0.018, -0.06, 252, 5)
-        modular_stats = ga_run_modular._finalize_backtest_stats(trade_rets, exit_types, 0.55, 0.018, -0.06, 252, 5)
+        hold_bars = [5, 3, 9, 4]
+        main_stats = ga_run._finalize_backtest_stats(trade_rets, exit_types, hold_bars, 0.55, 0.018, -0.06, 252, 5)
+        modular_stats = ga_run_modular._finalize_backtest_stats(trade_rets, exit_types, hold_bars, 0.55, 0.018, -0.06, 252, 5)
         self.assertEqual(set(main_stats.keys()), set(modular_stats.keys()))
         for key in main_stats:
             if isinstance(main_stats[key], float):
@@ -228,8 +258,8 @@ class TestParityAndFitness(unittest.TestCase):
     def test_fitness_guardrails_block_negative_alpha_from_beating_baseline(self):
         baseline = [_sample_stat(), _sample_stat(win_rate=0.64, win_rate_target=0.46)]
         negative_alpha = [
-            _sample_stat(sortino=3.5, profit_factor=3.0, expectancy=0.020, payoff_ratio=2.0, excess_return=-0.05, total_return=0.01),
-            _sample_stat(sortino=3.2, profit_factor=2.8, expectancy=0.018, payoff_ratio=1.8, excess_return=-0.04, total_return=0.01, win_rate=0.64, win_rate_target=0.46),
+            _sample_stat(sortino=3.5, profit_factor=3.0, expectancy=0.020, payoff_ratio=2.0, excess_return=-0.05, alpha_ann=-0.03, total_return=0.01),
+            _sample_stat(sortino=3.2, profit_factor=2.8, expectancy=0.018, payoff_ratio=1.8, excess_return=-0.04, alpha_ann=-0.02, total_return=0.01, win_rate=0.64, win_rate_target=0.46),
         ]
         self.assertLessEqual(
             ga_run.global_fitness_from_stats(negative_alpha),
@@ -238,6 +268,99 @@ class TestParityAndFitness(unittest.TestCase):
         self.assertLessEqual(
             ga_run_modular.global_fitness_from_stats(negative_alpha),
             ga_run_modular.global_fitness_from_stats(baseline),
+        )
+
+    def test_alpha_focus_prefers_alpha_recovery_over_small_wr_edge(self):
+        high_wr_bad_alpha = [
+            _sample_stat(
+                win_rate=0.69,
+                win_rate_target=0.61,
+                sortino=1.8,
+                profit_factor=1.9,
+                expectancy=0.018,
+                payoff_ratio=1.5,
+                alpha_ann=-0.12,
+                cagr=0.02,
+                buy_hold_cagr=0.14,
+                total_return=0.05,
+                mdd=-0.11,
+            ),
+            _sample_stat(
+                win_rate=0.67,
+                win_rate_target=0.58,
+                sortino=1.7,
+                profit_factor=1.8,
+                expectancy=0.016,
+                payoff_ratio=1.4,
+                alpha_ann=-0.11,
+                cagr=0.03,
+                buy_hold_cagr=0.14,
+                total_return=0.06,
+                mdd=-0.11,
+            ),
+        ]
+        alpha_recovery = [
+            _sample_stat(
+                win_rate=0.64,
+                win_rate_target=0.56,
+                sortino=1.2,
+                profit_factor=1.35,
+                expectancy=0.009,
+                payoff_ratio=1.15,
+                alpha_ann=-0.04,
+                cagr=0.09,
+                buy_hold_cagr=0.13,
+                total_return=0.09,
+                mdd=-0.10,
+            ),
+            _sample_stat(
+                win_rate=0.63,
+                win_rate_target=0.55,
+                sortino=1.1,
+                profit_factor=1.30,
+                expectancy=0.008,
+                payoff_ratio=1.10,
+                alpha_ann=-0.03,
+                cagr=0.10,
+                buy_hold_cagr=0.13,
+                total_return=0.10,
+                mdd=-0.10,
+            ),
+        ]
+
+        prev_alpha_focus_main = ga_run.GA_ALPHA_FOCUS
+        prev_alpha_focus_mod = ga_run_modular.GA_ALPHA_FOCUS
+        ga_run.GA_ALPHA_FOCUS = True
+        ga_run_modular.GA_ALPHA_FOCUS = True
+        try:
+            self.assertGreater(
+                ga_run.global_fitness_from_stats(alpha_recovery),
+                ga_run.global_fitness_from_stats(high_wr_bad_alpha),
+            )
+            self.assertGreater(
+                ga_run_modular.global_fitness_from_stats(alpha_recovery),
+                ga_run_modular.global_fitness_from_stats(high_wr_bad_alpha),
+            )
+        finally:
+            ga_run.GA_ALPHA_FOCUS = prev_alpha_focus_main
+            ga_run_modular.GA_ALPHA_FOCUS = prev_alpha_focus_mod
+
+    def test_fitness_prefers_swing_holding_profile_when_edge_is_similar(self):
+        swing_profile = [
+            _sample_stat(avg_hold_bars=8.0, median_hold_bars=7.0, max_hold_bars=20.0),
+            _sample_stat(avg_hold_bars=9.0, median_hold_bars=8.0, max_hold_bars=22.0, win_rate=0.65, win_rate_target=0.47),
+        ]
+        too_long_profile = [
+            _sample_stat(avg_hold_bars=42.0, median_hold_bars=30.0, max_hold_bars=75.0),
+            _sample_stat(avg_hold_bars=38.0, median_hold_bars=28.0, max_hold_bars=70.0, win_rate=0.65, win_rate_target=0.47),
+        ]
+        self.assertGreater(
+            ga_run.global_fitness_from_stats(swing_profile),
+            ga_run.global_fitness_from_stats(too_long_profile),
+        )
+        self.assertGreater(
+            ga_run_modular.global_fitness_from_stats(swing_profile),
+            ga_run_modular.global_fitness_from_stats(too_long_profile),
         )
 
 
@@ -269,7 +392,345 @@ class TestPayloadStoreLifecycle(unittest.TestCase):
             self.assertFalse(os.path.exists(meta_path))
 
 
+class TestStagedAcceptance(unittest.TestCase):
+    def test_acceptance_uses_alpha_ann_improvement_instead_of_raw_excess_floor(self):
+        base = {
+            "wr_med_all": 0.60,
+            "wr_target_med_all": 0.50,
+            "mdd_med": 0.10,
+            "mdd_p75": 0.12,
+            "mdd_duration_med": 35.0,
+            "mean_alpha_ann": -0.08,
+            "alpha_ann_pos_rate": 0.20,
+            "trades_med": 10.0,
+        }
+        improved = {
+            "wr_med_all": 0.72,
+            "wr_target_med_all": 0.62,
+            "mdd_med": 0.11,
+            "mdd_p75": 0.13,
+            "mdd_duration_med": 39.0,
+            "mean_alpha_ann": -0.05,
+            "alpha_ann_pos_rate": 0.28,
+            "trades_med": 12.0,
+            "avg_hold_bars_med": 8.0,
+            "median_hold_bars_med": 6.0,
+            "max_hold_bars_p75": 20.0,
+            "mean_excess": -5.0,
+        }
+        acceptance = staged_runner._compute_acceptance(improved, base)
+        self.assertTrue(acceptance["mean_alpha_ann_up"])
+        self.assertTrue(acceptance["alpha_ann_pos_rate_up"])
+        self.assertTrue(acceptance["wr_med_all_floor"])
+        self.assertTrue(acceptance["wr_target_med_all_floor"])
+        self.assertTrue(acceptance["all_pass"])
+
+    def test_acceptance_allows_small_mdd_increase_when_other_metrics_improve(self):
+        base = {
+            "wr_med_all": 0.33,
+            "wr_target_med_all": 0.00,
+            "mdd_med": 0.08,
+            "mdd_p75": 0.10,
+            "mdd_duration_med": 32.0,
+            "mean_alpha_ann": -0.095,
+            "alpha_ann_pos_rate": 0.16,
+            "trades_med": 11.0,
+        }
+        improved = {
+            "wr_med_all": 0.65,
+            "wr_target_med_all": 0.58,
+            "mdd_med": 0.117,
+            "mdd_p75": 0.115,
+            "mdd_duration_med": 40.0,
+            "mean_alpha_ann": -0.085,
+            "alpha_ann_pos_rate": 0.18,
+            "trades_med": 20.0,
+            "avg_hold_bars_med": 9.0,
+            "median_hold_bars_med": 7.0,
+            "max_hold_bars_p75": 24.0,
+        }
+        acceptance = staged_runner._compute_acceptance(improved, base)
+        self.assertTrue(acceptance["strong_alpha_wr_relax"])
+        self.assertGreater(acceptance["mdd_relaxation_bonus"], 0.0)
+        self.assertAlmostEqual(acceptance["alpha_ann_pos_rate_target"], 0.17, places=9)
+        self.assertTrue(acceptance["mdd_med_not_worse"])
+        self.assertTrue(acceptance["all_pass"])
+
+    def test_acceptance_requires_meaningful_alpha_pos_rate_improvement(self):
+        base = {
+            "wr_med_all": 0.33,
+            "wr_target_med_all": 0.00,
+            "mdd_med": 0.08,
+            "mdd_p75": 0.10,
+            "mdd_duration_med": 32.0,
+            "mean_alpha_ann": -0.095,
+            "alpha_ann_pos_rate": 0.16,
+            "trades_med": 11.0,
+        }
+        improved = {
+            "wr_med_all": 0.65,
+            "wr_target_med_all": 0.58,
+            "mdd_med": 0.117,
+            "mdd_p75": 0.115,
+            "mdd_duration_med": 40.0,
+            "mean_alpha_ann": -0.085,
+            "alpha_ann_pos_rate": 0.169,
+            "trades_med": 20.0,
+            "avg_hold_bars_med": 9.0,
+            "median_hold_bars_med": 7.0,
+            "max_hold_bars_p75": 24.0,
+        }
+        acceptance = staged_runner._compute_acceptance(improved, base)
+        self.assertTrue(acceptance["strong_alpha_wr_relax"])
+        self.assertFalse(acceptance["alpha_ann_pos_rate_up"])
+        self.assertAlmostEqual(acceptance["alpha_ann_pos_rate_target"], 0.17, places=9)
+        self.assertFalse(acceptance["all_pass"])
+
+    def test_acceptance_keeps_tighter_mdd_gate_when_alpha_gain_is_small(self):
+        base = {
+            "wr_med_all": 0.33,
+            "wr_target_med_all": 0.00,
+            "mdd_med": 0.08,
+            "mdd_p75": 0.10,
+            "mdd_duration_med": 32.0,
+            "mean_alpha_ann": -0.095,
+            "alpha_ann_pos_rate": 0.16,
+            "trades_med": 11.0,
+        }
+        improved = {
+            "wr_med_all": 0.58,
+            "wr_target_med_all": 0.50,
+            "mdd_med": 0.131,
+            "mdd_p75": 0.125,
+            "mdd_duration_med": 40.0,
+            "mean_alpha_ann": -0.091,
+            "alpha_ann_pos_rate": 0.19,
+            "trades_med": 20.0,
+            "avg_hold_bars_med": 9.0,
+            "median_hold_bars_med": 7.0,
+            "max_hold_bars_p75": 24.0,
+        }
+        acceptance = staged_runner._compute_acceptance(improved, base)
+        self.assertFalse(acceptance["strong_alpha_wr_relax"])
+        self.assertLess(acceptance["mdd_relaxation_bonus"], 0.0121)
+        self.assertFalse(acceptance["mdd_med_not_worse"])
+        self.assertFalse(acceptance["all_pass"])
+
+    def test_acceptance_blocks_tail_risk_and_non_swing_holding_profile(self):
+        base = {
+            "wr_med_all": 0.50,
+            "wr_target_med_all": 0.40,
+            "mdd_med": 0.09,
+            "mdd_p75": 0.11,
+            "mdd_duration_med": 30.0,
+            "mean_alpha_ann": -0.07,
+            "alpha_ann_pos_rate": 0.18,
+            "trades_med": 12.0,
+        }
+        improved = {
+            "wr_med_all": 0.64,
+            "wr_target_med_all": 0.55,
+            "mdd_med": 0.11,
+            "mdd_p75": 0.18,
+            "mdd_duration_med": 55.0,
+            "mean_alpha_ann": -0.05,
+            "alpha_ann_pos_rate": 0.22,
+            "trades_med": 13.0,
+            "avg_hold_bars_med": 26.0,
+            "median_hold_bars_med": 16.0,
+            "max_hold_bars_p75": 70.0,
+        }
+        acceptance = staged_runner._compute_acceptance(improved, base)
+        self.assertFalse(acceptance["mdd_p75_not_worse"])
+        self.assertFalse(acceptance["mdd_duration_not_worse"])
+        self.assertFalse(acceptance["swing_hold_ok"])
+
+    def test_incumbent_wr_guardrail_blocks_meaningful_wr_regression(self):
+        incumbent = {
+            "wr_med_all": 0.65,
+            "wr_target_med_all": 0.64,
+        }
+        weaker = {
+            "wr_med_all": 0.635,
+            "wr_target_med_all": 0.620,
+        }
+        stronger = {
+            "wr_med_all": 0.648,
+            "wr_target_med_all": 0.636,
+        }
+        blocked = staged_runner._compute_incumbent_wr_guardrail(weaker, incumbent)
+        allowed = staged_runner._compute_incumbent_wr_guardrail(stronger, incumbent)
+        self.assertFalse(blocked["wr_ok"])
+        self.assertFalse(blocked["all_pass"])
+        self.assertTrue(allowed["wr_ok"])
+        self.assertTrue(allowed["wr_target_ok"])
+        self.assertTrue(allowed["all_pass"])
+
+    def test_incumbent_safety_guardrail_blocks_tail_drawdown_regression(self):
+        incumbent = {
+            "wr_med_all": 0.65,
+            "wr_target_med_all": 0.64,
+            "mdd_med": 0.11,
+            "mdd_p75": 0.13,
+            "mdd_duration_med": 34.0,
+            "trades_med": 20.0,
+            "avg_hold_bars_med": 8.0,
+            "median_hold_bars_med": 6.0,
+            "max_hold_bars_p75": 28.0,
+            "mean_alpha_ann": -0.08,
+        }
+        weaker = {
+            "wr_med_all": 0.652,
+            "wr_target_med_all": 0.642,
+            "mdd_med": 0.128,
+            "mdd_p75": 0.151,
+            "mdd_duration_med": 50.0,
+            "trades_med": 19.0,
+            "avg_hold_bars_med": 8.0,
+            "median_hold_bars_med": 6.0,
+            "max_hold_bars_p75": 30.0,
+            "mean_alpha_ann": -0.078,
+        }
+        stronger = {
+            "wr_med_all": 0.661,
+            "wr_target_med_all": 0.651,
+            "mdd_med": 0.121,
+            "mdd_p75": 0.140,
+            "mdd_duration_med": 39.0,
+            "trades_med": 19.0,
+            "avg_hold_bars_med": 8.0,
+            "median_hold_bars_med": 6.0,
+            "max_hold_bars_p75": 30.0,
+            "mean_alpha_ann": -0.074,
+        }
+        blocked = staged_runner._compute_incumbent_safety_guardrail(weaker, incumbent)
+        allowed = staged_runner._compute_incumbent_safety_guardrail(stronger, incumbent)
+        self.assertFalse(blocked["mdd_ok"])
+        self.assertFalse(blocked["all_pass"])
+        self.assertTrue(allowed["mdd_ok"])
+        self.assertTrue(allowed["mdd_p75_ok"])
+        self.assertTrue(allowed["all_pass"])
+
+    def test_candidate_beats_incumbent_requires_shared_guardrails(self):
+        base = {
+            "wr_med_all": 0.33,
+            "wr_target_med_all": 0.00,
+            "mdd_med": 0.08,
+            "mdd_p75": 0.10,
+            "mdd_duration_med": 30.0,
+            "mean_alpha_ann": -0.095,
+            "alpha_ann_pos_rate": 0.16,
+            "trades_med": 11.0,
+        }
+        incumbent = {
+            "wr_med_all": 0.65,
+            "wr_target_med_all": 0.63,
+            "mdd_med": 0.11,
+            "mdd_p75": 0.13,
+            "mdd_duration_med": 34.0,
+            "mean_alpha_ann": -0.08,
+            "alpha_ann_pos_rate": 0.20,
+            "trades_med": 20.0,
+            "avg_hold_bars_med": 8.0,
+            "median_hold_bars_med": 6.0,
+            "max_hold_bars_p75": 28.0,
+            "fit": 1.0,
+        }
+        candidate = {
+            "wr_med_all": 0.645,
+            "wr_target_med_all": 0.620,
+            "mdd_med": 0.115,
+            "mdd_p75": 0.138,
+            "mdd_duration_med": 38.0,
+            "mean_alpha_ann": -0.072,
+            "alpha_ann_pos_rate": 0.21,
+            "trades_med": 19.0,
+            "avg_hold_bars_med": 8.0,
+            "median_hold_bars_med": 6.0,
+            "max_hold_bars_p75": 30.0,
+            "fit": 1.2,
+        }
+        decision = staged_runner._candidate_beats_incumbent(candidate, base, incumbent)
+        self.assertFalse(decision["incumbent_wr_guardrail"]["all_pass"])
+        self.assertFalse(decision["promote"])
+
+    def test_overnight_best_candidate_comes_from_best_so_far(self):
+        progress = {
+            "base_metrics": {
+                "wr_med_all": 0.40,
+                "wr_target_med_all": 0.30,
+                "mdd_med": 0.10,
+                "mdd_p75": 0.12,
+                "mdd_duration_med": 30.0,
+                "mean_alpha_ann": -0.09,
+                "alpha_ann_pos_rate": 0.16,
+                "trades_med": 12.0,
+            },
+            "best_so_far": {
+                "found_at_chunk": 3,
+                "genome": [0.1, 0.2],
+                "metrics": {
+                    "wr_med_all": 0.60,
+                    "wr_target_med_all": 0.56,
+                    "mdd_med": 0.12,
+                    "mdd_p75": 0.14,
+                    "mdd_duration_med": 36.0,
+                    "mean_alpha_ann": -0.07,
+                    "alpha_ann_pos_rate": 0.19,
+                    "trades_med": 13.0,
+                    "avg_hold_bars_med": 8.0,
+                    "median_hold_bars_med": 6.0,
+                    "max_hold_bars_p75": 20.0,
+                    "fit": 1.0,
+                },
+            },
+        }
+        candidate = overnight_runner._find_best_accepted(progress)
+        self.assertIsNotNone(candidate)
+        self.assertEqual(candidate["chunk_id"], 3)
+        self.assertEqual(candidate["best_genome"], [0.1, 0.2])
+
+
 class TestStagedRunnerProgress(unittest.TestCase):
+    def test_round_state_auto_rotates_window_offset(self):
+        old_cwd = os.getcwd()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            os.chdir(tmpdir)
+            try:
+                round_state_1, offset_1 = staged_runner._resolve_round_state(
+                    reset=True,
+                    requested_offset=None,
+                    total_windows=36,
+                    window_count=4,
+                )
+                round_state_2, offset_2 = staged_runner._resolve_round_state(
+                    reset=True,
+                    requested_offset=None,
+                    total_windows=36,
+                    window_count=4,
+                )
+            finally:
+                os.chdir(old_cwd)
+
+        self.assertEqual(round_state_1["round_index"], 1)
+        self.assertEqual(round_state_2["round_index"], 2)
+        self.assertNotEqual(offset_1, offset_2)
+
+    def test_seed_best_so_far_is_persisted_as_incumbent(self):
+        seed_genome = [0.1, 0.2, 0.3]
+        seed_metrics = {
+            "fit": -4.75,
+            "wr_med_all": 0.625,
+            "mean_alpha_ann": -0.088,
+            "n_ge_70": 41,
+        }
+        best = staged_runner._build_seed_best_so_far(seed_genome, seed_metrics)
+
+        self.assertEqual(best["found_at_chunk"], 0)
+        self.assertEqual(best["genome"], seed_genome)
+        self.assertEqual(best["metrics"]["fit"], seed_metrics["fit"])
+        self.assertEqual(best["wr_med_all"], seed_metrics["wr_med_all"])
+
     def test_progress_file_serializes_new_metrics_and_oos_diagnostics(self):
         payload = {
             "chunks": [{
@@ -279,9 +740,15 @@ class TestStagedRunnerProgress(unittest.TestCase):
                     "profit_factor_med": 1.5,
                     "expectancy_med": 0.01,
                     "payoff_ratio_med": 1.3,
+                    "mdd_p75": 0.14,
                     "mdd_duration_med": 12.0,
+                    "mdd_duration_p75": 16.0,
                     "cagr_med": 0.14,
                     "mean_excess": 0.02,
+                    "mean_alpha_ann": 0.03,
+                    "avg_hold_bars_med": 8.0,
+                    "median_hold_bars_med": 6.0,
+                    "max_hold_bars_p75": 22.0,
                 },
                 "oos_diagnostics": {
                     "selected_window_indices": [0, 3],
@@ -291,6 +758,7 @@ class TestStagedRunnerProgress(unittest.TestCase):
                         "win_rate_target_gap": 0.01,
                         "mdd_gap": -0.01,
                         "excess_return_gap": 0.005,
+                        "alpha_ann_gap": 0.002,
                     },
                     "window_metrics": [{
                         "window_index": 0,
@@ -314,9 +782,73 @@ class TestStagedRunnerProgress(unittest.TestCase):
         metrics = loaded["chunks"][0]["metrics"]
         self.assertIn("sortino_med", metrics)
         self.assertIn("profit_factor_med", metrics)
+        self.assertIn("mdd_p75", metrics)
         self.assertIn("mdd_duration_med", metrics)
+        self.assertIn("max_hold_bars_p75", metrics)
+        self.assertIn("mean_alpha_ann", metrics)
         self.assertIn("oos_diagnostics", loaded["chunks"][0])
         self.assertEqual(loaded["chunks"][0]["oos_diagnostics"]["selected_window_indices"], [0, 3])
+
+    def test_sync_best_so_far_updates_progress_and_file(self):
+        best = {
+            "fit": -4.75,
+            "wr_med_all": 0.625,
+            "genome": [0.1, 0.2, 0.3],
+            "metrics": {"fit": -4.75, "wr_med_all": 0.625},
+            "found_at_chunk": 0,
+        }
+        progress = {"chunks": [], "best_so_far": None}
+
+        old_cwd = os.getcwd()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            os.chdir(tmpdir)
+            try:
+                staged_runner._sync_best_so_far_state(progress, best)
+                with open(staged_runner.PROGRESS_FILE, "r", encoding="utf-8") as fh:
+                    saved_progress = json.load(fh)
+                with open(staged_runner.BEST_SOFAR_FILE, "r", encoding="utf-8") as fh:
+                    saved_best = json.load(fh)
+            finally:
+                os.chdir(old_cwd)
+
+        self.assertEqual(saved_progress["best_so_far"]["fit"], best["fit"])
+
+
+class TestTelegramDailyFile(unittest.TestCase):
+    def test_parse_excel_latest_date_reads_latest_apply_day(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            xlsx_path = os.path.join(tmpdir, "summary_latest.xlsx")
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Apply"
+            ws.append(["Date", "ticker", "signal"])
+            ws.append(["2026-04-14", "AAA3", "buy"])
+            ws.append(["2026-04-15", "BBB4", "hold"])
+            wb.save(xlsx_path)
+            wb.close()
+
+            latest = telegram_daily_file._parse_excel_latest_date(Path(xlsx_path))
+
+        self.assertEqual(str(latest), "2026-04-15")
+
+    def test_has_current_day_data_detects_stale_file(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            xlsx_path = os.path.join(tmpdir, "summary_latest.xlsx")
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Apply"
+            ws.append(["Date", "ticker", "signal"])
+            ws.append(["2026-04-14", "AAA3", "buy"])
+            wb.save(xlsx_path)
+            wb.close()
+
+            fresh, latest = telegram_daily_file._has_current_day_data(
+                Path(xlsx_path),
+                telegram_daily_file._target_date("2026-04-15"),
+            )
+
+        self.assertFalse(fresh)
+        self.assertEqual(str(latest), "2026-04-14")
 
 
 if __name__ == "__main__":

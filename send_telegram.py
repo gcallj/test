@@ -213,4 +213,6 @@ print("=== CAPTION ===")
 print(caption)
 print()
 print(f"=== SENDING {xlsx} ({os.path.getsize(xlsx)} bytes) ===")
-_send_telegram(xlsx, caption)
+ok = _send_telegram(xlsx, caption)
+if not ok:
+    raise SystemExit(2)
