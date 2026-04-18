@@ -98,3 +98,26 @@ tells future iterations which gene moves are dead ends.
 
 ---
 
+## 2026-04-18T20:39:53+00:00 - C_timing
+**Cycle**: #4  |  **Promoted**: NO  |  **Codex sync**: YES
+**Genes swept**: `time_stop_bars, consecutive_loss_cooldown`
+**Sweep file**: `local_fullmetric_sweep_continuous_C_timing_20260418_203623.json`
+
+### Metrics
+
+| Source | fit | WR | WR_tgt | alpha_ann | MDD | trades |
+|---|---:|---:|---:|---:|---:|---:|
+| baseline (git:main) | -75.4866 | 69.88% | 69.70% | -8.33% | 11.09% | 32 |
+| incumbent (worktree) | -75.4866 | 69.88% | 69.70% | -8.33% | 11.09% | 32 |
+| **candidate** | -75.6432 | 70.00% | 69.70% | -8.34% | 11.09% | 31 |
+
+**Best candidate label**: `consecutive_loss_cooldown:+1`
+
+**Moves applied to incumbent**:
+
+- `consecutive_loss_cooldown`: `6` -> `7` (step 1.0)
+
+**Learning**: candidato `consecutive_loss_cooldown: 6->7` parecia bom mas falhou nos gates: acceptance_vs_main, priority_better. Esses moves entram para o graveyard: nao tentar novamente sem mudar contexto.
+
+---
+
