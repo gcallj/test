@@ -245,7 +245,10 @@ def _append_log_entry(entry: dict) -> None:
 
     md = []
     md.append(f"## {entry['timestamp']} - {entry['category']}\n")
-    md.append(f"**Cycle**: #{entry['cycle_number']}  |  **Promoted**: {'YES' if entry['applied'] else 'NO'}\n")
+    md.append(f"**Cycle**: #{entry['cycle_number']}  |  **Promoted**: {'YES' if entry['applied'] else 'NO'}")
+    if "codex_synced" in entry:
+        md.append(f"  |  **Codex sync**: {'YES' if entry['codex_synced'] else 'skipped'}")
+    md.append("\n")
     md.append(f"**Genes swept**: `{', '.join(entry['genes'])}`\n")
     md.append(f"**Sweep file**: `{entry['sweep_filename']}`\n\n")
 
@@ -347,12 +350,49 @@ def _try_apply(sweep_path: Path, sweep: dict) -> bool:
     return True
 
 
-def _do_one_cycle(category_override: str | None, alpha_focus: str) -> dict:
+def _run_codex_sync() -> bool:
+    """Call analysis/codex_attempts_sync.py best-effort.
+
+    Returns True if the sync script ran (regardless of whether it wrote
+    anything), False if it was skipped or crashed.
+
+    The sync script itself is defensive: it exits 0 when the codex source
+    is missing (remote runner scenario), so this wrapper only needs to
+    shield us from transient errors and keep the cycle running.
+    """
+    script = ROOT / "analysis" / "codex_attempts_sync.py"
+    if not script.exists():
+        print("[CONTINUOUS] codex sync script missing — skipping")
+        return False
+    try:
+        rc = subprocess.run(
+            [sys.executable, "-u", str(script)],
+            cwd=str(ROOT),
+            check=False,
+            timeout=60,
+        ).returncode
+        if rc != 0:
+            print(f"[CONTINUOUS] codex sync exited rc={rc} (non-fatal)")
+        return True
+    except subprocess.TimeoutExpired:
+        print("[CONTINUOUS] codex sync timed out after 60s — skipping")
+        return False
+    except Exception as e:
+        print(f"[CONTINUOUS] codex sync skipped: {e!r}")
+        return False
+
+
+def _do_one_cycle(category_override: str | None, alpha_focus: str,
+                  run_codex_sync: bool = True) -> dict:
     state = _load_state()
     state["total_cycles"] += 1
     cycle_num = state["total_cycles"]
     category = _pick_next_category(state, override=category_override)
     print(f"\n=== CONTINUOUS CYCLE #{cycle_num} - category {category} ===")
+
+    codex_synced = False
+    if run_codex_sync:
+        codex_synced = _run_codex_sync()
 
     sweep_path, sweep = _run_sweep(category, alpha_focus)
     applied = _try_apply(sweep_path, sweep)
@@ -375,6 +415,7 @@ def _do_one_cycle(category_override: str | None, alpha_focus: str) -> dict:
         "sweep_filename": sweep_path.name,
         "sweep_result": sweep,
         "applied": applied,
+        "codex_synced": codex_synced,
     }
     _append_log_entry(entry)
     _save_state(state)
@@ -422,6 +463,9 @@ def main() -> int:
                         help="Maximum cycles to run (default 1; ignored if --until set).")
     parser.add_argument("--status", action="store_true",
                         help="Print status table and exit.")
+    parser.add_argument("--no-codex-sync", action="store_true",
+                        help="Skip calling analysis/codex_attempts_sync.py at "
+                             "the start of each cycle (useful offline / in CI).")
     args = parser.parse_args()
 
     if args.status:
@@ -439,7 +483,11 @@ def main() -> int:
             break
 
         try:
-            entry = _do_one_cycle(args.category, args.alpha_focus)
+            entry = _do_one_cycle(
+                args.category,
+                args.alpha_focus,
+                run_codex_sync=not args.no_codex_sync,
+            )
             cycles_done += 1
             if entry["applied"]:
                 cycles_promoted += 1

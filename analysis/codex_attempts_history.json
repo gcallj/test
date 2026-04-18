@@ -1,0 +1,407 @@
+{
+  "codex_sync_metadata": {
+    "source_file": "C:/Users/gabri/.codex/worktrees/0b30/test/analysis/optimization_attempts_20260416.md",
+    "source_sha1": "9775a1adbf70000cc220afe6c2731cf794165bdf",
+    "last_parsed": "2026-04-18T15:48:43+02:00",
+    "parser_version": 1,
+    "n_attempts_parsed": 13,
+    "n_promoted": 6,
+    "n_parse_errors": 0
+  },
+  "attempts": [
+    {
+      "attempt_id": "1",
+      "section_title": "Pattern Search",
+      "timestamp": "",
+      "sweep_file": "",
+      "genes": [],
+      "moves": [],
+      "metrics": {
+        "incumbent": {
+          "fit": 7.5986,
+          "wr_med_all": 0.6667000000000001,
+          "wr_target_med_all": 0.6812999999999999,
+          "mean_alpha_ann": -0.0818,
+          "mdd_med": 0.129,
+          "mdd_duration_med": 288.0,
+          "trades_med": 32.0
+        },
+        "candidate": {
+          "fit": 5.6658,
+          "wr_med_all": 0.6667000000000001,
+          "wr_target_med_all": 0.6667000000000001,
+          "mean_alpha_ann": -0.0819,
+          "mdd_med": 0.135,
+          "mdd_duration_med": 298.0,
+          "trades_med": 32.0
+        }
+      },
+      "promoted": false,
+      "learning": ""
+    },
+    {
+      "attempt_id": "2",
+      "section_title": "Optuna / TPE",
+      "timestamp": "",
+      "sweep_file": "",
+      "genes": [],
+      "moves": [],
+      "metrics": {
+        "incumbent": {},
+        "candidate": {}
+      },
+      "promoted": false,
+      "learning": ""
+    },
+    {
+      "attempt_id": "3",
+      "section_title": "Hybrid Mini-GA -> TPE",
+      "timestamp": "",
+      "sweep_file": "",
+      "genes": [],
+      "moves": [],
+      "metrics": {
+        "incumbent": {
+          "fit": 7.5647,
+          "wr_med_all": 0.6667000000000001,
+          "wr_target_med_all": 0.6818000000000001,
+          "mean_alpha_ann": -0.0816,
+          "mdd_med": 0.1276
+        },
+        "candidate": {
+          "fit": 7.5647,
+          "wr_med_all": 0.6667000000000001,
+          "wr_target_med_all": 0.6818000000000001,
+          "mean_alpha_ann": -0.0816,
+          "mdd_med": 0.1276
+        }
+      },
+      "promoted": false,
+      "learning": ""
+    },
+    {
+      "attempt_id": "3",
+      "section_title": "Staged GA (Stage 2 refine, `WR`-biased)",
+      "timestamp": "2026-04-18T03:01",
+      "sweep_file": "",
+      "genes": [],
+      "moves": [],
+      "metrics": {
+        "incumbent": {
+          "fit": 11.2307,
+          "wr_med_all": 0.6667000000000001,
+          "wr_target_med_all": 0.6778,
+          "mean_alpha_ann": -0.08259999999999999,
+          "mdd_med": 0.12380000000000001
+        },
+        "candidate": {
+          "fit": 12.4853,
+          "wr_med_all": 0.6667000000000001,
+          "wr_target_med_all": 0.6708,
+          "mean_alpha_ann": -0.08199999999999999,
+          "mdd_med": 0.122
+        }
+      },
+      "promoted": false,
+      "learning": "local Stage-2 refinement can trade small alpha/MDD improvements for small `WR_target` losses; with the current incumbent guardrails this is not promotable. next attempts should either (a) widen search diversity (Stage 1 / more mutations) or (b) explicitly bias the *search* objective harder toward `WR_target` so improvements do not come at `WR_target`’s expense."
+    },
+    {
+      "attempt_id": "4",
+      "section_title": "Staged GA (Stage 1 explore, higher `eval_topk`)",
+      "timestamp": "2026-04-18T03:30",
+      "sweep_file": "",
+      "genes": [],
+      "moves": [],
+      "metrics": {
+        "incumbent": {},
+        "candidate": {}
+      },
+      "promoted": false,
+      "learning": "increasing `eval_topk` surfaced several “nearby” candidates with similar `WR_med_all`, but none improved `WR_target` without giving back the incumbent’s safety profile. the incumbent remains the best operating point under the current objective; further progress likely requires either a larger Stage-1 budget or a targeted wr-target-focused retrain (e.g., the wr-target wrapper / stronger `WR_target` pressure in the train objective)."
+    },
+    {
+      "attempt_id": "5",
+      "section_title": "Staged GA (Stage 1 explore, bigger budget, new offset)",
+      "timestamp": "2026-04-18T03:49",
+      "sweep_file": "",
+      "genes": [],
+      "moves": [],
+      "metrics": {
+        "incumbent": {
+          "fit": 11.2307,
+          "wr_med_all": 0.6667000000000001,
+          "wr_target_med_all": 0.6778,
+          "mean_alpha_ann": -0.08259999999999999,
+          "mdd_med": 0.12380000000000001
+        },
+        "candidate": {
+          "fit": 10.4634,
+          "wr_med_all": 0.6667000000000001,
+          "wr_target_med_all": 0.6667000000000001,
+          "mean_alpha_ann": -0.08199999999999999,
+          "mdd_med": 0.121
+        }
+      },
+      "promoted": false,
+      "learning": "even with a larger Stage-1 budget + broader validation (`eval_topk=12`), the best full-metric candidates tended to trade small alpha/MDD gains for meaningful `WR_target` losses. the bottleneck appears to be search objective alignment (top train fitness ≠ best swing-priority); next attempt should directly optimize the priority tuple under full metrics."
+    },
+    {
+      "attempt_id": "6",
+      "section_title": "Full-metric local sweep (WR-target gene neighborhood) — PROMOTED",
+      "timestamp": "2026-04-18T04:37",
+      "sweep_file": "local_fullmetric_sweep_result.json",
+      "genes": [
+        "partial_take_pct"
+      ],
+      "moves": [
+        {
+          "gene": "partial_take_pct",
+          "from": 0.3,
+          "to": 0.2
+        }
+      ],
+      "metrics": {
+        "incumbent": {
+          "fit": 11.2307,
+          "wr_med_all": 0.6667000000000001,
+          "wr_target_med_all": 0.6778,
+          "mean_alpha_ann": -0.08259999999999999,
+          "mdd_med": 0.12380000000000001
+        },
+        "candidate": {
+          "fit": 8.1675,
+          "wr_med_all": 0.6712,
+          "wr_target_med_all": 0.6778,
+          "mean_alpha_ann": -0.08289999999999999,
+          "mdd_med": 0.1258
+        }
+      },
+      "promoted": true,
+      "learning": ""
+    },
+    {
+      "attempt_id": "7",
+      "section_title": "Optuna/TPE local refinement (train-fit proxy) — NOT PROMOTED",
+      "timestamp": "2026-04-18T05:49",
+      "sweep_file": "",
+      "genes": [],
+      "moves": [],
+      "metrics": {
+        "incumbent": {},
+        "candidate": {}
+      },
+      "promoted": false,
+      "learning": "for this checkpoint, **objective alignment matters more than optimizer sophistication**: TPE over a misaligned proxy is not productive. next searches should either optimize a priority-aligned proxy (e.g., full-metric on a reduced ticker set) or use direct full-metric neighborhood search."
+    },
+    {
+      "attempt_id": "8",
+      "section_title": "Expanded full-metric sweep (exit/risk neighborhood) — PROMOTED",
+      "timestamp": "2026-04-18T05:58",
+      "sweep_file": "local_fullmetric_sweep_result_20260418_055831.json",
+      "genes": [
+        "stop_atr_mult",
+        "stop_tighten_factor",
+        "time_stop_bars",
+        "max_loss_per_trade_pct",
+        "equity_drawdown_stop_pct",
+        "partial_take_level",
+        "partial_take_level_2",
+        "trailing_stop_mode",
+        "score_percentile_trigger",
+        "entry_discount_atr_frac"
+      ],
+      "moves": [
+        {
+          "gene": "trailing_stop_mode",
+          "from": 2.0,
+          "to": 1.0
+        }
+      ],
+      "metrics": {
+        "incumbent": {
+          "fit": 8.1675,
+          "wr_med_all": 0.6712,
+          "wr_target_med_all": 0.6778,
+          "mean_alpha_ann": -0.08289999999999999,
+          "mdd_med": 0.1258
+        },
+        "candidate": {
+          "fit": 8.8572,
+          "wr_med_all": 0.6778,
+          "wr_target_med_all": 0.6842,
+          "mean_alpha_ann": -0.08289999999999999,
+          "mdd_med": 0.1265
+        }
+      },
+      "promoted": true,
+      "learning": ""
+    },
+    {
+      "attempt_id": "9",
+      "section_title": "Full-metric sweep (entry/regime neighborhood) — PROMOTED",
+      "timestamp": "2026-04-18T07:50",
+      "sweep_file": "local_fullmetric_sweep_result_20260418_075045.json",
+      "genes": [
+        "entry_score_threshold",
+        "min_signal_strength",
+        "score_percentile_trigger",
+        "regime_threshold",
+        "volatility_filter_percentile",
+        "volume_confirm_mode",
+        "momentum_confirm_days"
+      ],
+      "moves": [
+        {
+          "gene": "regime_threshold",
+          "from": 0.3,
+          "to": 0.25
+        }
+      ],
+      "metrics": {
+        "incumbent": {
+          "fit": 8.8572,
+          "wr_med_all": 0.6778,
+          "wr_target_med_all": 0.6842,
+          "mean_alpha_ann": -0.08289999999999999,
+          "mdd_med": 0.1265
+        },
+        "candidate": {
+          "fit": 8.7203,
+          "wr_med_all": 0.6823999999999999,
+          "wr_target_med_all": 0.6842,
+          "mean_alpha_ann": -0.08259999999999999,
+          "mdd_med": 0.1265
+        }
+      },
+      "promoted": true,
+      "learning": "the regime-gating threshold still has a clean local improvement left: a slightly looser regime threshold reduced false positives enough to lift `WR_med_all` without sacrificing `WR_target`."
+    },
+    {
+      "attempt_id": "10",
+      "section_title": "Full-metric sweep (signal precision + vol regime) — PROMOTED",
+      "timestamp": "2026-04-18T09:50",
+      "sweep_file": "local_fullmetric_sweep_result_20260418_095044.json",
+      "genes": [
+        "vote_threshold_long",
+        "vote_threshold_short",
+        "z_threshold",
+        "signal_ema_span",
+        "entry_confirmation_days",
+        "score_strength_scaling",
+        "consecutive_loss_cooldown",
+        "volatility_filter_percentile",
+        "vol_regime_mode"
+      ],
+      "moves": [
+        {
+          "gene": "vol_regime_mode",
+          "from": 1.0,
+          "to": 2.0
+        }
+      ],
+      "metrics": {
+        "incumbent": {
+          "fit": 8.7203,
+          "wr_med_all": 0.6823999999999999,
+          "wr_target_med_all": 0.6842,
+          "mean_alpha_ann": -0.08259999999999999,
+          "mdd_med": 0.1265
+        },
+        "candidate": {
+          "fit": 19.3981,
+          "wr_med_all": 0.6897,
+          "wr_target_med_all": 0.6909000000000001,
+          "mean_alpha_ann": -0.0824,
+          "mdd_med": 0.1175
+        }
+      },
+      "promoted": true,
+      "learning": "`vol_regime_mode` is a high-leverage operational safety knob: skipping high-vol regimes can simultaneously reduce drawdown and slightly improve hit rates without collapsing trade frequency."
+    },
+    {
+      "attempt_id": "11",
+      "section_title": "Full-metric sweep (safety knobs: vol filter / DD stop / cooldown) â€” PROMOTED",
+      "timestamp": "2026-04-18T11:50",
+      "sweep_file": "local_fullmetric_sweep_result_20260418_115025.json",
+      "genes": [
+        "volatility_filter_percentile",
+        "regime_threshold",
+        "max_loss_per_trade_pct",
+        "equity_drawdown_stop_pct",
+        "consecutive_loss_cooldown",
+        "trailing_stop_mode",
+        "stop_atr_mult",
+        "reward_risk_ratio"
+      ],
+      "moves": [
+        {
+          "gene": "volatility_filter_percentile",
+          "from": 0.0,
+          "to": 0.05
+        }
+      ],
+      "metrics": {
+        "incumbent": {
+          "fit": 19.3981,
+          "wr_med_all": 0.6897,
+          "wr_target_med_all": 0.6909000000000001,
+          "mean_alpha_ann": -0.0824,
+          "mdd_med": 0.1175
+        },
+        "candidate": {
+          "fit": 20.7172,
+          "wr_med_all": 0.6970000000000001,
+          "wr_target_med_all": 0.6944,
+          "mean_alpha_ann": -0.0827,
+          "mdd_med": 0.1159
+        }
+      },
+      "promoted": true,
+      "learning": "`volatility_filter_percentile` appears to be another high-leverage operational safety knob: a tiny filter (`+0.05`) improved hit rate and reduced drawdown without collapsing trade counts."
+    },
+    {
+      "attempt_id": "12",
+      "section_title": "Full-metric sweep (signal confirmations + entry threshold) — PROMOTED",
+      "timestamp": "2026-04-18T13:55",
+      "sweep_file": "local_fullmetric_sweep_result_20260418_135553.json",
+      "genes": [
+        "entry_score_threshold",
+        "volume_confirm_mode",
+        "momentum_confirm_days",
+        "regime_threshold",
+        "score_strength_scaling",
+        "consecutive_loss_cooldown"
+      ],
+      "moves": [
+        {
+          "gene": "consecutive_loss_cooldown",
+          "from": 6.0,
+          "to": 7.0
+        },
+        {
+          "gene": "entry_score_threshold",
+          "from": 0.15,
+          "to": 0.2
+        }
+      ],
+      "metrics": {
+        "incumbent": {
+          "fit": 20.7172,
+          "wr_med_all": 0.6970000000000001,
+          "wr_target_med_all": 0.6944,
+          "mean_alpha_ann": -0.0827,
+          "mdd_med": 0.1159
+        },
+        "candidate": {
+          "fit": 21.0068,
+          "wr_med_all": 0.7,
+          "wr_target_med_all": 0.6944,
+          "mean_alpha_ann": -0.0827,
+          "mdd_med": 0.11380000000000001
+        }
+      },
+      "promoted": true,
+      "learning": "a slightly stricter entry gating (`entry_score_threshold`) plus a longer loss cooldown can lift WR and reduce drawdown simultaneously *without* collapsing trade counts, suggesting the incumbent still has local “signal quality” headroom even after the `volatility_filter_percentile` and regime-mode safety promotions."
+    }
+  ]
+}

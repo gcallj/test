@@ -1,6 +1,6 @@
 # Sweep Learnings Summary
 
-_Generated: 2026-04-18T14:38:03+02:00_
+_Generated: 2026-04-18T15:52:37+02:00_
 
 Aggregates all `local_fullmetric_sweep_result*.json` files plus the
 continuous-improvement state. Use this file to plan the next cycle.
@@ -9,10 +9,11 @@ continuous-improvement state. Use this file to plan the next cycle.
 
 - Checkpoint fitness: `20.717201265906507`
 - Total sweeps seen: **7**
-- Total promotions: **5**
-- Promotion rate: **71.4%**
+- Total promotions: **6** (including 1 from codex log)
+- Promotion rate: **30.0%** (over 20 total attempts)
 - Continuous cycles run: 1
 - Continuous promotions: 0
+- Codex attempts synced: **13** (6 promoted) from `optimization_attempts_20260416.md`
 
 ## Next suggested sweep
 
@@ -20,52 +21,55 @@ categoria nao explorada: **A_risk_management** (rodar `python run_continuous_imp
 
 ## Promotion timeline (chronological)
 
-| Date | Sweep file | Move | Resulting metrics |
-|---|---|---|---|
-| 2026-04-18 | `local_fullmetric_sweep_result.json` | `partial_take_pct 0.30000000000000004->0.2` | fit=8.168 WR=67.1% alpha=-8.29% MDD=12.6% |
-| 2026-04-18 | `local_fullmetric_sweep_result_20260418_055831.json` | `trailing_stop_mode 2->1` | fit=8.857 WR=67.8% alpha=-8.29% MDD=12.6% |
-| 2026-04-18 | `local_fullmetric_sweep_result_20260418_075045.json` | `regime_threshold 0.30000000000000004->0.25` | fit=8.720 WR=68.2% alpha=-8.26% MDD=12.6% |
-| 2026-04-18 | `local_fullmetric_sweep_result_20260418_095044.json` | `vol_regime_mode 1->2` | fit=19.398 WR=69.0% alpha=-8.24% MDD=11.7% |
-| 2026-04-18 | `local_fullmetric_sweep_result_20260418_115025.json` | `volatility_filter_percentile 0.0->0.05` | fit=20.717 WR=69.7% alpha=-8.27% MDD=11.6% |
+| Date | Source | Sweep file | Move | Resulting metrics |
+|---|---|---|---|---|
+| 2026-04-18 | local | `local_fullmetric_sweep_result.json` | `partial_take_pct 0.30000000000000004->0.2` | fit=8.168 WR=67.1% alpha=-8.29% MDD=12.6% |
+| 2026-04-18 | local | `local_fullmetric_sweep_result_20260418_055831.json` | `trailing_stop_mode 2->1` | fit=8.857 WR=67.8% alpha=-8.29% MDD=12.6% |
+| 2026-04-18 | local | `local_fullmetric_sweep_result_20260418_075045.json` | `regime_threshold 0.30000000000000004->0.25` | fit=8.720 WR=68.2% alpha=-8.26% MDD=12.6% |
+| 2026-04-18 | local | `local_fullmetric_sweep_result_20260418_095044.json` | `vol_regime_mode 1->2` | fit=19.398 WR=69.0% alpha=-8.24% MDD=11.7% |
+| 2026-04-18 | local | `local_fullmetric_sweep_result_20260418_115025.json` | `volatility_filter_percentile 0.0->0.05` | fit=20.717 WR=69.7% alpha=-8.27% MDD=11.6% |
+| 2026-04-18 | codex | `local_fullmetric_sweep_result_20260418_135553.json` | `consecutive_loss_cooldown 6.0->7.0; entry_score_threshold 0.15->0.2` | fit=21.007 WR=70.0% alpha=-8.27% MDD=11.4% |
 
 ## Graveyard (genes que falharam multiplas vezes)
 
 Genes tentados >= 2 vezes sem nenhuma promocao. Considere SKIP no proximo ciclo.
+(Colunas `codex` contam tentativas importadas do log do GPT codex — dedup por sweep file.)
 
-| Gene | Attempts | Promotions |
-|---|---:|---:|
-| `stop_atr_mult` | 3 | 0 |
-| `score_percentile_trigger` | 3 | 0 |
-| `entry_score_threshold` | 3 | 0 |
-| `score_strength_scaling` | 3 | 0 |
-| `consecutive_loss_cooldown` | 3 | 0 |
-| `stop_tighten_factor` | 2 | 0 |
-| `time_stop_bars` | 2 | 0 |
-| `reward_risk_ratio` | 2 | 0 |
-| `partial_take_level` | 2 | 0 |
-| `partial_take_level_2` | 2 | 0 |
-| `max_loss_per_trade_pct` | 2 | 0 |
-| `equity_drawdown_stop_pct` | 2 | 0 |
-| `entry_discount_atr_frac` | 2 | 0 |
-| `min_signal_strength` | 2 | 0 |
-| `volume_confirm_mode` | 2 | 0 |
-| `momentum_confirm_days` | 2 | 0 |
-| `vote_threshold_long` | 2 | 0 |
-| `vote_threshold_short` | 2 | 0 |
-| `z_threshold` | 2 | 0 |
-| `signal_ema_span` | 2 | 0 |
+| Gene | Attempts | Promotions | (codex) Attempts | (codex) Promotions |
+|---|---:|---:|---:|---:|
+| `stop_atr_mult` | 3 | 0 | 0 | 0 |
+| `score_percentile_trigger` | 3 | 0 | 0 | 0 |
+| `score_strength_scaling` | 3 | 0 | 1 | 0 |
+| `stop_tighten_factor` | 2 | 0 | 0 | 0 |
+| `time_stop_bars` | 2 | 0 | 0 | 0 |
+| `reward_risk_ratio` | 2 | 0 | 0 | 0 |
+| `partial_take_level` | 2 | 0 | 0 | 0 |
+| `partial_take_level_2` | 2 | 0 | 0 | 0 |
+| `max_loss_per_trade_pct` | 2 | 0 | 0 | 0 |
+| `equity_drawdown_stop_pct` | 2 | 0 | 0 | 0 |
+| `entry_discount_atr_frac` | 2 | 0 | 0 | 0 |
+| `min_signal_strength` | 2 | 0 | 0 | 0 |
+| `volume_confirm_mode` | 2 | 0 | 1 | 0 |
+| `momentum_confirm_days` | 2 | 0 | 1 | 0 |
+| `vote_threshold_long` | 2 | 0 | 0 | 0 |
+| `vote_threshold_short` | 2 | 0 | 0 | 0 |
+| `z_threshold` | 2 | 0 | 0 | 0 |
+| `signal_ema_span` | 2 | 0 | 0 | 0 |
+| `entry_confirmation_days` | 2 | 0 | 0 | 0 |
 
 ## Hot zones (genes que ja promoveram)
 
 Genes onde alguma combinacao funcionou. Vale revisitar com novos vizinhos.
 
-| Gene | Promotions | Attempts | Hit rate |
-|---|---:|---:|---:|
-| `partial_take_pct` | 1 | 1 | 100% |
-| `vol_regime_mode` | 1 | 1 | 100% |
-| `trailing_stop_mode` | 1 | 3 | 33% |
-| `regime_threshold` | 1 | 3 | 33% |
-| `volatility_filter_percentile` | 1 | 3 | 33% |
+| Gene | Promotions | Attempts | Hit rate | (codex) Promotions |
+|---|---:|---:|---:|---:|
+| `partial_take_pct` | 1 | 1 | 100% | 0 |
+| `vol_regime_mode` | 1 | 1 | 100% | 0 |
+| `trailing_stop_mode` | 1 | 3 | 33% | 0 |
+| `entry_score_threshold` | 1 | 3 | 33% | 1 |
+| `regime_threshold` | 1 | 3 | 33% | 0 |
+| `volatility_filter_percentile` | 1 | 3 | 33% | 0 |
+| `consecutive_loss_cooldown` | 1 | 3 | 33% | 1 |
 
 ## Category rotation status
 
@@ -77,6 +81,18 @@ Genes onde alguma combinacao funcionou. Vale revisitar com novos vizinhos.
 | D_entry_filter | 2026-04-18T14:37:35+02:00 | 1 | 0 |
 | E_regime_vol | never | 0 | 0 |
 | F_trailing | never | 0 | 0 |
+
+## Codex sync history (latest attempts)
+
+Parsed `optimization_attempts_20260416.md` at 2026-04-18T15:48:43+02:00. Total attempts: **13**, promoted: **6**. Updates via `python analysis/codex_attempts_sync.py` at the start of every continuous cycle (auto) or on demand.
+
+| Attempt | Timestamp | Promoted | Move(s) | Learning (snippet) |
+|---|---|:-:|---|---|
+| #12 | 2026-04-18T13:55 | YES | `consecutive_loss_cooldown 6.0->7.0; entry_score_threshold 0.15->0.2` | a slightly stricter entry gating (`entry_score_threshold`) plus a longer loss cooldown can lift WR and reduce drawdown s... |
+| #11 | 2026-04-18T11:50 | YES | `volatility_filter_percentile 0.0->0.05` | `volatility_filter_percentile` appears to be another high-leverage operational safety knob: a tiny filter (`+0.05`) impr... |
+| #10 | 2026-04-18T09:50 | YES | `vol_regime_mode 1.0->2.0` | `vol_regime_mode` is a high-leverage operational safety knob: skipping high-vol regimes can simultaneously reduce drawdo... |
+| #9 | 2026-04-18T07:50 | YES | `regime_threshold 0.3->0.25` | the regime-gating threshold still has a clean local improvement left: a slightly looser regime threshold reduced false p... |
+| #8 | 2026-04-18T05:58 | YES | `trailing_stop_mode 2.0->1.0` |  |
 
 ---
 
