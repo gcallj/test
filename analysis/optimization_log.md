@@ -37,3 +37,26 @@ tells future iterations which gene moves are dead ends.
 
 ---
 
+## 2026-04-18T15:42:25+00:00 - A_risk_management
+**Cycle**: #2  |  **Promoted**: NO  |  **Codex sync**: YES
+**Genes swept**: `stop_atr_mult, stop_tighten_after_bars, stop_tighten_factor, max_loss_per_trade_pct, equity_drawdown_stop_pct`
+**Sweep file**: `local_fullmetric_sweep_continuous_A_risk_management_20260418_153817.json`
+
+### Metrics
+
+| Source | fit | WR | WR_tgt | alpha_ann | MDD | trades |
+|---|---:|---:|---:|---:|---:|---:|
+| baseline (git:main) | -75.1949 | 70.13% | 69.70% | -8.28% | 10.72% | 32 |
+| incumbent (worktree) | -75.1949 | 70.13% | 69.70% | -8.28% | 10.72% | 32 |
+| **candidate** | -74.8961 | 70.13% | 70.00% | -8.32% | 10.72% | 31 |
+
+**Best candidate label**: `max_loss_per_trade_pct:+1`
+
+**Moves applied to incumbent**:
+
+- `max_loss_per_trade_pct`: `0.08` -> `0.09` (step 0.01)
+
+**Learning**: candidato `max_loss_per_trade_pct: 0.08->0.09` parecia bom mas falhou nos gates: acceptance_vs_main. Esses moves entram para o graveyard: nao tentar novamente sem mudar contexto.
+
+---
+
