@@ -14,6 +14,7 @@ from openpyxl import load_workbook
 ROOT = Path(__file__).resolve().parent
 SUMMARY_XLSX = ROOT / "summary_latest.xlsx"
 STORE_DIR = ROOT / "output" / "ga_memmap"
+CHECKPOINT_JSON = ROOT / "global_ga_checkpoint.json"
 
 
 def _store_latest_day():
@@ -77,13 +78,23 @@ def _parse_excel_latest_date(xlsx_path: Path):
         wb.close()
 
 
-def _target_date(raw_date: str | None):
+def _target_date(raw_date: str | None, store_latest: date | None = None):
+    """
+    Pick the "trading day" we should guarantee in the workbook.
+
+    - If --date is provided, that is authoritative.
+    - Otherwise, prefer the latest day available in the local store, which
+      naturally handles weekends/holidays and offline environments.
+    - Fall back to local-today only when the store is unavailable.
+    """
     if raw_date:
         parsed = pd.to_datetime(raw_date, errors="raise")
         if pd.isna(parsed):
             raise ValueError(f"Invalid --date value: {raw_date}")
         parsed = parsed.tz_localize(None) if getattr(parsed, "tzinfo", None) is not None else parsed
         return parsed.date()
+    if store_latest:
+        return store_latest
     return pd.Timestamp.now().date()
 
 
@@ -102,6 +113,17 @@ def _run_predict_daily(full_mode: bool):
     subprocess.run(cmd, cwd=ROOT, env=env, check=True)
 
 
+def _run_ga_load_only():
+    """
+    Rebuild summary_latest.xlsx using the current local store + checkpoint,
+    without attempting ETL. This is safe for weekends and offline runs.
+    """
+    env = os.environ.copy()
+    env["GA_RUN_MODE"] = "load"
+    env["GA_DISABLE_TELEGRAM_SEND"] = "1"
+    subprocess.run([sys.executable, "-c", "import ga_run as g; g.run()"], cwd=ROOT, env=env, check=True)
+
+
 def _run_send_telegram():
     subprocess.run([sys.executable, "send_telegram.py"], cwd=ROOT, check=True)
 
@@ -114,10 +136,25 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="Check freshness without sending Telegram.")
     args = parser.parse_args()
 
-    target_day = _target_date(args.date)
     store_latest = _store_latest_day()
+    target_day = _target_date(args.date, store_latest)
     if store_latest:
         print(f"[CHECK] store_latest_day={store_latest.isoformat()}")
+
+    # If the checkpoint is newer than the workbook, rebuild the workbook from the existing store
+    # (no ETL) so Telegram receives the *latest model* for the latest trading day.
+    if not args.no_refresh:
+        try:
+            if (not SUMMARY_XLSX.exists()) or (
+                CHECKPOINT_JSON.exists()
+                and SUMMARY_XLSX.exists()
+                and CHECKPOINT_JSON.stat().st_mtime > SUMMARY_XLSX.stat().st_mtime + 1.0
+            ):
+                print("[REFRESH] Checkpoint newer than workbook; running GA load-only to rebuild summary_latest.xlsx.")
+                _run_ga_load_only()
+        except subprocess.CalledProcessError as exc:
+            print(f"[WARN] GA load-only rebuild failed: {exc}")
+
     fresh, latest = _has_current_day_data(SUMMARY_XLSX, target_day)
     print(f"[CHECK] target_day={target_day.isoformat()} latest_in_xlsx={latest}")
 

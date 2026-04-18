@@ -78,6 +78,15 @@ except ImportError:
 import os
 import json
 import gc
+
+# Work around joblib/loky physical core detection failures in sandboxed/CI-like
+# environments (can raise and bubble up as a non-zero exit even after a
+# successful run). Prefer a conservative default when unset.
+if "LOKY_MAX_CPU_COUNT" not in os.environ:
+    try:
+        os.environ["LOKY_MAX_CPU_COUNT"] = str(os.cpu_count() or 1)
+    except Exception:
+        os.environ["LOKY_MAX_CPU_COUNT"] = "1"
 import multiprocessing
 from concurrent.futures import ProcessPoolExecutor
 try:
@@ -3589,23 +3598,31 @@ def run():
     results_summary: List[Dict[str, Any]] = []
     results_apply: List[Dict[str, Any]] = []
 
-    # Load universe quality tags (Premium/HighQuality/Regular)
-    # baseados em analysis/ticker_alpha_analysis.json (pre-computed)
-    _universe_quality = {}
-    _analysis_path = "analysis/ticker_alpha_analysis.json"
-    if os.path.exists(_analysis_path):
-        try:
-            with open(_analysis_path, "r", encoding="utf-8") as _fq:
-                _q_data = json.load(_fq)
-            _prem = set(_q_data.get("premium_subset", {}).get("tickers", []))
-            _hq = set(_q_data.get("high_quality_subset", {}).get("tickers", []))
-            for _t in _hq:
-                _universe_quality[_t] = "HIGH_QUAL"
-            for _t in _prem:
-                _universe_quality[_t] = "PREMIUM"  # overrides HQ if both
-            print(f"[UNIVERSE] loaded: {len(_prem)} PREMIUM + {len(_hq)} HIGH_QUAL tags")
-        except Exception as _e:
-            print(f"[WARN] universe tags load failed: {_e}")
+    def _classify_universe_tier(_wr, _wr_tgt, _alpha_ann, _mdd_abs, _n_trades):
+        """
+        Dynamic operational tiers for the CURRENT model snapshot.
+
+        These tiers are intentionally based on swing-trade usability rather than
+        only on beating buy&hold, because the user prioritizes hit rate and
+        operational safety.
+        """
+        if (
+            _n_trades >= 30
+            and _wr >= 0.74
+            and _wr_tgt >= 0.72
+            and _alpha_ann >= -0.12
+            and _mdd_abs <= 0.13
+        ):
+            return "PREMIUM"
+        if (
+            _n_trades >= 20
+            and _wr >= 0.67
+            and _wr_tgt >= 0.65
+            and _alpha_ann >= -0.20
+            and _mdd_abs <= 0.16
+        ):
+            return "HIGH_QUAL"
+        return "REGULAR"
 
     n_tickers_phase3 = len(store.tickers)
     for ix_tkr, tkr in enumerate(store.tickers, 1):
@@ -3963,21 +3980,28 @@ def run():
 
             # -- Quality gates: demote unreliable buys to hold --
             # Nao removemos tickers da planilha - apenas mudamos signal para hold.
-            _low_wr_reason = None  # preserva motivo para o texto de recomendacao
+            _hold_gate_note = None  # preserva motivo para o texto de recomendacao
             if sig == "buy" and confidence < MIN_BUY_CONFIDENCE:
                 sig = "hold"  # confidence too low
             if sig == "buy" and wr_tier == "insuficiente" and bt_n_trades < 10:
                 sig = "hold"  # truly insufficient data (relaxed: allow if >=10 trades)
             # NOVO: gate de 60% WR - nao operar em tickers de baixa qualidade
-            # Tickers ficam no xlsx mas como hold com marcador "[BAIXA QUAL]"
+            # Tickers ficam no xlsx mas como hold com nota explicita.
             if sig == "buy" and bt_n_trades >= min_trades_for_tier and bt_win_rate < 0.60:
                 sig = "hold"
-                _low_wr_reason = f"WR {bt_win_rate*100:.0f}% < 60% (nao operar)"
+                _hold_gate_note = f"FILTRO WR: WR {bt_win_rate*100:.0f}% < 60%"
 
             # (gate de potencial minimo movido para APOS pivot override + coerce)
 
-            # Universe quality tag
-            _univ_tag = _universe_quality.get(tkr, "REGULAR")
+            # Universe quality tag based on CURRENT model metrics, not on a
+            # stale offline subset file.
+            _univ_tag = _classify_universe_tier(
+                bt_win_rate,
+                bt_win_rate_target,
+                float(st.get("alpha_ann", 0.0)),
+                abs(float(st["mdd"])),
+                int(st["n_trades"]),
+            )
 
             # ── UPSIDE SCORE: qualidade da oportunidade de subida (0-100) ──
             # Combina fatores que historicamente predizem subida:
@@ -4228,7 +4252,11 @@ def run():
                 _final_alvo_pct = (take_profit - best_buy) / max(best_buy, ATR_EPS)
                 if _final_alvo_pct < 0.05:
                     sig = "hold"
-                    _low_wr_reason = f"Potencial {_final_alvo_pct*100:.1f}% < 5% (nao compensa custos)"
+                    _hold_gate_note = f"WATCHLIST: alvo curto ({_final_alvo_pct*100:.1f}% < 5%)"
+
+            # Mantem o restante do texto/ranking coerente com o sinal realmente
+            # entregue ao usuario apos todos os gates finais.
+            final_sig = sig
 
             # ═══════════════════════════════════════════════════════════════
             # AJUSTE DE RANK/POTENCIAL baseado no signal final
@@ -4328,14 +4356,21 @@ def run():
             _wr_pct = round(bt_win_rate * 100, 0)
             _wr_tgt_pct = round(bt_win_rate_target * 100, 0)  # % alvo hits
             _stage_short = f"{stage_label.replace('Stage ', 'S')} {timing_sub}"
+            _close_info = f"Fechou @{close_val:.2f}"
 
             # Nivel de cancelamento da tese (mais conservador que o stop tactico)
             # - Stage 2 ideal/momentum: perder S1 do dia ou MA50 (o que for menor)
             # - Stage 2 pullback: perder MA200 (cancela pullback de tendencia)
             # - Stage 1: perder S1
             if stage_num == 2 and timing_sub == "pullback":
-                _cancel = float(min(_ma200_val if np.isfinite(_ma200_val) else s1, s1))
-                _cancel_label = "MA200"
+                _ma200_ok = np.isfinite(_ma200_val) and _ma200_val > 0
+                _s1_ok = np.isfinite(s1) and s1 > 0
+                if _ma200_ok and (_ma200_val <= s1 or not _s1_ok):
+                    _cancel = float(_ma200_val)
+                    _cancel_label = "MA200"
+                else:
+                    _cancel = float(s1)
+                    _cancel_label = "S1"
             elif stage_num == 2:
                 _cancel = float(min(s1, _ma50_val if np.isfinite(_ma50_val) else s1))
                 _cancel_label = "MA50/S1"
@@ -4345,21 +4380,34 @@ def run():
 
             if final_sig == "buy":
                 # Determinar modo de execucao
-                if close_val < pivot:
+                if timing_sub == "pullback":
+                    if close_val < pivot:
+                        _modo = f"RETOMADA APOS PULLBACK: esperar Pivot @{pivot:.2f}"
+                        _detalhe = "contexto bom, mas sem entrada abaixo dele; so comprar apos fechamento acima do Pivot"
+                    elif close_val > r1:
+                        _modo = f"PULLBACK ESTICADO: preferir recuo @{best_buy:.2f}"
+                        _detalhe = f"preco acima de R1 @{r1:.2f}"
+                    elif best_buy < close_val * 0.998:
+                        _modo = f"PULLBACK EM ALTA: ordem limite @{best_buy:.2f}"
+                        _detalhe = f"recuo controlado acima do Pivot @{pivot:.2f}"
+                    else:
+                        _modo = f"PULLBACK EM ALTA: entrada @{best_buy:.2f}"
+                        _detalhe = "gatilho ativo"
+                elif close_val < pivot:
                     # Precisa romper Pivot primeiro
-                    _modo = f"AGUARDAR ROMPER PIVOT @{pivot:.2f}"
-                    _detalhe = f"comprar @{best_buy:.2f} apos rompimento"
+                    _modo = f"ABAIXO DO PIVOT: esperar confirmacao @{pivot:.2f}"
+                    _detalhe = "setup montado, mas sem entrada agora; so comprar apos fechamento acima do Pivot"
                 elif best_buy < close_val * 0.998:
                     # Ordem limite (esperar pullback ate entrada)
                     _modo = f"ORDEM LIMITE @{best_buy:.2f}"
-                    _detalhe = f"close atual {close_val:.2f}, esperar recuo"
+                    _detalhe = f"esperar recuo a partir do fechamento"
                 else:
                     # Comprar agora (close >= entrada)
-                    _modo = f"COMPRAR JA @{best_buy:.2f}"
-                    _detalhe = f"gatilho disparado"
+                    _modo = f"COMPRA ACIONADA @{best_buy:.2f}"
+                    _detalhe = "gatilho ativo"
 
                 recomendacao = (
-                    f"{_modo} * {_stage_short} * "
+                    f"{_close_info} * {_modo} * {_detalhe} * Contexto: {_stage_short} * "
                     f"+{_alvo_pct_num:.1f}% alvo @{take_profit:.2f} "
                     f"(WR {_wr_pct:.0f}% / alvo {_wr_tgt_pct:.0f}%) * "
                     f"Stop @{stop_loss:.2f} (-{_stop_pct_num:.1f}%) * "
@@ -4369,17 +4417,17 @@ def run():
             elif final_sig == "sell":
                 if stage_num == 4:
                     recomendacao = (
-                        f"VENDER * Stage 4 Queda * Abaixo MA200 (tendencia de baixa) * "
+                        f"{_close_info} * VENDER * Stage 4 Queda * Abaixo MA200 (tendencia de baixa) * "
                         f"Sair posicao. Recomprar apos formar nova base acima MA200"
                     )
                 elif stage_num == 3:
                     recomendacao = (
-                        f"VENDER * Stage 3 Topo + regime {_regime_str} * "
+                        f"{_close_info} * VENDER * Stage 3 Topo + regime {_regime_str} * "
                         f"Distribuicao em bear * Stop apertado @{pivot:.2f}"
                     )
                 else:
                     recomendacao = (
-                        f"VENDER * {stage_label} * regime {_regime_str} * "
+                        f"{_close_info} * VENDER * {stage_label} * regime {_regime_str} * "
                         f"Abaixo Pivot @{pivot:.2f}"
                     )
 
@@ -4387,70 +4435,75 @@ def run():
                 if stage_num == 2 and timing_sub in ("ideal", "momentum"):
                     if _above_r1:
                         recomendacao = (
-                            f"AGUARDAR PULLBACK (esticado acima R1 @{r1:.2f}) * {_stage_short} * "
+                            f"{_close_info} * AGUARDAR PULLBACK (esticado acima R1 @{r1:.2f}) * Contexto: {_stage_short} * "
                             f"Comprar @{pivot:.2f} ou @{s1:.2f} * "
                             f"Cancelar se < {_cancel_label} @{_cancel:.2f}"
                         )
                     elif _above_pivot:
+                        _breakout_cancel = float(pivot) if np.isfinite(pivot) and pivot > 0 else float(_cancel)
+                        _breakout_cancel_label = "Pivot" if np.isfinite(pivot) and pivot > 0 else _cancel_label
+                        _cancel = _breakout_cancel
+                        _cancel_label = _breakout_cancel_label
                         recomendacao = (
-                            f"AGUARDAR ROMPER R1 @{r1:.2f} * {_stage_short} (entre Pivot e R1) * "
+                            f"{_close_info} * AGUARDAR ROMPER R1 @{r1:.2f} * Contexto: {_stage_short} (entre Pivot e R1) * "
                             f"+{_alvo_pct_num:.1f}% alvo apos breakout * "
-                            f"Cancelar se < Pivot @{pivot:.2f}"
+                            f"Cancelar se < {_breakout_cancel_label} @{_breakout_cancel:.2f}"
                         )
                     else:
                         recomendacao = (
-                            f"AGUARDAR ROMPER PIVOT @{pivot:.2f} * {_stage_short} (abaixo Pivot) * "
-                            f"Comprar se retomar Pivot * "
+                            f"{_close_info} * ABAIXO DO PIVOT: sem entrada agora * "
+                            f"Contexto: {_stage_short}; so considerar compra se fechar acima do Pivot @{pivot:.2f} * "
                             f"Cancelar se < {_cancel_label} @{_cancel:.2f}"
                         )
                 elif stage_num == 2 and timing_sub == "cedo":
                     recomendacao = (
-                        f"AGUARDAR CONFIRMACAO * {_stage_short} (cruzamento MA50/MA200 recente) * "
+                        f"{_close_info} * AGUARDAR CONFIRMACAO * Contexto: {_stage_short} (cruzamento MA50/MA200 recente) * "
                         f"Comprar apos 3+ fechamentos > R1 @{r1:.2f} * "
-                        f"Cancelar se MA50 voltar abaixo MA200"
+                        f"Cancelar se < {_cancel_label} @{_cancel:.2f} ou se MA50 voltar abaixo MA200"
                     )
                 elif stage_num == 2 and timing_sub == "pullback":
                     recomendacao = (
-                        f"AGUARDAR PULLBACK ATE S1 @{s1:.2f} * {_stage_short} (abaixo MA50 @{_ma50_val:.2f}) * "
-                        f"Comprar se segurar S1 e retomar MA50 * "
-                        f"Cancelar se < MA200 @{_ma200_val:.2f}"
+                        f"{_close_info} * AGUARDAR PULLBACK ATE S1 @{s1:.2f} * Contexto: {_stage_short} (abaixo MA50 @{_ma50_val:.2f}) * "
+                        f"Gatilho = segurar S1 e retomar MA50/Pivot * "
+                        f"Cancelar se < {_cancel_label} @{_cancel:.2f}"
                     )
                 elif stage_num == 2 and timing_sub == "atrasado":
                     recomendacao = (
-                        f"AGUARDAR PULLBACK * {_stage_short} (esticado +{dist_ma_disp(close_val, _ma50_val)}% MA50) * "
+                        f"{_close_info} * AGUARDAR PULLBACK * Contexto: {_stage_short} (esticado +{dist_ma_disp(close_val, _ma50_val)}% MA50) * "
                         f"Esperar correcao ate S1 @{s1:.2f} ou MA50 @{_ma50_val:.2f} * "
                         f"Cancelar se < {_cancel_label} @{_cancel:.2f}"
                     )
                 elif stage_num == 3:
                     recomendacao = (
-                        f"NAO ABRIR * Stage 3 Topo (MA50 caindo, distribuicao) * "
+                        f"{_close_info} * NAO ABRIR * Stage 3 Topo (MA50 caindo, distribuicao) * "
                         f"Vender posicoes se perder Pivot @{pivot:.2f}"
                     )
                 elif stage_num == 1:
                     recomendacao = (
-                        f"AGUARDAR BREAKOUT R1 @{r1:.2f} * Stage 1 Base lateral * "
+                        f"{_close_info} * AGUARDAR BREAKOUT R1 @{r1:.2f} * Stage 1 Base lateral * "
                         f"Comprar se romper com volume * "
                         f"Evitar se perder S1 @{s1:.2f}"
                     )
                 else:
                     recomendacao = (
-                        f"OBSERVAR * {stage_label} * regime {_regime_str} * "
+                        f"{_close_info} * OBSERVAR * {stage_label} * regime {_regime_str} * "
                         f"R1 @{r1:.2f} S1 @{s1:.2f}"
                     )
 
-            # Prefix "[BAIXA QUAL]" quando o gate de WR<60% foi acionado
-            # (BUY foi demovido para HOLD por qualidade insuficiente)
-            if _low_wr_reason:
-                recomendacao = f"[BAIXA QUAL {_low_wr_reason}] {recomendacao}"
+            # Prefixo explicito quando o BUY foi demovido para HOLD.
+            if _hold_gate_note:
+                recomendacao = f"{_hold_gate_note}\n{recomendacao}"
 
-            # Prefix universe tag para BUYs:
-            # PREMIUM = modelo tem edge real (alpha>+2pp)
-            # HIGH_QUAL = modelo bate B&H (alpha>=0)
-            # REGULAR = cuidado, tende a underperformar B&H
-            if sig == "buy" and _univ_tag != "REGULAR":
-                recomendacao = f"[{_univ_tag}] {recomendacao}"
-            elif sig == "buy" and _univ_tag == "REGULAR":
-                recomendacao = f"[REGULAR-cuidado] {recomendacao}"
+            # Prefix universe tag para BUYs: tiers agora sao dinamicos e
+            # operacionais, baseados no modelo atual.
+            if sig == "buy" and _univ_tag == "PREMIUM":
+                recomendacao = f"PREMIUM\n{recomendacao}"
+            elif sig == "buy" and _univ_tag == "HIGH_QUAL":
+                recomendacao = f"ALTA QUALIDADE\n{recomendacao}"
+
+            # Recommendation column is easier to scan with explicit newlines in
+            # Excel instead of long inline separators.
+            recomendacao = recomendacao.replace(" * ", "\n")
 
 
             # Formatar potencial_pct para exibicao
@@ -4488,7 +4541,7 @@ def run():
                 "confidence": round(confidence, 1),
                 "win_rate": round(bt_win_rate * 100, 2),
                 "wr_alvo": round(bt_win_rate_target * 100, 2),  # v8: % alvo hits (2 decimais)
-                "universe": _universe_quality.get(tkr, "REGULAR"),  # PREMIUM/HIGH_QUAL/REGULAR
+                "universe": _univ_tag,
                 "queda_max": round(queda_max_esperada * 100, 1),
                 "regime": _regime_str,
                 # === Auditoria ===
@@ -4518,6 +4571,7 @@ def run():
             "buy_hold_return": st.get("buy_hold_return", 0.0),
             "buy_hold_cagr": st.get("buy_hold_cagr", 0.0),
             "test_alpha_ann": st.get("alpha_ann", 0.0),
+            "universe": _univ_tag,
             "wr_tier": wr_tier,
             "dist_quality": round(bt_dist_quality * 100, 1),
             "big_wins": round(bt_big_wins * 100, 1),
@@ -4526,6 +4580,11 @@ def run():
 
     df_sum = pd.DataFrame(results_summary)
     df_app = pd.DataFrame(results_apply)
+    _universe_counts = (
+        df_app["universe"].value_counts().to_dict()
+        if (not df_app.empty and "universe" in df_app.columns)
+        else {}
+    )
 
     # Schema validation: ensure required columns exist before saving
     required_apply_cols = {"Date", "ticker", "recomendacao", "potencial_pct", "signal", "estagio", "confidence", "rank", "close", "entrada", "stop", "alvo", "RR"}
@@ -4716,7 +4775,15 @@ def run():
                         "queda_max": "Previsao de queda maxima (%) baseada no MDD historico",
                         "win_rate": "Win rate do backtest (% trades positivos, incl. trailing stops)",
                         "wr_alvo": "% de trades que atingiram o alvo de take-profit (estrito)",
-                        "universe": "Qualidade do universo:\nPREMIUM = alpha>+2pp & WR>68% (7 tickers)\nHIGH_QUAL = alpha>=0 & WR>=65% (15 tickers)\nREGULAR = demais (tende a nao bater B&H)",
+                        "universe": (
+                            "Tier operacional do modelo atual:\n"
+                            "PREMIUM = WR>=74%, WR alvo>=72%, alpha_ann>=-12pp, MDD<=13%, >=30 trades\n"
+                            "HIGH_QUAL = WR>=67%, WR alvo>=65%, alpha_ann>=-20pp, MDD<=16%, >=20 trades\n"
+                            "REGULAR = demais\n"
+                            f"Hoje: PREMIUM={_universe_counts.get('PREMIUM', 0)} | "
+                            f"HIGH_QUAL={_universe_counts.get('HIGH_QUAL', 0)} | "
+                            f"REGULAR={_universe_counts.get('REGULAR', 0)}"
+                        ),
                         "regime": "Regime de mercado: favoravel/neutro/desfavoravel",
                         "signal_ga": "Sinal bruto do GA antes do override por stage (auditoria)",
                     }
@@ -4730,7 +4797,7 @@ def run():
                     # Column widths
                     apply_widths = {
                         "Date": 12, "ticker": 12,
-                        "recomendacao": 95,          # wide for full text
+                        "recomendacao": 54,          # narrower + wrap for multiline text
                         "potencial_pct": 13,
                         "signal": 8, "estagio": 26,
                         "close": 10, "entrada": 10, "stop": 10, "alvo": 10,
@@ -4744,14 +4811,16 @@ def run():
                         ws_app.set_column(col_idx, col_idx, apply_widths.get(col_name, 11))
 
                     # Row colors: buy = light green, hold = white
-                    buy_fmt  = wb.add_format({"bg_color": "#C6EFCE", "font_color": "#276221"})
-                    hold_fmt = wb.add_format({"bg_color": "#FFFFFF"})
-                    price_buy  = wb.add_format({"bg_color": "#C6EFCE", "font_color": "#276221", "num_format": "0.00"})
-                    price_hold = wb.add_format({"num_format": "0.00"})
-                    num1_buy   = wb.add_format({"bg_color": "#C6EFCE", "font_color": "#276221", "num_format": "0.0"})
-                    num1_hold  = wb.add_format({"num_format": "0.0"})
-                    int_buy    = wb.add_format({"bg_color": "#C6EFCE", "font_color": "#276221", "num_format": "0"})
-                    int_hold   = wb.add_format({"num_format": "0"})
+                    buy_fmt  = wb.add_format({"bg_color": "#C6EFCE", "font_color": "#276221", "valign": "vcenter"})
+                    hold_fmt = wb.add_format({"bg_color": "#FFFFFF", "valign": "vcenter"})
+                    text_buy = wb.add_format({"bg_color": "#C6EFCE", "font_color": "#276221", "text_wrap": True, "valign": "top"})
+                    text_hold = wb.add_format({"bg_color": "#FFFFFF", "text_wrap": True, "valign": "top"})
+                    price_buy  = wb.add_format({"bg_color": "#C6EFCE", "font_color": "#276221", "num_format": "0.00", "valign": "vcenter"})
+                    price_hold = wb.add_format({"num_format": "0.00", "valign": "vcenter"})
+                    num1_buy   = wb.add_format({"bg_color": "#C6EFCE", "font_color": "#276221", "num_format": "0.0", "valign": "vcenter"})
+                    num1_hold  = wb.add_format({"num_format": "0.0", "valign": "vcenter"})
+                    int_buy    = wb.add_format({"bg_color": "#C6EFCE", "font_color": "#276221", "num_format": "0", "valign": "vcenter"})
+                    int_hold   = wb.add_format({"num_format": "0", "valign": "vcenter"})
 
                     price_cols = {"close", "entrada", "stop", "alvo", "piso"}
                     # Note: venda_pct and trailing removed (always 100% and breakeven with current genome)
@@ -4760,9 +4829,16 @@ def run():
 
                     for row_idx, row in enumerate(df_app.itertuples(index=False), start=1):
                         is_buy = (row.signal == "buy")
+                        rec_text = str(getattr(row, "recomendacao", "") or "")
+                        _segments = rec_text.splitlines() if rec_text else [""]
+                        _approx_lines = sum(max(1, int(math.ceil(len(seg) / 42.0))) for seg in _segments)
+                        _row_height = min(280, max(42, int(19 * (_approx_lines + 0.75))))
+                        ws_app.set_row(row_idx, _row_height)
                         for col_idx, col_name in enumerate(df_app.columns):
                             val = getattr(row, col_name)
-                            if col_name in price_cols:
+                            if col_name == "recomendacao":
+                                fmt = text_buy if is_buy else text_hold
+                            elif col_name in price_cols:
                                 fmt = price_buy if is_buy else price_hold
                             elif col_name in score_cols:
                                 fmt = num1_buy if is_buy else num1_hold
@@ -4797,6 +4873,23 @@ def run():
                     df_sum.to_excel(writer, sheet_name="Summary", index=False)
                     if not df_feat_imp.empty:
                         df_feat_imp.to_excel(writer, sheet_name="Feature_Importance", index=False)
+                    if not df_app.empty:
+                        from openpyxl.styles import Alignment
+
+                        ws_app = writer.sheets["Apply"]
+                        ws_app.column_dimensions["C"].width = 54
+                        for row_idx in range(2, len(df_app) + 2):
+                            rec_text = str(ws_app[f"C{row_idx}"].value or "")
+                            _segments = rec_text.splitlines() if rec_text else [""]
+                            _approx_lines = sum(max(1, int(math.ceil(len(seg) / 42.0))) for seg in _segments)
+                            _row_height = min(280, max(42, int(19 * (_approx_lines + 0.75))))
+                            ws_app.row_dimensions[row_idx].height = _row_height
+                            for col_idx in range(1, len(df_app.columns) + 1):
+                                cell = ws_app.cell(row=row_idx, column=col_idx)
+                                if col_idx == 3:
+                                    cell.alignment = Alignment(wrap_text=True, vertical="top")
+                                else:
+                                    cell.alignment = Alignment(vertical="center")
             except Exception as e2:
                 print(f"[WARN] xlsx save failed (file open in Excel?): {e2} -- CSV already saved.")
 
