@@ -1,6 +1,6 @@
 # Sweep Learnings Summary
 
-_Generated: 2026-04-18T21:31:39+00:00_
+_Generated: 2026-04-18T22:37:05+00:00_
 
 Aggregates all `local_fullmetric_sweep_result*.json` files plus the
 continuous-improvement state. Use this file to plan the next cycle.
@@ -8,16 +8,16 @@ continuous-improvement state. Use this file to plan the next cycle.
 ## Current snapshot
 
 - Checkpoint fitness: `20.717201265906507`
-- Total sweeps seen: **12**
+- Total sweeps seen: **13**
 - Total promotions: **7** (including 2 from codex log)
-- Promotion rate: **26.9%** (over 26 total attempts)
-- Continuous cycles run: 5
+- Promotion rate: **25.9%** (over 27 total attempts)
+- Continuous cycles run: 6
 - Continuous promotions: 0
 - Codex attempts synced: **14** (7 promoted) from `optimization_attempts_20260416.md`
 
 ## Next suggested sweep
 
-categoria nao explorada: **F_trailing** (rodar `python run_continuous_improvement.py --category F`)
+categoria mais antiga: **D_entry_filter** (ultima vez: 2026-04-18T14:37:35+02:00) -> `python run_continuous_improvement.py --category D`
 
 ## Promotion timeline (chronological)
 
@@ -68,11 +68,11 @@ Genes onde alguma combinacao funcionou. Vale revisitar com novos vizinhos.
 | `vol_regime_mode` | 1 | 2 | 50% | 0 |
 | `entry_score_threshold` | 1 | 3 | 33% | 1 |
 | `partial_take_pct` | 1 | 4 | 25% | 0 |
-| `trailing_stop_mode` | 1 | 4 | 25% | 0 |
 | `regime_threshold` | 1 | 4 | 25% | 0 |
 | `volatility_filter_percentile` | 1 | 4 | 25% | 0 |
 | `consecutive_loss_cooldown` | 1 | 4 | 25% | 1 |
 | `partial_take_level` | 1 | 5 | 20% | 1 |
+| `trailing_stop_mode` | 1 | 5 | 20% | 0 |
 
 ## Category rotation status
 
@@ -83,7 +83,7 @@ Genes onde alguma combinacao funcionou. Vale revisitar com novos vizinhos.
 | C_timing | 2026-04-18T20:39:53+00:00 | 1 | 0 |
 | D_entry_filter | 2026-04-18T14:37:35+02:00 | 1 | 0 |
 | E_regime_vol | 2026-04-18T21:31:21+00:00 | 1 | 0 |
-| F_trailing | never | 0 | 0 |
+| F_trailing | 2026-04-18T22:36:36+00:00 | 1 | 0 |
 
 ## Codex sync history (latest attempts)
 

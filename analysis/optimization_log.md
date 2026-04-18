@@ -144,3 +144,21 @@ tells future iterations which gene moves are dead ends.
 
 ---
 
+## 2026-04-18T22:36:36+00:00 - F_trailing
+**Cycle**: #6  |  **Promoted**: NO  |  **Codex sync**: YES
+**Genes swept**: `trailing_stop_mode`
+**Sweep file**: `local_fullmetric_sweep_continuous_F_trailing_20260418_223530.json`
+
+### Metrics
+
+| Source | fit | WR | WR_tgt | alpha_ann | MDD | trades |
+|---|---:|---:|---:|---:|---:|---:|
+| baseline (git:main) | 19.6541 | 69.18% | 68.83% | -8.30% | 11.25% | 32 |
+| incumbent (worktree) | 19.6541 | 69.18% | 68.83% | -8.30% | 11.25% | 32 |
+
+*(no candidate produced metrics — sweep returned empty)*
+
+**Learning**: nenhum candidato cruzou os guardrails de WR ou de seguranca; o incumbent ja esta no Pareto local desse conjunto de genes. Considerar marcar essas genes como 'exploradas recentemente' por 30 dias.
+
+---
+
