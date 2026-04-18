@@ -60,3 +60,26 @@ tells future iterations which gene moves are dead ends.
 
 ---
 
+## 2026-04-18T18:50:09+00:00 - B_take_profit
+**Cycle**: #3  |  **Promoted**: NO  |  **Codex sync**: YES
+**Genes swept**: `reward_risk_ratio, partial_take_pct, partial_take_level, partial_take_pct_2, partial_take_level_2`
+**Sweep file**: `local_fullmetric_sweep_continuous_B_take_profit_20260418_184523.json`
+
+### Metrics
+
+| Source | fit | WR | WR_tgt | alpha_ann | MDD | trades |
+|---|---:|---:|---:|---:|---:|---:|
+| baseline (git:main) | -80.1094 | 67.27% | 66.67% | -8.42% | 11.08% | 26 |
+| incumbent (worktree) | -80.1094 | 67.27% | 66.67% | -8.42% | 11.08% | 26 |
+| **candidate** | -79.3785 | 67.74% | 66.67% | -8.35% | 10.66% | 26 |
+
+**Best candidate label**: `partial_take_level_2:-1`
+
+**Moves applied to incumbent**:
+
+- `partial_take_level_2`: `1.75` -> `1.5` (step 0.25)
+
+**Learning**: candidato `partial_take_level_2: 1.75->1.5` parecia bom mas falhou nos gates: acceptance_vs_main. Esses moves entram para o graveyard: nao tentar novamente sem mudar contexto.
+
+---
+

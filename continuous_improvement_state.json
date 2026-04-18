@@ -8,8 +8,8 @@
       "n_promotions": 0
     },
     "B_take_profit": {
-      "last_swept": null,
-      "n_runs": 0,
+      "last_swept": "2026-04-18T18:50:09+00:00",
+      "n_runs": 1,
       "n_promotions": 0
     },
     "C_timing": {
@@ -33,7 +33,7 @@
       "n_promotions": 0
     }
   },
-  "total_cycles": 2,
+  "total_cycles": 3,
   "total_promotions": 0,
-  "last_updated": "2026-04-18T15:42:25+00:00"
+  "last_updated": "2026-04-18T18:50:09+00:00"
 }
