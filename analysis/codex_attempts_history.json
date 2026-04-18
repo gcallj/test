@@ -1,11 +1,11 @@
 {
   "codex_sync_metadata": {
     "source_file": "C:/Users/gabri/.codex/worktrees/0b30/test/analysis/optimization_attempts_20260416.md",
-    "source_sha1": "9775a1adbf70000cc220afe6c2731cf794165bdf",
-    "last_parsed": "2026-04-18T15:48:43+02:00",
+    "source_sha1": "8e35342600b97fe4f6558b45b3c010de1727cd28",
+    "last_parsed": "2026-04-18T16:33:25+02:00",
     "parser_version": 1,
-    "n_attempts_parsed": 13,
-    "n_promoted": 6,
+    "n_attempts_parsed": 14,
+    "n_promoted": 7,
     "n_parse_errors": 0
   },
   "attempts": [
@@ -402,6 +402,46 @@
       },
       "promoted": true,
       "learning": "a slightly stricter entry gating (`entry_score_threshold`) plus a longer loss cooldown can lift WR and reduce drawdown simultaneously *without* collapsing trade counts, suggesting the incumbent still has local “signal quality” headroom even after the `volatility_filter_percentile` and regime-mode safety promotions."
+    },
+    {
+      "attempt_id": "13",
+      "section_title": "Full-metric sweep (take-profit levels neighborhood) â€” PROMOTED",
+      "timestamp": "2026-04-18T15:56",
+      "sweep_file": "local_fullmetric_sweep_result_20260418_1620_alphaexit.json",
+      "genes": [
+        "reward_risk_ratio",
+        "partial_take_pct",
+        "partial_take_level",
+        "partial_take_pct_2",
+        "partial_take_level_2",
+        "trailing_stop_mode",
+        "entry_discount_atr_frac"
+      ],
+      "moves": [
+        {
+          "gene": "partial_take_level",
+          "from": 0.75,
+          "to": 1.0
+        }
+      ],
+      "metrics": {
+        "incumbent": {
+          "fit": 21.0068,
+          "wr_med_all": 0.7,
+          "wr_target_med_all": 0.6944,
+          "mean_alpha_ann": -0.0827,
+          "mdd_med": 0.11380000000000001
+        },
+        "candidate": {
+          "fit": 21.0214,
+          "wr_med_all": 0.7,
+          "wr_target_med_all": 0.6944,
+          "mean_alpha_ann": -0.0824,
+          "mdd_med": 0.11220000000000001
+        }
+      },
+      "promoted": true,
+      "learning": "`partial_take_level` is a useful local refinement lever: raising the first partial take threshold can improve median drawdown (and slightly improve alpha) without damaging hit-rate, but it may worsen tail MDD (`MDD_p75`) and should be monitored in future sweeps."
     }
   ]
 }
