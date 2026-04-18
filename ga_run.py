@@ -977,20 +977,11 @@ def _extract_alpha_ann(stat: Dict[str, float]) -> float:
 
 
 def _attach_benchmark_stats(stats: Dict[str, float], close: np.ndarray) -> Dict[str, float]:
-    """Attach buy_hold_return, buy_hold_cagr and alpha_ann to a stats dict.
-
-    Safe to call after backtest_stats_global_intraday(); used by callers that
-    want to compute alpha vs buy & hold per ticker (run_local_ga_staged,
-    run_local_fullmetric_sweep). Existing callers that don't import this
-    helper are unaffected.
-    """
     buy_hold_return = buyhold_capped(close)
     buy_hold_cagr = _compute_cagr(buy_hold_return, len(close))
     stats["buy_hold_return"] = float(buy_hold_return)
     stats["buy_hold_cagr"] = float(buy_hold_cagr)
-    stats["alpha_ann"] = float(
-        stats.get("cagr", _compute_cagr(stats.get("total_return", 0.0), len(close))) - buy_hold_cagr
-    )
+    stats["alpha_ann"] = float(stats.get("cagr", _compute_cagr(stats.get("total_return", 0.0), len(close))) - buy_hold_cagr)
     return stats
 
 
@@ -1004,14 +995,6 @@ def _finalize_backtest_stats(
     n_bars: int,
     max_drawdown_duration: int,
 ) -> Dict[str, float]:
-    """Public helper that computes the full swing-trade metrics dict from
-    raw trade data. Used by tests and by run_local_fullmetric_sweep helpers
-    that need to recompute stats from saved artifacts.
-
-    The inline logic in backtest_stats_global_intraday() also produces these
-    same keys; this function is provided so callers can build a stats dict
-    without re-running the full backtest loop.
-    """
     base_stats = {
         "total_return": float(total_return),
         "mdd": float(mdd),
@@ -1188,7 +1171,7 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
     mdd = 0.0
     trade_rets = []
     trade_exit_types = []  # "stop", "take", "time", "hard_loss"
-    trade_hold_bars = []  # NEW: number of bars each trade was held (for swing-trade hold profile)
+    trade_hold_bars = []
     pos = 0
     entry_px = np.nan
     bars = 0
@@ -1200,9 +1183,8 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
     consec_stops = 0
     cooldown = 0
     exposure_acc = 0.0
-    # Drawdown duration tracking (in bars)
-    max_drawdown_duration = 0
     current_drawdown_duration = 0
+    max_drawdown_duration = 0
 
     for i in range(1, n):
         if cooldown > 0:
@@ -1238,7 +1220,7 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
                 equity *= (1.0 + ret)
                 trade_rets.append(ret)
                 trade_exit_types.append("hard_loss")
-                trade_hold_bars.append(float(bars))
+                trade_hold_bars.append(float(max(1, bars)))
                 consec_stops += 1 if ret < 0 else 0
                 if ret > 0:
                     consec_stops = 0
@@ -1317,7 +1299,7 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
                     trade_exit_types.append("stop")
                 else:
                     trade_exit_types.append("time")
-                trade_hold_bars.append(float(bars))
+                trade_hold_bars.append(float(max(1, bars)))
                 if stop_hit and ret < 0:
                     consec_stops += 1
                 elif ret > 0:
@@ -1417,123 +1399,29 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
                     partial_taken_2 = False
                     max_fav = 0.0
 
-        # Track drawdown duration in bars (current and max).
-        # If new equity peak hit, drawdown duration resets; else accumulates.
-        if equity >= peak:
-            peak = equity
-            current_drawdown_duration = 0
-        else:
+        peak = max(peak, equity)
+        drawdown = (equity / max(peak, ATR_EPS)) - 1.0
+        mdd = min(mdd, drawdown)
+        if drawdown < -1e-12:
             current_drawdown_duration += 1
-            if current_drawdown_duration > max_drawdown_duration:
-                max_drawdown_duration = current_drawdown_duration
-        mdd = min(mdd, (equity / max(peak, ATR_EPS)) - 1.0)
+            max_drawdown_duration = max(max_drawdown_duration, current_drawdown_duration)
+        else:
+            current_drawdown_duration = 0
         # Equity drawdown circuit-breaker (progressive re-entry: 20 bars, was 30)
-        if gp.equity_drawdown_stop_pct > 0 and (equity / max(peak, ATR_EPS)) - 1.0 < -gp.equity_drawdown_stop_pct:
+        if gp.equity_drawdown_stop_pct > 0 and drawdown < -gp.equity_drawdown_stop_pct:
             cooldown = max(cooldown, 20)  # ~1 month pause after DD exceeds threshold
 
     exposure = float(exposure_acc / max(1, n - 1))
-    if len(trade_rets) == 0:
-        return {"total_return": float(equity - 1.0), "mdd": float(mdd), "sharpe": 0.0,
-                "sortino": 0.0, "profit_factor": 0.0, "expectancy": 0.0, "payoff_ratio": 0.0,
-                "max_drawdown_duration": float(max_drawdown_duration),
-                "cagr": _compute_cagr(float(equity - 1.0), int(n)),
-                "n_trades": 0.0, "win_rate": 0.0, "win_rate_target": 0.0,
-                "win_rate_target_robust": 0.0,
-                "pct_exit_take": 0.0, "pct_exit_stop": 0.0, "pct_exit_time": 0.0,
-                "avg_hold_bars": 0.0, "median_hold_bars": 0.0, "max_hold_bars": 0.0,
-                "avg_trade": 0.0, "trade_std": 0.0, "exposure": exposure}
-    tr = np.asarray(trade_rets, dtype=np.float64)
-    # Exit-type metrics (NEW): track how trades terminated
-    exit_arr = np.asarray(trade_exit_types)
-    n_tr = max(len(exit_arr), 1)
-    pct_exit_take = float((exit_arr == "take").mean()) if len(exit_arr) > 0 else 0.0
-    pct_exit_stop = float(((exit_arr == "stop") | (exit_arr == "hard_loss")).mean()) if len(exit_arr) > 0 else 0.0
-    pct_exit_time = float((exit_arr == "time").mean()) if len(exit_arr) > 0 else 0.0
-    # Strict WR: only trades that hit take-profit target (pure alvo hits)
-    wr_target_strict = pct_exit_take
-    # Robust WR target: trades that hit take OR time-stop with positive return
-    # (captures trailing-stop exits in profit territory)
-    take_mask = (exit_arr == "take")
-    time_pos_mask = (exit_arr == "time") & (tr > 0)
-    wr_target_robust = float((take_mask | time_pos_mask).mean()) if len(exit_arr) > 0 else 0.0
-    # Annualized Sharpe: use trades_per_year, not raw trade count
-    n_years = max(n / 252.0, 0.1)
-    trades_per_year = len(tr) / n_years
-    ann_factor = np.sqrt(min(trades_per_year, 252))
-    ann_sharpe = float(np.mean(tr) / (np.std(tr) + 1e-12) * ann_factor)
-    # Sortino + profit factor + expectancy + payoff ratio (NEW: codex swing metrics)
-    mean_tr = float(np.mean(tr))
-    std_tr = float(np.std(tr))
-    downside = np.minimum(tr, 0.0)
-    downside_dev = float(np.sqrt(np.mean(np.square(downside)))) if len(downside) > 0 else 0.0
-    wins_arr = tr[tr > 0]
-    losses_arr = tr[tr < 0]
-    avg_win = float(np.mean(wins_arr)) if len(wins_arr) > 0 else 0.0
-    avg_loss = abs(float(np.mean(losses_arr))) if len(losses_arr) > 0 else 0.0
-    gross_profit = float(np.sum(wins_arr)) if len(wins_arr) > 0 else 0.0
-    gross_loss = abs(float(np.sum(losses_arr))) if len(losses_arr) > 0 else 0.0
-    win_rate_val = float((tr > 0).mean())
-    expectancy = float(np.clip(win_rate_val * avg_win - (1.0 - win_rate_val) * avg_loss, -1.0, 1.0))
-    ann_sortino = float(np.clip(_safe_metric_ratio(mean_tr, downside_dev, cap=10.0) * ann_factor, -10.0, 10.0))
-    profit_factor = _safe_positive_ratio(gross_profit, gross_loss, cap=10.0)
-    payoff_ratio = _safe_positive_ratio(avg_win, avg_loss, cap=10.0)
-    cagr_val = _compute_cagr(float(equity - 1.0), int(n))
-    # Hold profile (in bars)
-    hold_arr = np.asarray(trade_hold_bars, dtype=np.float64) if len(trade_hold_bars) > 0 else np.zeros(len(tr), dtype=np.float64)
-    if hold_arr.shape[0] != tr.shape[0]:
-        hold_arr = np.resize(hold_arr, tr.shape[0])
-    avg_hold_bars = float(np.mean(hold_arr)) if len(hold_arr) > 0 else 0.0
-    median_hold_bars = float(np.median(hold_arr)) if len(hold_arr) > 0 else 0.0
-    max_hold_bars = float(np.max(hold_arr)) if len(hold_arr) > 0 else 0.0
-    # -- Trade return distribution buckets (v5) --
-    # Faixas: >15%, 10-15%, 5-10%, 2-5%, 0-2%, -2-0%, -5 to -2%, -10 to -5%, <-10%
-    pct_gt15  = float((tr > 0.15).mean())
-    pct_10_15 = float(((tr > 0.10) & (tr <= 0.15)).mean())
-    pct_5_10  = float(((tr > 0.05) & (tr <= 0.10)).mean())
-    pct_2_5   = float(((tr > 0.02) & (tr <= 0.05)).mean())
-    pct_0_2   = float(((tr > 0.00) & (tr <= 0.02)).mean())
-    pct_n2_0  = float(((tr > -0.02) & (tr <= 0.00)).mean())
-    pct_n5_n2 = float(((tr > -0.05) & (tr <= -0.02)).mean())
-    pct_n10_n5= float(((tr > -0.10) & (tr <= -0.05)).mean())
-    pct_lt_n10= float((tr <= -0.10).mean())
-    # Quality score from distribution: big wins vs big losses ratio
-    big_wins = pct_gt15 + pct_10_15 + pct_5_10  # trades > +5%
-    big_losses = pct_lt_n10 + pct_n10_n5 + pct_n5_n2  # trades < -2%
-    dist_quality = float(np.clip((big_wins - big_losses + 0.5), 0.0, 1.0))  # 0.5 = neutral
-
-    return {
-        "total_return": float(equity - 1.0),
-        "mdd": float(mdd),
-        "sharpe": ann_sharpe,
-        # NEW: codex swing-trade metrics
-        "sortino": ann_sortino,
-        "profit_factor": profit_factor,
-        "expectancy": expectancy,
-        "payoff_ratio": payoff_ratio,
-        "max_drawdown_duration": float(max_drawdown_duration),
-        "cagr": cagr_val,
-        "n_trades": float(len(tr)),
-        "win_rate": float((tr > 0).mean()),
-        # NEW: exit-type breakdown and target-based WR
-        "win_rate_target": wr_target_strict,   # only take-profit hits
-        "win_rate_target_robust": wr_target_robust,  # take + time-exit in profit
-        "pct_exit_take": pct_exit_take,
-        "pct_exit_stop": pct_exit_stop,
-        "pct_exit_time": pct_exit_time,
-        "avg_trade": float(np.mean(tr)),
-        "trade_std": float(np.std(tr)),
-        # NEW: hold profile (bars per trade)
-        "avg_hold_bars": avg_hold_bars,
-        "median_hold_bars": median_hold_bars,
-        "max_hold_bars": max_hold_bars,
-        "exposure": exposure,
-        # Distribution buckets
-        "pct_gt15": pct_gt15, "pct_10_15": pct_10_15, "pct_5_10": pct_5_10,
-        "pct_2_5": pct_2_5, "pct_0_2": pct_0_2, "pct_n2_0": pct_n2_0,
-        "pct_n5_n2": pct_n5_n2, "pct_n10_n5": pct_n10_n5, "pct_lt_n10": pct_lt_n10,
-        "dist_quality": dist_quality,
-        "big_wins_pct": big_wins, "big_losses_pct": big_losses,
-    }
+    return _finalize_backtest_stats(
+        trade_rets=trade_rets,
+        trade_exit_types=trade_exit_types,
+        trade_hold_bars=trade_hold_bars,
+        exposure=exposure,
+        total_return=float(equity - 1.0),
+        mdd=float(mdd),
+        n_bars=n,
+        max_drawdown_duration=max_drawdown_duration,
+    )
 
 
 def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float:
@@ -1541,15 +1429,25 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
     Multi-objective fitness optimised for:
       - High win rate (prefer few quality trades over many losing ones)
       - Low max drawdown (MDD must stay small)
-      - Beat buy-and-hold on excess return
+      - Beat buy-and-hold on annualized alpha
       - Statistical volume (enough trades for significance)
     """
     if len(per_ticker_stats) == 0:
         return -1e9
-    sharpe    = np.array([s.get("sharpe", 0.0)       for s in per_ticker_stats], dtype=np.float64)
-    ret       = np.array([s.get("total_return", 0.0)  for s in per_ticker_stats], dtype=np.float64)
-    excess    = np.array([s.get("excess_return", s.get("total_return", 0.0)) for s in per_ticker_stats], dtype=np.float64)
-    mdd_vals  = np.array([s.get("mdd", 0.0)           for s in per_ticker_stats], dtype=np.float64)
+    sharpe    = np.array([s.get("sharpe", 0.0) for s in per_ticker_stats], dtype=np.float64)
+    sortino   = np.array([s.get("sortino", 0.0) for s in per_ticker_stats], dtype=np.float64)
+    ret       = np.array([s.get("total_return", 0.0) for s in per_ticker_stats], dtype=np.float64)
+    raw_excess = np.array([s.get("excess_return", s.get("total_return", 0.0)) for s in per_ticker_stats], dtype=np.float64)
+    alpha_ann_vals = np.array([_extract_alpha_ann(s) for s in per_ticker_stats], dtype=np.float64)
+    expectancy_vals = np.array([s.get("expectancy", s.get("avg_trade", 0.0)) for s in per_ticker_stats], dtype=np.float64)
+    payoff_vals = np.array([s.get("payoff_ratio", 0.0) for s in per_ticker_stats], dtype=np.float64)
+    profit_factor_vals = np.array([s.get("profit_factor", 0.0) for s in per_ticker_stats], dtype=np.float64)
+    cagr_vals = np.array([s.get("cagr", 0.0) for s in per_ticker_stats], dtype=np.float64)
+    hold_avg_vals = np.array([s.get("avg_hold_bars", 0.0) for s in per_ticker_stats], dtype=np.float64)
+    hold_med_vals = np.array([s.get("median_hold_bars", 0.0) for s in per_ticker_stats], dtype=np.float64)
+    hold_max_vals = np.array([s.get("max_hold_bars", 0.0) for s in per_ticker_stats], dtype=np.float64)
+    mdd_duration_vals = np.array([s.get("max_drawdown_duration", 0.0) for s in per_ticker_stats], dtype=np.float64)
+    mdd_vals  = np.array([s.get("mdd", 0.0) for s in per_ticker_stats], dtype=np.float64)
     # Phase 1.3: Cap extreme MDD at -60% to prevent outliers (-99%) from destroying median
     mdd_vals  = np.clip(mdd_vals, -0.60, 0.0)
     ntr       = np.array([s.get("n_trades", 0.0)      for s in per_ticker_stats], dtype=np.float64)
@@ -1562,12 +1460,30 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
 
     med_sharpe        = float(np.median(sharpe))
     mean_sharpe       = float(np.mean(sharpe))
+    med_sortino       = float(np.median(sortino))
+    mean_sortino      = float(np.mean(sortino))
     mean_ret          = float(np.mean(ret))
     med_ret           = float(np.median(ret))
-    mean_excess       = float(np.mean(excess))
-    med_excess        = float(np.median(excess))
+    mean_excess       = float(np.mean(raw_excess))
+    med_excess        = float(np.median(raw_excess))
+    mean_alpha_ann    = float(np.mean(alpha_ann_vals))
+    med_alpha_ann     = float(np.median(alpha_ann_vals))
+    mean_expectancy   = float(np.mean(expectancy_vals))
+    med_expectancy    = float(np.median(expectancy_vals))
+    mean_payoff       = float(np.mean(payoff_vals))
+    med_payoff        = float(np.median(payoff_vals))
+    mean_profit_factor = float(np.mean(profit_factor_vals))
+    med_profit_factor = float(np.median(profit_factor_vals))
+    mean_cagr         = float(np.mean(cagr_vals))
+    med_cagr          = float(np.median(cagr_vals))
+    mean_hold_avg     = float(np.mean(hold_avg_vals))
+    med_hold_med      = float(np.median(hold_med_vals))
+    p75_hold_max      = float(np.percentile(hold_max_vals, 75)) if len(hold_max_vals) > 0 else 0.0
+    mean_mdd_duration = float(np.mean(mdd_duration_vals))
+    med_mdd_duration  = float(np.median(mdd_duration_vals))
     pct_positive      = float((ret > 0).mean())
-    pct_excess_pos    = float((excess > 0).mean())
+    pct_excess_pos    = float((raw_excess > 0).mean())
+    pct_alpha_pos     = float((alpha_ann_vals > 0).mean())
     med_trades        = float(np.median(ntr))
     mean_trades       = float(np.mean(ntr))
     mean_exposure     = float(np.mean(exposure))
@@ -1577,6 +1493,7 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
     med_wr_target     = float(np.median(wr_targets))
     mean_mdd          = float(np.mean(mdd_vals))   # negative
     median_mdd        = float(np.median(mdd_vals)) # negative
+    alpha_pos_floor   = 0.22 if GA_ALPHA_FOCUS else 0.18
 
     # -- Activity bonus/penalty --------------------------------------------
     # Target: 15-80 trades per year per ticker. Penalise extremes.
@@ -1621,16 +1538,72 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
     if abs_mdd_tail > 0.40:
         mdd_penalty += (abs_mdd_tail - 0.40) * 100.0
 
+    alpha_drag_penalty = 0.0
+    if mean_alpha_ann < -0.06 and abs_mdd > 0.10:
+        alpha_drag_penalty += (abs_mdd - 0.10) * (40.0 if GA_ALPHA_FOCUS else 20.0)
+    if mean_alpha_ann < -0.08 and abs_mdd > 0.12:
+        alpha_drag_penalty += (abs_mdd - 0.12) * (80.0 if GA_ALPHA_FOCUS else 40.0)
+    if med_alpha_ann < -0.06 and abs_mdd > 0.11:
+        alpha_drag_penalty += (abs_mdd - 0.11) * (36.0 if GA_ALPHA_FOCUS else 18.0)
+    if pct_alpha_pos < alpha_pos_floor and abs_mdd > 0.10:
+        alpha_drag_penalty += (alpha_pos_floor - pct_alpha_pos) * (18.0 if GA_ALPHA_FOCUS else 9.0)
+
     # -- Under-performance penalty -----------------------------------------
     underperf_penalty = 0.0
-    if mean_excess < 0:
-        underperf_penalty += 10.0 * abs(mean_excess)
-    if pct_excess_pos < 0.50:
-        underperf_penalty += (0.50 - pct_excess_pos) * 2.5  # was 2.0
+    alpha_mean_w = 34.0 if GA_ALPHA_FOCUS else 24.0
+    alpha_med_w = 20.0 if GA_ALPHA_FOCUS else 14.0
+    alpha_floor_mean = -0.02 if GA_ALPHA_FOCUS else -0.03
+    alpha_floor_med = -0.015 if GA_ALPHA_FOCUS else -0.025
+    if mean_alpha_ann < 0:
+        underperf_penalty += alpha_mean_w * abs(mean_alpha_ann)
+    if med_alpha_ann < 0:
+        underperf_penalty += alpha_med_w * abs(med_alpha_ann)
+    if mean_alpha_ann < alpha_floor_mean:
+        underperf_penalty += (alpha_floor_mean - mean_alpha_ann) * (22.0 if GA_ALPHA_FOCUS else 10.0)
+    if med_alpha_ann < alpha_floor_med:
+        underperf_penalty += (alpha_floor_med - med_alpha_ann) * (16.0 if GA_ALPHA_FOCUS else 8.0)
+    if pct_alpha_pos < alpha_pos_floor:
+        underperf_penalty += (alpha_pos_floor - pct_alpha_pos) * (10.0 if GA_ALPHA_FOCUS else 6.0)
+    if pct_alpha_pos < 0.35:
+        underperf_penalty += (0.35 - pct_alpha_pos) * (7.0 if GA_ALPHA_FOCUS else 5.0)
+    if mean_alpha_ann < -0.08:
+        underperf_penalty += (abs(mean_alpha_ann) - 0.08) * (60.0 if GA_ALPHA_FOCUS else 30.0)
+    if mean_alpha_ann < -0.09:
+        underperf_penalty += (abs(mean_alpha_ann) - 0.09) * (85.0 if GA_ALPHA_FOCUS else 42.0)
+    if med_alpha_ann < -0.06:
+        underperf_penalty += (abs(med_alpha_ann) - 0.06) * (40.0 if GA_ALPHA_FOCUS else 20.0)
+    if med_alpha_ann < -0.075:
+        underperf_penalty += (abs(med_alpha_ann) - 0.075) * (55.0 if GA_ALPHA_FOCUS else 28.0)
     if mean_ret < 0.015:
         underperf_penalty += (0.015 - mean_ret) * 25.0
     if mean_ret < 0.0:
         underperf_penalty += abs(mean_ret) * 30.0
+
+    alpha_recovery_bonus = 0.0
+    if mean_alpha_ann > -0.10:
+        alpha_recovery_bonus += (mean_alpha_ann + 0.10) * (24.0 if GA_ALPHA_FOCUS else 12.0)
+    if mean_alpha_ann > -0.12:
+        alpha_recovery_bonus += (mean_alpha_ann + 0.12) * (18.0 if GA_ALPHA_FOCUS else 10.0)
+    if mean_alpha_ann > -0.09:
+        alpha_recovery_bonus += (mean_alpha_ann + 0.09) * (36.0 if GA_ALPHA_FOCUS else 18.0)
+    if mean_alpha_ann > -0.08:
+        alpha_recovery_bonus += (mean_alpha_ann + 0.08) * (28.0 if GA_ALPHA_FOCUS else 14.0)
+    if mean_alpha_ann > -0.07:
+        alpha_recovery_bonus += (mean_alpha_ann + 0.07) * (52.0 if GA_ALPHA_FOCUS else 26.0)
+    if mean_alpha_ann > -0.04:
+        alpha_recovery_bonus += (mean_alpha_ann + 0.04) * (40.0 if GA_ALPHA_FOCUS else 20.0)
+    if med_alpha_ann > -0.10:
+        alpha_recovery_bonus += (med_alpha_ann + 0.10) * (10.0 if GA_ALPHA_FOCUS else 6.0)
+    if med_alpha_ann > -0.08:
+        alpha_recovery_bonus += (med_alpha_ann + 0.08) * (20.0 if GA_ALPHA_FOCUS else 10.0)
+    if med_alpha_ann > -0.06:
+        alpha_recovery_bonus += (med_alpha_ann + 0.06) * (18.0 if GA_ALPHA_FOCUS else 10.0)
+    if pct_alpha_pos > 0.17:
+        alpha_recovery_bonus += (pct_alpha_pos - 0.17) * (10.0 if GA_ALPHA_FOCUS else 5.0)
+    if pct_alpha_pos > 0.18:
+        alpha_recovery_bonus += (pct_alpha_pos - 0.18) * (8.0 if GA_ALPHA_FOCUS else 4.0)
+    if pct_alpha_pos > 0.30:
+        alpha_recovery_bonus += (pct_alpha_pos - 0.30) * (12.0 if GA_ALPHA_FOCUS else 6.0)
 
     # -- Win-rate bonus (v9: operational floor at 60%) ----------
     # Rationale: WR < 60% nao deve ser operado (aprovado pelo usuario).
@@ -1647,9 +1620,9 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
     if mean_win_rate > 0.60:
         win_rate_bonus += (mean_win_rate - 0.60) * 8.0
     if mean_win_rate > 0.65:
-        win_rate_bonus += (mean_win_rate - 0.65) * 12.0
+        win_rate_bonus += (mean_win_rate - 0.65) * 9.0
     if mean_win_rate > 0.70:
-        win_rate_bonus += (mean_win_rate - 0.70) * 15.0
+        win_rate_bonus += (mean_win_rate - 0.70) * 10.0
     # Median win rate (consistency across tickers)
     if med_win_rate < 0.60:
         win_rate_bonus -= (0.60 - med_win_rate) * 10.0  # penalty ate mediana >= 60%
@@ -1660,11 +1633,11 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
     # v7: Aggressive push above current baseline (68%)
     # Steep gradient only kicks in above 0.68 to incentivize pushing past current ceiling
     if med_win_rate > 0.68:
-        win_rate_bonus += (med_win_rate - 0.68) * 40.0
+        win_rate_bonus += (med_win_rate - 0.68) * 18.0
     if med_win_rate > 0.70:
-        win_rate_bonus += (med_win_rate - 0.70) * 60.0
+        win_rate_bonus += (med_win_rate - 0.70) * 26.0
     if mean_win_rate > 0.68:
-        win_rate_bonus += (mean_win_rate - 0.68) * 25.0
+        win_rate_bonus += (mean_win_rate - 0.68) * 12.0
 
     # v9: penalty por pct_sub60 (quantos tickers estao abaixo de 60%)
     # Desincentiva modelos que tem WR mean alto mas muita variacao
@@ -1740,16 +1713,84 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
     if mean_pct_gt10 > 0.20:
         dist_bonus += (mean_pct_gt10 - 0.20) * 12.0  # strong reward
 
-    # -- Main fitness (v5) -------------------------------------------------
+    # -- Trade quality bonus (P0 metrics) ----------------------------------
+    sortino_bonus = 0.0
+    if mean_sortino > 0.0:
+        sortino_bonus += 0.35 * float(np.clip(mean_sortino, 0.0, 4.0))
+    if med_sortino > 0.0:
+        sortino_bonus += 0.25 * float(np.clip(med_sortino, 0.0, 4.0))
+
+    profit_factor_bonus = 0.0
+    if mean_profit_factor > 1.0:
+        profit_factor_bonus += 0.40 * float(np.clip(mean_profit_factor - 1.0, 0.0, 2.0))
+    if med_profit_factor > 1.0:
+        profit_factor_bonus += 0.30 * float(np.clip(med_profit_factor - 1.0, 0.0, 2.0))
+    if mean_payoff > 1.0:
+        profit_factor_bonus += 0.10 * float(np.clip(mean_payoff - 1.0, 0.0, 2.0))
+    if med_payoff > 1.0:
+        profit_factor_bonus += 0.10 * float(np.clip(med_payoff - 1.0, 0.0, 2.0))
+
+    expectancy_bonus = 0.0
+    if mean_expectancy > 0.0:
+        expectancy_bonus += 30.0 * float(np.clip(mean_expectancy, 0.0, 0.03))
+    if med_expectancy > 0.0:
+        expectancy_bonus += 18.0 * float(np.clip(med_expectancy, 0.0, 0.03))
+    if mean_cagr > 0.0:
+        expectancy_bonus += 0.10 * float(np.clip(mean_cagr, 0.0, 2.0))
+    if med_cagr > 0.0:
+        expectancy_bonus += 0.08 * float(np.clip(med_cagr, 0.0, 2.0))
+
+    drawdown_duration_penalty = 0.0
+    med_mdd_duration_years = med_mdd_duration / 252.0
+    mean_mdd_duration_years = mean_mdd_duration / 252.0
+    if med_mdd_duration_years > 0.15:
+        drawdown_duration_penalty += (med_mdd_duration_years - 0.15) * 2.0
+    if med_mdd_duration_years > 0.35:
+        drawdown_duration_penalty += (med_mdd_duration_years - 0.35) * 4.0
+    if mean_mdd_duration_years > 0.20:
+        drawdown_duration_penalty += (mean_mdd_duration_years - 0.20) * 1.5
+
+    swing_bonus = 0.0
+    if mean_hold_avg < 2.0:
+        swing_bonus -= (2.0 - mean_hold_avg) * 0.40
+    elif mean_hold_avg <= 18.0:
+        swing_bonus += min(mean_hold_avg - 2.0, 8.0) * 0.10
+    elif mean_hold_avg > 30.0:
+        swing_bonus -= (mean_hold_avg - 30.0) * 0.08
+    if med_hold_med >= 3.0 and med_hold_med <= 15.0:
+        swing_bonus += 0.90
+    elif med_hold_med > 22.0:
+        swing_bonus -= (med_hold_med - 22.0) * 0.07
+    elif med_hold_med < 2.0:
+        swing_bonus -= (2.0 - med_hold_med) * 0.20
+    if p75_hold_max > 45.0:
+        swing_bonus -= (p75_hold_max - 45.0) * 0.03
+
+    quality_bonus = sortino_bonus + profit_factor_bonus + expectancy_bonus
+    alpha_quality_scale = 1.0
+    if mean_alpha_ann < 0.0:
+        alpha_quality_scale *= 0.35 if GA_ALPHA_FOCUS else 0.45
+    if mean_alpha_ann < -0.06:
+        alpha_quality_scale *= 0.70
+    if med_alpha_ann < -0.05:
+        alpha_quality_scale *= 0.80
+    if pct_alpha_pos < (0.22 if GA_ALPHA_FOCUS else 0.18):
+        alpha_quality_scale *= 0.75 if GA_ALPHA_FOCUS else 0.85
+    if pct_alpha_pos < 0.35:
+        alpha_quality_scale *= 0.75
+    quality_bonus *= alpha_quality_scale
+
+    # -- Main fitness (v5.2 alpha-hard) ------------------------------------
     # GA_ALPHA_FOCUS: amplifica sinal de alpha para forcar GA a priorizar
-    # reducao de underperformance vs B&H (clip afrouxado, peso 2.5x)
-    _exc_w_mean = 2.5 if GA_ALPHA_FOCUS else 1.8
-    _exc_w_med = 1.8 if GA_ALPHA_FOCUS else 1.3
-    _exc_clip_lo = -2.5 if GA_ALPHA_FOCUS else -1.0
+    # reducao de underperformance vs B&H via alpha anualizado.
+    _alpha_w_mean = 26.0 if GA_ALPHA_FOCUS else 12.0
+    _alpha_w_med = 18.0 if GA_ALPHA_FOCUS else 8.0
+    _alpha_pos_w = 4.5 if GA_ALPHA_FOCUS else 2.5
+    _alpha_clip_lo = -0.35 if GA_ALPHA_FOCUS else -0.20
     fitness = (
-        _exc_w_mean * np.clip(mean_excess, _exc_clip_lo, 5.0) +   # beat B&H
-        _exc_w_med  * np.clip(med_excess,  _exc_clip_lo, 5.0) +
-        1.4 * pct_excess_pos +                      # % tickers beating B&H
+        _alpha_w_mean * np.clip(mean_alpha_ann, _alpha_clip_lo, 0.50) +
+        _alpha_w_med  * np.clip(med_alpha_ann,  _alpha_clip_lo, 0.50) +
+        _alpha_pos_w * pct_alpha_pos +              # % tickers beating B&H on annualized alpha
         0.5 * np.clip(mean_ret,    -1.0, 5.0) +
         0.3 * np.clip(med_ret,     -1.0, 5.0) +
         0.5 * np.clip(mean_sharpe, -2.0, 3.0) +
@@ -1760,8 +1801,13 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
         wr_target_bonus +                              # v8: reward alvo hits
         consistency_bonus +
         calmar_bonus +
+        alpha_recovery_bonus +
+        swing_bonus +
+        quality_bonus +
         dist_bonus +                                   # v5: distribution quality (big wins vs big losses)
         trade_bonus -
+        alpha_drag_penalty -
+        drawdown_duration_penalty -
         mdd_penalty -
         underperf_penalty
     )
