@@ -1,6 +1,6 @@
 # Sweep Learnings Summary
 
-_Generated: 2026-04-18T18:50:22+00:00_
+_Generated: 2026-04-18T19:15:44+00:00_
 
 Aggregates all `local_fullmetric_sweep_result*.json` files plus the
 continuous-improvement state. Use this file to plan the next cycle.
@@ -79,7 +79,7 @@ Genes onde alguma combinacao funcionou. Vale revisitar com novos vizinhos.
 | Category | Last swept | Runs | Promotions |
 |---|---|---:|---:|
 | A_risk_management | 2026-04-18T15:42:25+00:00 | 1 | 0 |
-| B_take_profit | 2026-04-18T18:50:09+00:00 | 1 | 0 |
+| B_take_profit | 2026-04-18T19:15:37+00:00 | 1 | 0 |
 | C_timing | never | 0 | 0 |
 | D_entry_filter | 2026-04-18T14:37:35+02:00 | 1 | 0 |
 | E_regime_vol | never | 0 | 0 |

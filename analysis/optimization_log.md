@@ -64,6 +64,10 @@ tells future iterations which gene moves are dead ends.
 **Cycle**: #3  |  **Promoted**: NO  |  **Codex sync**: YES
 **Genes swept**: `reward_risk_ratio, partial_take_pct, partial_take_level, partial_take_pct_2, partial_take_level_2`
 **Sweep file**: `local_fullmetric_sweep_continuous_B_take_profit_20260418_184523.json`
+## 2026-04-18T19:15:37+00:00 - B_take_profit
+**Cycle**: #3  |  **Promoted**: NO  |  **Codex sync**: YES
+**Genes swept**: `reward_risk_ratio, partial_take_pct, partial_take_level, partial_take_pct_2, partial_take_level_2`
+**Sweep file**: `local_fullmetric_sweep_continuous_B_take_profit_20260418_191042.json`
 
 ### Metrics
 
@@ -80,6 +84,17 @@ tells future iterations which gene moves are dead ends.
 - `partial_take_level_2`: `1.75` -> `1.5` (step 0.25)
 
 **Learning**: candidato `partial_take_level_2: 1.75->1.5` parecia bom mas falhou nos gates: acceptance_vs_main. Esses moves entram para o graveyard: nao tentar novamente sem mudar contexto.
+| baseline (git:main) | -75.2106 | 70.00% | 69.70% | -8.29% | 10.55% | 32 |
+| incumbent (worktree) | -75.2106 | 70.00% | 69.70% | -8.29% | 10.55% | 32 |
+| **candidate** | -75.1232 | 70.00% | 69.70% | -8.26% | 10.91% | 31 |
+
+**Best candidate label**: `partial_take_level:+1`
+
+**Moves applied to incumbent**:
+
+- `partial_take_level`: `0.75` -> `1.0` (step 0.25)
+
+**Learning**: candidato `partial_take_level: 0.75->1.0` parecia bom mas falhou nos gates: acceptance_vs_main, priority_better. Esses moves entram para o graveyard: nao tentar novamente sem mudar contexto.
 
 ---
 
