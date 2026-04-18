@@ -1,6 +1,6 @@
 # Sweep Learnings Summary
 
-_Generated: 2026-04-18T20:40:10+00:00_
+_Generated: 2026-04-18T21:31:39+00:00_
 
 Aggregates all `local_fullmetric_sweep_result*.json` files plus the
 continuous-improvement state. Use this file to plan the next cycle.
@@ -8,16 +8,16 @@ continuous-improvement state. Use this file to plan the next cycle.
 ## Current snapshot
 
 - Checkpoint fitness: `20.717201265906507`
-- Total sweeps seen: **11**
+- Total sweeps seen: **12**
 - Total promotions: **7** (including 2 from codex log)
-- Promotion rate: **28.0%** (over 25 total attempts)
-- Continuous cycles run: 4
+- Promotion rate: **26.9%** (over 26 total attempts)
+- Continuous cycles run: 5
 - Continuous promotions: 0
 - Codex attempts synced: **14** (7 promoted) from `optimization_attempts_20260416.md`
 
 ## Next suggested sweep
 
-categoria nao explorada: **E_regime_vol** (rodar `python run_continuous_improvement.py --category E`)
+categoria nao explorada: **F_trailing** (rodar `python run_continuous_improvement.py --category F`)
 
 ## Promotion timeline (chronological)
 
@@ -48,11 +48,11 @@ Genes tentados >= 2 vezes sem nenhuma promocao. Considere SKIP no proximo ciclo.
 | `equity_drawdown_stop_pct` | 3 | 0 | 0 | 0 |
 | `score_percentile_trigger` | 3 | 0 | 0 | 0 |
 | `entry_discount_atr_frac` | 3 | 0 | 1 | 0 |
+| `volume_confirm_mode` | 3 | 0 | 1 | 0 |
+| `momentum_confirm_days` | 3 | 0 | 1 | 0 |
 | `score_strength_scaling` | 3 | 0 | 1 | 0 |
 | `stop_tighten_after_bars` | 2 | 0 | 0 | 0 |
 | `min_signal_strength` | 2 | 0 | 0 | 0 |
-| `volume_confirm_mode` | 2 | 0 | 1 | 0 |
-| `momentum_confirm_days` | 2 | 0 | 1 | 0 |
 | `vote_threshold_long` | 2 | 0 | 0 | 0 |
 | `vote_threshold_short` | 2 | 0 | 0 | 0 |
 | `z_threshold` | 2 | 0 | 0 | 0 |
@@ -65,12 +65,12 @@ Genes onde alguma combinacao funcionou. Vale revisitar com novos vizinhos.
 
 | Gene | Promotions | Attempts | Hit rate | (codex) Promotions |
 |---|---:|---:|---:|---:|
-| `vol_regime_mode` | 1 | 1 | 100% | 0 |
+| `vol_regime_mode` | 1 | 2 | 50% | 0 |
 | `entry_score_threshold` | 1 | 3 | 33% | 1 |
-| `regime_threshold` | 1 | 3 | 33% | 0 |
-| `volatility_filter_percentile` | 1 | 3 | 33% | 0 |
 | `partial_take_pct` | 1 | 4 | 25% | 0 |
 | `trailing_stop_mode` | 1 | 4 | 25% | 0 |
+| `regime_threshold` | 1 | 4 | 25% | 0 |
+| `volatility_filter_percentile` | 1 | 4 | 25% | 0 |
 | `consecutive_loss_cooldown` | 1 | 4 | 25% | 1 |
 | `partial_take_level` | 1 | 5 | 20% | 1 |
 
@@ -82,7 +82,7 @@ Genes onde alguma combinacao funcionou. Vale revisitar com novos vizinhos.
 | B_take_profit | 2026-04-18T19:15:37+00:00 | 1 | 0 |
 | C_timing | 2026-04-18T20:39:53+00:00 | 1 | 0 |
 | D_entry_filter | 2026-04-18T14:37:35+02:00 | 1 | 0 |
-| E_regime_vol | never | 0 | 0 |
+| E_regime_vol | 2026-04-18T21:31:21+00:00 | 1 | 0 |
 | F_trailing | never | 0 | 0 |
 
 ## Codex sync history (latest attempts)

@@ -121,3 +121,26 @@ tells future iterations which gene moves are dead ends.
 
 ---
 
+## 2026-04-18T21:31:21+00:00 - E_regime_vol
+**Cycle**: #5  |  **Promoted**: NO  |  **Codex sync**: YES
+**Genes swept**: `ma_filter_period, ma_filter_mode, vol_regime_mode, volatility_filter_percentile, regime_threshold, volume_confirm_mode, momentum_confirm_days`
+**Sweep file**: `local_fullmetric_sweep_continuous_E_regime_vol_20260418_212640.json`
+
+### Metrics
+
+| Source | fit | WR | WR_tgt | alpha_ann | MDD | trades |
+|---|---:|---:|---:|---:|---:|---:|
+| baseline (git:main) | 21.1254 | 69.91% | 69.70% | -8.28% | 10.79% | 32 |
+| incumbent (worktree) | 21.1254 | 69.91% | 69.70% | -8.28% | 10.79% | 32 |
+| **candidate** | 22.4735 | 70.00% | 70.00% | -8.24% | 10.76% | 32 |
+
+**Best candidate label**: `momentum_confirm_days:-1`
+
+**Moves applied to incumbent**:
+
+- `momentum_confirm_days`: `5` -> `4` (step 1.0)
+
+**Learning**: candidato `momentum_confirm_days: 5->4` parecia bom mas falhou nos gates: acceptance_vs_main. Esses moves entram para o graveyard: nao tentar novamente sem mudar contexto.
+
+---
+
