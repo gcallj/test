@@ -276,13 +276,25 @@ def run_etl():
     # Download dos dados
     # ============================
     print("Baixando cotações do Yahoo Finance...")
+    # yfinance uses sqlite-backed caches (timezone/cookies/ISIN) under the user's
+    # cache directory. Some environments restrict writing there, causing
+    # "OperationalError: unable to open database file". Pin caches to workspace.
+    try:
+        yf_cache_dir = os.path.abspath("./output/yfinance_cache")
+        os.makedirs(yf_cache_dir, exist_ok=True)
+        yf.cache.set_cache_location(yf_cache_dir)
+    except Exception:
+        pass
+
     data = yf.download(
         ALL_TICKERS,
         start=START_DATE,
         group_by='column',
         auto_adjust=True,
         progress=False,
-        threads=True
+        # Use single-threaded downloads to avoid sqlite cache contention
+        # ("database is locked") on some Windows setups.
+        threads=False,
     )
 
     # Somente colunas OHLCV relevantes e limpeza de levels

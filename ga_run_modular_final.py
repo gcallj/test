@@ -317,6 +317,39 @@ def buyhold_capped(close: np.ndarray) -> float:
     return float(math.exp(log_eq) - 1.0)
 
 
+# Swing-trade metric utilities (mirrored from ga_run.py)
+def _safe_metric_ratio(numerator: float, denominator: float, cap: float = 10.0) -> float:
+    num = float(numerator) if np.isfinite(numerator) else 0.0
+    den = float(denominator) if np.isfinite(denominator) else 0.0
+    if abs(den) < 1e-12:
+        if num > 0:
+            return float(cap)
+        if num < 0:
+            return float(-cap)
+        return 0.0
+    return float(np.clip(num / den, -cap, cap))
+
+
+def _safe_positive_ratio(numerator: float, denominator: float, cap: float = 10.0) -> float:
+    num = float(numerator) if np.isfinite(numerator) else 0.0
+    den = float(denominator) if np.isfinite(denominator) else 0.0
+    if num <= 0:
+        return 0.0
+    if abs(den) < 1e-12:
+        return float(cap)
+    return float(np.clip(num / den, 0.0, cap))
+
+
+def _compute_cagr(total_return: float, n_bars: int) -> float:
+    n_years = max(float(n_bars) / 252.0, 1.0 / 252.0)
+    equity = 1.0 + float(total_return)
+    if not np.isfinite(equity):
+        return 0.0
+    if equity <= 0:
+        return -1.0
+    return float(np.clip(equity ** (1.0 / n_years) - 1.0, -1.0, 10.0))
+
+
 # ---------------------------------------------------------------------------
 # Backtest engine (from main ga_run.py — full v6 with trailing stops,
 # 2nd partial, vol regime, volume/momentum confirmation, regime score,
@@ -377,6 +410,7 @@ def _backtest_stats_global_intraday(
     mdd = 0.0
     trade_rets = []
     trade_exit_types = []  # v8: track "take", "stop", "time", "hard_loss"
+    trade_hold_bars = []  # NEW: bars held per trade
     pos = 0
     entry_px = np.nan
     bars = 0
@@ -388,6 +422,9 @@ def _backtest_stats_global_intraday(
     consec_stops = 0
     cooldown = 0
     exposure_acc = 0.0
+    # NEW: drawdown duration tracking
+    max_drawdown_duration = 0
+    current_drawdown_duration = 0
 
     for i in range(1, n):
         if cooldown > 0:
@@ -423,6 +460,7 @@ def _backtest_stats_global_intraday(
                 equity *= (1.0 + ret)
                 trade_rets.append(ret)
                 trade_exit_types.append("hard_loss")
+                trade_hold_bars.append(float(bars))
                 consec_stops += 1 if ret < 0 else 0
                 if ret > 0:
                     consec_stops = 0
@@ -501,6 +539,7 @@ def _backtest_stats_global_intraday(
                     trade_exit_types.append("stop")
                 else:
                     trade_exit_types.append("time")
+                trade_hold_bars.append(float(bars))
                 if stop_hit and ret < 0:
                     consec_stops += 1
                 elif ret > 0:
@@ -600,7 +639,14 @@ def _backtest_stats_global_intraday(
                     partial_taken_2 = False
                     max_fav = 0.0
 
-        peak = max(peak, equity)
+        # Drawdown duration tracking (NEW)
+        if equity >= peak:
+            peak = equity
+            current_drawdown_duration = 0
+        else:
+            current_drawdown_duration += 1
+            if current_drawdown_duration > max_drawdown_duration:
+                max_drawdown_duration = current_drawdown_duration
         mdd = min(mdd, (equity / max(peak, ATR_EPS)) - 1.0)
         # Equity drawdown circuit-breaker (progressive re-entry: 20 bars, was 30)
         if gp.equity_drawdown_stop_pct > 0 and (equity / max(peak, ATR_EPS)) - 1.0 < -gp.equity_drawdown_stop_pct:
@@ -609,8 +655,12 @@ def _backtest_stats_global_intraday(
     exposure = float(exposure_acc / max(1, n - 1))
     if len(trade_rets) == 0:
         return {"total_return": float(equity - 1.0), "mdd": float(mdd), "sharpe": 0.0,
+                "sortino": 0.0, "profit_factor": 0.0, "expectancy": 0.0, "payoff_ratio": 0.0,
+                "max_drawdown_duration": float(max_drawdown_duration),
+                "cagr": _compute_cagr(float(equity - 1.0), int(n)),
                 "n_trades": 0.0, "win_rate": 0.0, "win_rate_target": 0.0,
                 "pct_exit_take": 0.0, "pct_exit_stop": 0.0, "pct_exit_time": 0.0,
+                "avg_hold_bars": 0.0, "median_hold_bars": 0.0, "max_hold_bars": 0.0,
                 "avg_trade": 0.0, "exposure": exposure}
     tr = np.asarray(trade_rets, dtype=np.float64)
     # v8: exit-type metrics
@@ -624,6 +674,29 @@ def _backtest_stats_global_intraday(
     trades_per_year = len(tr) / n_years
     ann_factor = np.sqrt(min(trades_per_year, 252))
     ann_sharpe = float(np.mean(tr) / (np.std(tr) + 1e-12) * ann_factor)
+    # NEW: codex swing-trade metrics
+    mean_tr = float(np.mean(tr))
+    std_tr = float(np.std(tr))
+    downside = np.minimum(tr, 0.0)
+    downside_dev = float(np.sqrt(np.mean(np.square(downside)))) if len(downside) > 0 else 0.0
+    wins_arr = tr[tr > 0]
+    losses_arr = tr[tr < 0]
+    avg_win = float(np.mean(wins_arr)) if len(wins_arr) > 0 else 0.0
+    avg_loss = abs(float(np.mean(losses_arr))) if len(losses_arr) > 0 else 0.0
+    gross_profit = float(np.sum(wins_arr)) if len(wins_arr) > 0 else 0.0
+    gross_loss = abs(float(np.sum(losses_arr))) if len(losses_arr) > 0 else 0.0
+    win_rate_val = float((tr > 0).mean())
+    expectancy = float(np.clip(win_rate_val * avg_win - (1.0 - win_rate_val) * avg_loss, -1.0, 1.0))
+    ann_sortino = float(np.clip(_safe_metric_ratio(mean_tr, downside_dev, cap=10.0) * ann_factor, -10.0, 10.0))
+    profit_factor = _safe_positive_ratio(gross_profit, gross_loss, cap=10.0)
+    payoff_ratio = _safe_positive_ratio(avg_win, avg_loss, cap=10.0)
+    cagr_val = _compute_cagr(float(equity - 1.0), int(n))
+    hold_arr = np.asarray(trade_hold_bars, dtype=np.float64) if len(trade_hold_bars) > 0 else np.zeros(len(tr), dtype=np.float64)
+    if hold_arr.shape[0] != tr.shape[0]:
+        hold_arr = np.resize(hold_arr, tr.shape[0])
+    avg_hold_bars = float(np.mean(hold_arr)) if len(hold_arr) > 0 else 0.0
+    median_hold_bars = float(np.median(hold_arr)) if len(hold_arr) > 0 else 0.0
+    max_hold_bars = float(np.max(hold_arr)) if len(hold_arr) > 0 else 0.0
     # -- Trade return distribution buckets (v5) --
     # Faixas: >15%, 10-15%, 5-10%, 2-5%, 0-2%, -2-0%, -5 to -2%, -10 to -5%, <-10%
     pct_gt15  = float((tr > 0.15).mean())
@@ -644,6 +717,13 @@ def _backtest_stats_global_intraday(
         "total_return": float(equity - 1.0),
         "mdd": float(mdd),
         "sharpe": ann_sharpe,
+        # NEW: codex swing-trade metrics
+        "sortino": ann_sortino,
+        "profit_factor": profit_factor,
+        "expectancy": expectancy,
+        "payoff_ratio": payoff_ratio,
+        "max_drawdown_duration": float(max_drawdown_duration),
+        "cagr": cagr_val,
         "n_trades": float(len(tr)),
         "win_rate": float((tr > 0).mean()),
         # v8: exit-type breakdown + strict alvo-hit metric
@@ -653,6 +733,10 @@ def _backtest_stats_global_intraday(
         "pct_exit_time": pct_exit_time,
         "avg_trade": float(np.mean(tr)),
         "trade_std": float(np.std(tr)),
+        # NEW: hold profile
+        "avg_hold_bars": avg_hold_bars,
+        "median_hold_bars": median_hold_bars,
+        "max_hold_bars": max_hold_bars,
         "exposure": exposure,
         # Distribution buckets
         "pct_gt15": pct_gt15, "pct_10_15": pct_10_15, "pct_5_10": pct_5_10,
