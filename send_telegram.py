@@ -5,6 +5,13 @@ import numpy as np
 import pandas as pd
 from openpyxl import load_workbook
 
+# Guardrail: allow callers (e.g., ensure_daily_telegram_file.py refresh) to
+# explicitly suppress Telegram sends to guarantee exactly-one delivery.
+_disable = str(os.environ.get("GA_DISABLE_TELEGRAM_SEND", "")).strip().lower()
+if _disable not in ("", "0", "false", "no", "off"):
+    print("[TELEGRAM] GA_DISABLE_TELEGRAM_SEND is set; skipping Telegram send.")
+    raise SystemExit(0)
+
 # Use current env token if set, otherwise fallback to the one in ga_run.py
 if not os.environ.get("TELEGRAM_BOT_TOKEN"):
     from ga_run import TELEGRAM_BOT_TOKEN as _default_token
@@ -121,50 +128,51 @@ if os.path.exists(wr_json_path):
     except Exception as _e:
         print(f"[WARN] wr_deep_dive load failed: {_e}")
 
-# -- Premium/High-Quality subsets: load pre-computed alpha analysis --
-# Shows where the model has REAL edge over full history (more reliable than
-# a single walk-forward test window). Computed by analysis/ticker_alpha_subset.py.
+# -- Premium/High-Quality subsets: use CURRENT operational tiers from Summary --
 premium_caption = ""
-premium_json_path = "analysis/ticker_alpha_analysis.json"
-if os.path.exists(premium_json_path):
+uni_col_s = col(h_sum, "universe")
+cagr_col_s = col(h_sum, "test_cagr")
+alpha_col_s = col(h_sum, "test_alpha_ann")
+if uni_col_s >= 0 and cagr_col_s >= 0 and alpha_col_s >= 0:
     try:
-        with open(premium_json_path, "r", encoding="utf-8") as _fpa:
-            _alpha_data = json.load(_fpa)
-        _all_tk = _alpha_data.get("all_tickers", [])
-
-        def _subset_stats(tickers_list):
-            rows = [r for r in _all_tk if r["ticker"] in set(tickers_list)]
+        def _subset_stats(tier_name):
+            rows = [
+                r for r in rows_sum
+                if r[uni_col_s] == tier_name
+                and r[wr_col_s] is not None
+                and r[cagr_col_s] is not None
+                and r[alpha_col_s] is not None
+                and r[mdd_col_s] is not None
+            ]
             if not rows:
                 return None
             return {
                 "n": len(rows),
-                "wr": float(np.median([r["wr"] for r in rows])) * 100,
-                "ret": float(np.median([r["ret_ann"] for r in rows])) * 100,
-                "alp": float(np.median([r["alpha_ann_pp"] for r in rows])),
-                "mdd": float(np.median([r["mdd"] for r in rows])) * 100,
+                "wr": float(np.median([float(r[wr_col_s]) for r in rows])) * 100,
+                "ret": float(np.median([float(r[cagr_col_s]) for r in rows])) * 100,
+                "alp": float(np.median([float(r[alpha_col_s]) for r in rows])) * 100,
+                "mdd": float(np.median([float(r[mdd_col_s]) for r in rows])) * 100,
             }
 
-        _hq_list = _alpha_data.get("high_quality_subset", {}).get("tickers", [])
-        _prem_list = _alpha_data.get("premium_subset", {}).get("tickers", [])
-        _hq = _subset_stats(_hq_list) if _hq_list else None
-        _prem = _subset_stats(_prem_list) if _prem_list else None
+        _prem = _subset_stats("PREMIUM")
+        _hq = _subset_stats("HIGH_QUAL")
 
         subset_lines = []
         if _hq:
             subset_lines.append(
-                f"\n\nHigh-Quality (n={_hq['n']}, alpha>=0 & WR>=65%):\n"
+                f"\n\nHigh-Quality atual (n={_hq['n']}):\n"
                 f"  WR {_hq['wr']:.1f}% | Ret {_hq['ret']:+.1f}%a.a. "
                 f"| Alpha {_hq['alp']:+.1f}pp | MDD {_hq['mdd']:.1f}%"
             )
         if _prem:
             subset_lines.append(
-                f"\nPremium (n={_prem['n']}, alpha>=+2pp & WR>=68%):\n"
+                f"\nPremium atual (n={_prem['n']}):\n"
                 f"  WR {_prem['wr']:.1f}% | Ret {_prem['ret']:+.1f}%a.a. "
                 f"| Alpha {_prem['alp']:+.1f}pp | MDD {_prem['mdd']:.1f}%"
             )
         premium_caption = "".join(subset_lines)
     except Exception as _e:
-        print(f"[WARN] premium subset load failed: {_e}")
+        print(f"[WARN] premium/current-tier caption build failed: {_e}")
 
 # Current checkpoint fitness
 ck = json.load(open("global_ga_checkpoint.json"))
@@ -213,4 +221,6 @@ print("=== CAPTION ===")
 print(caption)
 print()
 print(f"=== SENDING {xlsx} ({os.path.getsize(xlsx)} bytes) ===")
-_send_telegram(xlsx, caption)
+ok = _send_telegram(xlsx, caption)
+if not ok:
+    raise SystemExit(2)

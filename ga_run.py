@@ -87,7 +87,10 @@ from payload_store import PayloadStore, build_window_plans
 from ga_run_modular_final import run_global_ga_two_stage
 from auto_tune import AutoTuner
 
-from deap import base, creator, tools, algorithms
+try:
+    from deap import base, creator, tools, algorithms
+except ImportError:
+    base = creator = tools = algorithms = None
 
 from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor
 from sklearn.model_selection import TimeSeriesSplit
@@ -328,6 +331,8 @@ GA_WORKERS_OVERRIDE = os.environ.get("GA_WORKERS_OVERRIDE", None)
 # 1) DEAP SETUP
 # ==============================================================================
 def setup_global_deap():
+    if base is None or creator is None or not hasattr(base, "Fitness"):
+        return
     if not hasattr(creator, "FitnessMax_PT"):
         creator.create("FitnessMax_PT", base.Fitness, weights=(1.0,))
     if not hasattr(creator, "Individual_PT"):
@@ -987,6 +992,143 @@ def _attach_benchmark_stats(stats: Dict[str, float], close: np.ndarray) -> Dict[
         stats.get("cagr", _compute_cagr(stats.get("total_return", 0.0), len(close))) - buy_hold_cagr
     )
     return stats
+
+
+def _finalize_backtest_stats(
+    trade_rets: List[float],
+    trade_exit_types: List[str],
+    trade_hold_bars: List[float],
+    exposure: float,
+    total_return: float,
+    mdd: float,
+    n_bars: int,
+    max_drawdown_duration: int,
+) -> Dict[str, float]:
+    """Public helper that computes the full swing-trade metrics dict from
+    raw trade data. Used by tests and by run_local_fullmetric_sweep helpers
+    that need to recompute stats from saved artifacts.
+
+    The inline logic in backtest_stats_global_intraday() also produces these
+    same keys; this function is provided so callers can build a stats dict
+    without re-running the full backtest loop.
+    """
+    base_stats = {
+        "total_return": float(total_return),
+        "mdd": float(mdd),
+        "sharpe": 0.0,
+        "sortino": 0.0,
+        "profit_factor": 0.0,
+        "expectancy": 0.0,
+        "payoff_ratio": 0.0,
+        "max_drawdown_duration": float(max_drawdown_duration),
+        "cagr": _compute_cagr(total_return, n_bars),
+        "n_trades": 0.0,
+        "win_rate": 0.0,
+        "win_rate_target": 0.0,
+        "win_rate_target_robust": 0.0,
+        "pct_exit_take": 0.0,
+        "pct_exit_stop": 0.0,
+        "pct_exit_time": 0.0,
+        "avg_trade": 0.0,
+        "trade_std": 0.0,
+        "avg_hold_bars": 0.0,
+        "median_hold_bars": 0.0,
+        "max_hold_bars": 0.0,
+        "exposure": float(exposure),
+        "pct_gt15": 0.0,
+        "pct_10_15": 0.0,
+        "pct_5_10": 0.0,
+        "pct_2_5": 0.0,
+        "pct_0_2": 0.0,
+        "pct_n2_0": 0.0,
+        "pct_n5_n2": 0.0,
+        "pct_n10_n5": 0.0,
+        "pct_lt_n10": 0.0,
+        "dist_quality": 0.0,
+        "big_wins_pct": 0.0,
+        "big_losses_pct": 0.0,
+    }
+    if len(trade_rets) == 0:
+        return base_stats
+
+    tr = np.asarray(trade_rets, dtype=np.float64)
+    exit_arr = np.asarray(trade_exit_types)
+    hold_arr = np.asarray(trade_hold_bars, dtype=np.float64) if len(trade_hold_bars) > 0 else np.zeros(len(tr), dtype=np.float64)
+    if hold_arr.shape[0] != tr.shape[0]:
+        hold_arr = np.resize(hold_arr, tr.shape[0])
+    n_years = max(float(n_bars) / 252.0, 0.1)
+    trades_per_year = len(tr) / n_years
+    ann_factor = np.sqrt(min(trades_per_year, 252.0))
+    mean_tr = float(np.mean(tr))
+    std_tr = float(np.std(tr))
+    downside = np.minimum(tr, 0.0)
+    downside_dev = float(np.sqrt(np.mean(np.square(downside)))) if len(downside) > 0 else 0.0
+
+    pct_exit_take = float((exit_arr == "take").mean()) if len(exit_arr) > 0 else 0.0
+    pct_exit_stop = float(((exit_arr == "stop") | (exit_arr == "hard_loss")).mean()) if len(exit_arr) > 0 else 0.0
+    pct_exit_time = float((exit_arr == "time").mean()) if len(exit_arr) > 0 else 0.0
+    take_mask = (exit_arr == "take")
+    time_pos_mask = (exit_arr == "time") & (tr > 0)
+    wr_target_robust = float((take_mask | time_pos_mask).mean()) if len(exit_arr) > 0 else 0.0
+
+    wins = tr[tr > 0]
+    losses = tr[tr < 0]
+    avg_win = float(np.mean(wins)) if len(wins) > 0 else 0.0
+    avg_loss = abs(float(np.mean(losses))) if len(losses) > 0 else 0.0
+    gross_profit = float(np.sum(wins)) if len(wins) > 0 else 0.0
+    gross_loss = abs(float(np.sum(losses))) if len(losses) > 0 else 0.0
+    win_rate = float((tr > 0).mean())
+    expectancy = float(np.clip(win_rate * avg_win - (1.0 - win_rate) * avg_loss, -1.0, 1.0))
+    ann_sharpe = float(np.clip(_safe_metric_ratio(mean_tr, std_tr, cap=10.0) * ann_factor, -10.0, 10.0))
+    ann_sortino = float(np.clip(_safe_metric_ratio(mean_tr, downside_dev, cap=10.0) * ann_factor, -10.0, 10.0))
+    profit_factor = _safe_positive_ratio(gross_profit, gross_loss, cap=10.0)
+    payoff_ratio = _safe_positive_ratio(avg_win, avg_loss, cap=10.0)
+
+    pct_gt15 = float((tr > 0.15).mean())
+    pct_10_15 = float(((tr > 0.10) & (tr <= 0.15)).mean())
+    pct_5_10 = float(((tr > 0.05) & (tr <= 0.10)).mean())
+    pct_2_5 = float(((tr > 0.02) & (tr <= 0.05)).mean())
+    pct_0_2 = float(((tr > 0.00) & (tr <= 0.02)).mean())
+    pct_n2_0 = float(((tr > -0.02) & (tr <= 0.00)).mean())
+    pct_n5_n2 = float(((tr > -0.05) & (tr <= -0.02)).mean())
+    pct_n10_n5 = float(((tr > -0.10) & (tr <= -0.05)).mean())
+    pct_lt_n10 = float((tr <= -0.10).mean())
+    big_wins = pct_gt15 + pct_10_15 + pct_5_10
+    big_losses = pct_lt_n10 + pct_n10_n5 + pct_n5_n2
+    dist_quality = float(np.clip((big_wins - big_losses + 0.5), 0.0, 1.0))
+
+    base_stats.update({
+        "sharpe": ann_sharpe,
+        "sortino": ann_sortino,
+        "profit_factor": profit_factor,
+        "expectancy": expectancy,
+        "payoff_ratio": payoff_ratio,
+        "n_trades": float(len(tr)),
+        "win_rate": win_rate,
+        "win_rate_target": pct_exit_take,
+        "win_rate_target_robust": wr_target_robust,
+        "pct_exit_take": pct_exit_take,
+        "pct_exit_stop": pct_exit_stop,
+        "pct_exit_time": pct_exit_time,
+        "avg_trade": mean_tr,
+        "trade_std": std_tr,
+        "avg_hold_bars": float(np.mean(hold_arr)) if len(hold_arr) > 0 else 0.0,
+        "median_hold_bars": float(np.median(hold_arr)) if len(hold_arr) > 0 else 0.0,
+        "max_hold_bars": float(np.max(hold_arr)) if len(hold_arr) > 0 else 0.0,
+        "pct_gt15": pct_gt15,
+        "pct_10_15": pct_10_15,
+        "pct_5_10": pct_5_10,
+        "pct_2_5": pct_2_5,
+        "pct_0_2": pct_0_2,
+        "pct_n2_0": pct_n2_0,
+        "pct_n5_n2": pct_n5_n2,
+        "pct_n10_n5": pct_n10_n5,
+        "pct_lt_n10": pct_lt_n10,
+        "dist_quality": dist_quality,
+        "big_wins_pct": big_wins,
+        "big_losses_pct": big_losses,
+    })
+    return base_stats
 
 
 def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalParams, precomputed: Optional[Dict[str, np.ndarray]] = None, stage_gate: Optional[str] = None) -> Dict[str, float]:

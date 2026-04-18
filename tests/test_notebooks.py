@@ -89,7 +89,10 @@ class TestGANotebook(unittest.TestCase):
                 "open": 30.10, "high": 30.55, "low": 29.90, "close": 30.25,
                 "EV_buy_fund_3": 0.42,
             }])
-            fixture_df.to_parquet(input_parquet, index=False)
+            try:
+                fixture_df.to_parquet(input_parquet, index=False)
+            except ImportError as exc:
+                self.skipTest(f"Parquet engine not available in test environment: {exc}")
 
             loaded = pd.read_parquet(input_parquet)
             self.assertEqual(set(loaded.columns), REQUIRED_INPUT_COLS)
