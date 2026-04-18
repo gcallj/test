@@ -133,20 +133,85 @@ GA disse HOLD mas Stage 2 ideal/momentum indica oportunidade? Promove SE:
 | `sweep_chunk3_variants.py` | Parameter sweep post-hoc (rr, trailing, partial) |
 | `sweep_universe_subset.py` | Avalia modelo em subsets do universo |
 | `validate_stage_filter.py` | Valida Minervini Stage gate no backtest |
+| `sweep_learnings.py` | **Agregador**: le todos os sweeps + state + checkpoint, produz `sweep_learnings_summary.md` com graveyard + hot zones + sugestao do proximo sweep |
+| `optimization_log.md` | **Log estruturado** anexado por `run_continuous_improvement.py` a cada ciclo (sucessos E falhas) |
+| `optimization_attempts_20260416.md` | Log humano dos 11 attempts do codex (Apr 16-18) |
+
+### Rotina de melhoria continua (toolkit)
+
+| Arquivo | Funcao |
+|---------|--------|
+| `run_continuous_improvement.py` | **Orquestrador**: rotaciona 6 categorias de genes, chama sweep + apply, anexa log markdown |
+| `run_local_fullmetric_sweep.py` | Sweep +/- step na vizinhanca de N genes com acceptance gates |
+| `apply_fullmetric_sweep_best.py` | Aplica candidato promovivel ao checkpoint (com backup automatico) |
+| `run_local_ga_staged.py` | Staged GA com acceptance gates compartilhados (eval-only ou retrain) |
+| `overnight_alpha_until_0600.py` | Runner contínuo ate hora limite (alternativa ao continuous) |
+| `continuous_improvement_state.json` | State de rotacao (quando cada categoria foi swept) |
 
 ---
 
 ## Como Executar
 
+### Diario (sinais + Telegram)
 ```bash
-# Diario (~30 min)
-python predict_daily.py
+python predict_daily.py     # ~30 min: ETL + GA load → summary_latest.xlsx → Telegram
+```
 
-# Retrain seeded (usa checkpoint atual como semente)
-python retrain_with_wr_target.py    # 3 chunks × 3 gens × 24 pop
+### Rotina de melhoria continua (manual no Claude)
 
-# Pipeline completa (treina tudo, ~4-8h)
-python ga_run.py
+A rotina chama `run_local_fullmetric_sweep.py` em vizinhanca de 1 categoria de
+genes, aplica o candidato se passar nos guardrails, e anexa entry estruturada
+ao log markdown.
+
+```bash
+# Status: quais categorias ja foram exploradas e quando
+python run_continuous_improvement.py --status
+
+# 1 ciclo automatico (escolhe categoria menos-recentemente-explorada)
+python run_continuous_improvement.py
+
+# Categoria especifica (A=risk, B=take_profit, C=timing,
+# D=entry_filter, E=regime_vol, F=trailing)
+python run_continuous_improvement.py --category D
+
+# N ciclos consecutivos
+python run_continuous_improvement.py --max-cycles 6
+
+# Loop ate hora limite (overnight)
+python run_continuous_improvement.py --until 06:00
+
+# Atualizar agregador apos rodar ciclos (le todos os sweeps + state)
+python analysis/sweep_learnings.py
+```
+
+Cada ciclo:
+1. Le `continuous_improvement_state.json` para escolher proxima categoria
+2. Roda `run_local_fullmetric_sweep.py` na vizinhanca daquela categoria (~30-60 min)
+3. Se passar acceptance gates (vs git:main + vs incumbent), promove via
+   `apply_fullmetric_sweep_best.py` (faz backup automatico)
+4. Anexa entry ao `analysis/optimization_log.md` (sucesso OU falha — falhas
+   formam o graveyard que ensina o que NAO funciona)
+5. Atualiza state file
+
+**Maximizar periodicidade**: encadeie ciclos com `--max-cycles 6` ou
+`--until 06:00`. Cada categoria leva ~30-60 min; 6 categorias completam um
+"giro" em 3-6 horas.
+
+### Rotina automatica (Claude Code remote trigger — RECOMENDADO)
+- Trigger: `trig_01CsyZBNYWPvAzu7CxRfGrpi` (GA continuous improvement)
+- Periodicidade: **a cada 2 horas** (12x por dia, intervalo minimo da API)
+- Ambiente: cloud isolada da Anthropic (CCR), nao depende da maquina local
+- Acao: 1 ciclo de `run_continuous_improvement.py` + push automatico se promover
+- UI: https://claude.ai/code/scheduled/trig_01CsyZBNYWPvAzu7CxRfGrpi
+
+### Rotina automatica (GitHub Actions — backup)
+- `.github/workflows/weekly_sweep.yml` — sabado 22:00 UTC, 1 ciclo, auto-commit
+- `.github/workflows/daily_pipeline.yml` — todos os dias 21:30 UTC, predict_daily
+
+### Retrain pesado (raro)
+```bash
+python retrain_with_wr_target.py    # 3 chunks × 3 gens × 24 pop (~1-2h)
+python ga_run.py                    # Treina do zero (~4-8h)
 ```
 
 ---
