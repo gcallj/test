@@ -153,9 +153,15 @@ def _compute_acceptance(chunk_metrics, base_metrics):
         "mdd_p75_not_worse": bool(float(chunk_metrics.get("mdd_p75", 0.0) or 0.0) <= mdd_p75_limit + 1e-9),
         "mdd_duration_not_worse": bool(float(chunk_metrics.get("mdd_duration_med", 0.0) or 0.0) <= mdd_duration_limit + 1e-9),
         "mean_alpha_ann_up": bool(float(chunk_metrics.get("mean_alpha_ann", 0.0) or 0.0) > float(base_metrics.get("mean_alpha_ann", 0.0) or 0.0) + 1e-9),
+        # B2 (overfitting prevention): no alpha regression vs git:main baseline allowed.
+        # Historic tolerance was -0.002 (permitia -0.2pp de piora); com alpha atual
+        # ja em -8.29% vs buy-and-hold (subperformance significativa), nao podemos
+        # aceitar novas promocoes que piorem alpha, mesmo marginalmente.
+        # Override via GA_ALPHA_FLOOR_TOLERANCE_PP (default "0.0" = zero tolerance).
         "mean_alpha_ann_floor": bool(
             float(chunk_metrics.get("mean_alpha_ann", 0.0) or 0.0)
-            >= float(base_metrics.get("mean_alpha_ann", 0.0) or 0.0) - 0.002
+            >= float(base_metrics.get("mean_alpha_ann", 0.0) or 0.0)
+               - (float(os.environ.get("GA_ALPHA_FLOOR_TOLERANCE_PP", "0.0")) / 100.0)
         ),
         "alpha_ann_pos_rate_up": bool(float(chunk_metrics.get("alpha_ann_pos_rate", 0.0) or 0.0) >= alpha_pos_target - 1e-9),
         "alpha_ann_pos_rate_floor": bool(float(chunk_metrics.get("alpha_ann_pos_rate", 0.0) or 0.0) >= alpha_pos_floor - 1e-9),

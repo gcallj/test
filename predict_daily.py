@@ -84,6 +84,22 @@ def step_ga_load():
     print(f"[OK] GA done in {time.time() - t0:.0f}s")
 
 
+def step_log_predictions():
+    """C1 (overfitting prevention): append signals do summary_latest.xlsx
+    em analysis/predictions_log.jsonl para criar ground truth no futuro.
+    Nunca quebra o pipeline — erros viram warning."""
+    print("\n" + "=" * 60)
+    print("STEP LOG: append predictions to predictions_log.jsonl")
+    print("=" * 60)
+    try:
+        from analysis.log_predictions import append_log
+        n = append_log(dry_run=False)
+        print(f"[OK] logged {n} predictions")
+    except Exception as e:
+        # Best-effort: nao queremos que um bug no logger quebre o daily pipeline
+        print(f"[WARN] log_predictions falhou (nao-fatal): {e}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Daily Predict Pipeline")
     parser.add_argument(
@@ -108,6 +124,7 @@ def main():
         step_final()
 
     step_ga_load()
+    step_log_predictions()
 
     elapsed = time.time() - t_start
     print(f"\n{'=' * 60}")
