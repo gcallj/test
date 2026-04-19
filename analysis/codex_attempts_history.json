@@ -1,11 +1,11 @@
 {
   "codex_sync_metadata": {
     "source_file": "C:/Users/gabri/.codex/worktrees/0b30/test/analysis/optimization_attempts_20260416.md",
-    "source_sha1": "0cf7ea389d0521251fb2e3f2b9ae57e8e4f04e4e",
-    "last_parsed": "2026-04-19T19:14:29+02:00",
+    "source_sha1": "03a7cb514e18f6ea309bf06d73dedf1abc71326a",
+    "last_parsed": "2026-04-19T20:57:24+02:00",
     "parser_version": 1,
-    "n_attempts_parsed": 13,
-    "n_promoted": 5,
+    "n_attempts_parsed": 14,
+    "n_promoted": 6,
     "n_parse_errors": 0
   },
   "attempts": [
@@ -396,6 +396,43 @@
       },
       "promoted": false,
       "learning": "`momentum_confirm_days: 5 -> 4` is the strongest uncovered E-category direction: it improves `WR_target`, alpha, and drawdown simultaneously, but it gives back about `0.25pp` of `WR_med_all` on its own and therefore needs a paired WR-restoring lever. extra volatility filtering (`volatility_filter_percentile: 0.05 -> 0.10`) is over-defensive here: fit and risk improve, but alpha regresses to `-8.34%` and `alpha_ann_pos_rate` falls below the acceptance floor. `regime_threshold: 0.25 -> 0.20` is st"
+    },
+    {
+      "attempt_id": "27",
+      "section_title": "Full-metric sweep (momentum WR-restore combo probe) - PROMOTED",
+      "timestamp": "2026-04-19T18:54:45Z",
+      "sweep_file": "local_fullmetric_sweep_result_20260419_2047_momentum_wrrestore.json",
+      "genes": [
+        "momentum_confirm_days",
+        "consecutive_loss_cooldown",
+        "partial_take_level",
+        "regime_threshold",
+        "ma_filter_mode",
+        "volatility_filter_percentile"
+      ],
+      "moves": [],
+      "metrics": {
+        "incumbent": {
+          "fit": 20.9898,
+          "wr_med_all": 0.6970000000000001,
+          "wr_target_med_all": 0.6944,
+          "mean_alpha_ann": -0.08259999999999999,
+          "mdd_med": 0.1131,
+          "mdd_duration_med": 226.5,
+          "trades_med": 31.5
+        },
+        "candidate": {
+          "fit": 21.2051,
+          "wr_med_all": 0.6970000000000001,
+          "wr_target_med_all": 0.6970000000000001,
+          "mean_alpha_ann": -0.0825,
+          "mdd_med": 0.1131,
+          "mdd_duration_med": 228.5,
+          "trades_med": 31.0
+        }
+      },
+      "promoted": true,
+      "learning": "`consecutive_loss_cooldown` still has one more safe step beyond the prior `6 -> 7` promotion: `7 -> 8` adds one more `>=70%` ticker (`57 -> 58`) and upgrades `WR_target_med_all` without giving back `WR_med_all`. The intended `momentum_confirm_days:-1` rescue still did not materialize in this budget. Even with multiple hot-zone WR restorers in the sweep, no momentum-including variant beat the incumbent guardrails, so the WR-restoration burden remains the binding constraint. `partial_take_level:+1"
     }
   ]
 }
