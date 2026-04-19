@@ -1,6 +1,6 @@
 # Sweep Learnings Summary
 
-_Generated: 2026-04-19T01:44:22+00:00_
+_Generated: 2026-04-19T02:37:40+00:00_
 
 Aggregates all `local_fullmetric_sweep_result*.json` files plus the
 continuous-improvement state. Use this file to plan the next cycle.
@@ -8,16 +8,16 @@ continuous-improvement state. Use this file to plan the next cycle.
 ## Current snapshot
 
 - Checkpoint fitness: `20.717201265906507`
-- Total sweeps seen: **14**
+- Total sweeps seen: **15**
 - Total promotions: **7** (including 2 from codex log)
-- Promotion rate: **25.0%** (over 28 total attempts)
-- Continuous cycles run: 7
+- Promotion rate: **24.1%** (over 29 total attempts)
+- Continuous cycles run: 8
 - Continuous promotions: 0
 - Codex attempts synced: **14** (7 promoted) from `optimization_attempts_20260416.md`
 
 ## Next suggested sweep
 
-categoria mais antiga: **A_risk_management** (ultima vez: 2026-04-18T15:42:25+00:00) -> `python run_continuous_improvement.py --category A`
+categoria mais antiga: **B_take_profit** (ultima vez: 2026-04-18T19:15:37+00:00) -> `python run_continuous_improvement.py --category B`
 
 ## Promotion timeline (chronological)
 
@@ -38,17 +38,18 @@ Genes tentados >= 2 vezes sem nenhuma promocao. Considere SKIP no proximo ciclo.
 
 | Gene | Attempts | Promotions | (codex) Attempts | (codex) Promotions |
 |---|---:|---:|---:|---:|
+| `stop_atr_mult` | 5 | 0 | 0 | 0 |
 | `reward_risk_ratio` | 5 | 0 | 1 | 0 |
 | `partial_take_level_2` | 5 | 0 | 1 | 0 |
-| `stop_atr_mult` | 4 | 0 | 0 | 0 |
+| `stop_tighten_factor` | 4 | 0 | 0 | 0 |
 | `partial_take_pct_2` | 4 | 0 | 1 | 0 |
+| `max_loss_per_trade_pct` | 4 | 0 | 0 | 0 |
+| `equity_drawdown_stop_pct` | 4 | 0 | 0 | 0 |
 | `score_percentile_trigger` | 4 | 0 | 0 | 0 |
 | `entry_discount_atr_frac` | 4 | 0 | 1 | 0 |
 | `score_strength_scaling` | 4 | 0 | 1 | 0 |
-| `stop_tighten_factor` | 3 | 0 | 0 | 0 |
+| `stop_tighten_after_bars` | 3 | 0 | 0 | 0 |
 | `time_stop_bars` | 3 | 0 | 0 | 0 |
-| `max_loss_per_trade_pct` | 3 | 0 | 0 | 0 |
-| `equity_drawdown_stop_pct` | 3 | 0 | 0 | 0 |
 | `min_signal_strength` | 3 | 0 | 0 | 0 |
 | `volume_confirm_mode` | 3 | 0 | 1 | 0 |
 | `momentum_confirm_days` | 3 | 0 | 1 | 0 |
@@ -57,7 +58,6 @@ Genes tentados >= 2 vezes sem nenhuma promocao. Considere SKIP no proximo ciclo.
 | `z_threshold` | 3 | 0 | 0 | 0 |
 | `signal_ema_span` | 3 | 0 | 0 | 0 |
 | `entry_confirmation_days` | 3 | 0 | 0 | 0 |
-| `stop_tighten_after_bars` | 2 | 0 | 0 | 0 |
 
 ## Hot zones (genes que ja promoveram)
 
@@ -78,7 +78,7 @@ Genes onde alguma combinacao funcionou. Vale revisitar com novos vizinhos.
 
 | Category | Last swept | Runs | Promotions |
 |---|---|---:|---:|
-| A_risk_management | 2026-04-18T15:42:25+00:00 | 1 | 0 |
+| A_risk_management | 2026-04-19T02:37:22+00:00 | 2 | 0 |
 | B_take_profit | 2026-04-18T19:15:37+00:00 | 1 | 0 |
 | C_timing | 2026-04-18T20:39:53+00:00 | 1 | 0 |
 | D_entry_filter | 2026-04-19T01:44:00+00:00 | 2 | 0 |

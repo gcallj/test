@@ -3,8 +3,8 @@
   "created_at": "2026-04-18T14:14:23+02:00",
   "categories": {
     "A_risk_management": {
-      "last_swept": "2026-04-18T15:42:25+00:00",
-      "n_runs": 1,
+      "last_swept": "2026-04-19T02:37:22+00:00",
+      "n_runs": 2,
       "n_promotions": 0
     },
     "B_take_profit": {
@@ -33,7 +33,7 @@
       "n_promotions": 0
     }
   },
-  "total_cycles": 7,
+  "total_cycles": 8,
   "total_promotions": 0,
-  "last_updated": "2026-04-19T01:44:00+00:00"
+  "last_updated": "2026-04-19T02:37:22+00:00"
 }
