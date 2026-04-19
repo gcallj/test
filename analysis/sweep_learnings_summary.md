@@ -1,6 +1,6 @@
 # Sweep Learnings Summary
 
-_Generated: 2026-04-19T07:45:14+00:00_
+_Generated: 2026-04-19T07:51:11+00:00_
 
 Aggregates all `local_fullmetric_sweep_result*.json` files plus the
 continuous-improvement state. Use this file to plan the next cycle.
@@ -8,10 +8,10 @@ continuous-improvement state. Use this file to plan the next cycle.
 ## Current snapshot
 
 - Checkpoint fitness: `20.717201265906507`
-- Total sweeps seen: **17**
+- Total sweeps seen: **18**
 - Total promotions: **7** (including 2 from codex log)
-- Promotion rate: **22.6%** (over 31 total attempts)
-- Continuous cycles run: 9
+- Promotion rate: **21.9%** (over 32 total attempts)
+- Continuous cycles run: 10
 - Continuous promotions: 0
 - Codex attempts synced: **14** (7 promoted) from `optimization_attempts_20260416.md`
 
@@ -38,9 +38,9 @@ Genes tentados >= 2 vezes sem nenhuma promocao. Considere SKIP no proximo ciclo.
 
 | Gene | Attempts | Promotions | (codex) Attempts | (codex) Promotions |
 |---|---:|---:|---:|---:|
-| `reward_risk_ratio` | 7 | 0 | 1 | 0 |
-| `partial_take_level_2` | 7 | 0 | 1 | 0 |
-| `partial_take_pct_2` | 6 | 0 | 1 | 0 |
+| `reward_risk_ratio` | 8 | 0 | 1 | 0 |
+| `partial_take_level_2` | 8 | 0 | 1 | 0 |
+| `partial_take_pct_2` | 7 | 0 | 1 | 0 |
 | `stop_atr_mult` | 5 | 0 | 0 | 0 |
 | `stop_tighten_factor` | 4 | 0 | 0 | 0 |
 | `max_loss_per_trade_pct` | 4 | 0 | 0 | 0 |
@@ -71,15 +71,15 @@ Genes onde alguma combinacao funcionou. Vale revisitar com novos vizinhos.
 | `volatility_filter_percentile` | 1 | 4 | 25% | 0 |
 | `consecutive_loss_cooldown` | 1 | 4 | 25% | 1 |
 | `trailing_stop_mode` | 1 | 5 | 20% | 0 |
-| `partial_take_pct` | 1 | 6 | 17% | 0 |
-| `partial_take_level` | 1 | 7 | 14% | 1 |
+| `partial_take_pct` | 1 | 7 | 14% | 0 |
+| `partial_take_level` | 1 | 8 | 12% | 1 |
 
 ## Category rotation status
 
 | Category | Last swept | Runs | Promotions |
 |---|---|---:|---:|
 | A_risk_management | 2026-04-19T03:31:30+00:00 | 2 | 0 |
-| B_take_profit | 2026-04-19T07:42:34+00:00 | 2 | 0 |
+| B_take_profit | 2026-04-19T07:47:29+00:00 | 3 | 0 |
 | C_timing | 2026-04-18T20:39:53+00:00 | 1 | 0 |
 | D_entry_filter | 2026-04-19T01:44:00+00:00 | 2 | 0 |
 | E_regime_vol | 2026-04-18T21:31:21+00:00 | 1 | 0 |
