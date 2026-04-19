@@ -185,3 +185,26 @@ tells future iterations which gene moves are dead ends.
 
 ---
 
+## 2026-04-19T03:31:30+00:00 - A_risk_management
+**Cycle**: #8  |  **Promoted**: NO  |  **Codex sync**: YES
+**Genes swept**: `stop_atr_mult, stop_tighten_after_bars, stop_tighten_factor, max_loss_per_trade_pct, equity_drawdown_stop_pct`
+**Sweep file**: `local_fullmetric_sweep_continuous_A_risk_management_20260419_032748.json`
+
+### Metrics
+
+| Source | fit | WR | WR_tgt | alpha_ann | MDD | trades |
+|---|---:|---:|---:|---:|---:|---:|
+| baseline (git:main) | 17.6724 | 67.21% | 66.67% | -8.47% | 10.48% | 27 |
+| incumbent (worktree) | 17.6724 | 67.21% | 66.67% | -8.47% | 10.48% | 27 |
+| **candidate** | 21.3929 | 68.50% | 68.42% | -8.35% | 10.48% | 28 |
+
+**Best candidate label**: `equity_drawdown_stop_pct:+1`
+
+**Moves applied to incumbent**:
+
+- `equity_drawdown_stop_pct`: `0.18` -> `0.2` (step 0.02)
+
+**Learning**: candidato `equity_drawdown_stop_pct: 0.18->0.2` parecia bom mas falhou nos gates: acceptance_vs_main. Esses moves entram para o graveyard: nao tentar novamente sem mudar contexto.
+
+---
+
