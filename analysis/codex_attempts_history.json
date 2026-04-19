@@ -1,11 +1,11 @@
 {
   "codex_sync_metadata": {
     "source_file": "C:/Users/gabri/.codex/worktrees/0b30/test/analysis/optimization_attempts_20260416.md",
-    "source_sha1": "8e35342600b97fe4f6558b45b3c010de1727cd28",
-    "last_parsed": "2026-04-18T16:33:25+02:00",
+    "source_sha1": "0cf7ea389d0521251fb2e3f2b9ae57e8e4f04e4e",
+    "last_parsed": "2026-04-19T19:14:29+02:00",
     "parser_version": 1,
-    "n_attempts_parsed": 14,
-    "n_promoted": 7,
+    "n_attempts_parsed": 13,
+    "n_promoted": 5,
     "n_parse_errors": 0
   },
   "attempts": [
@@ -360,88 +360,42 @@
       "learning": "`volatility_filter_percentile` appears to be another high-leverage operational safety knob: a tiny filter (`+0.05`) improved hit rate and reduced drawdown without collapsing trade counts."
     },
     {
-      "attempt_id": "12",
-      "section_title": "Full-metric sweep (signal confirmations + entry threshold) — PROMOTED",
-      "timestamp": "2026-04-18T13:55",
-      "sweep_file": "local_fullmetric_sweep_result_20260418_135553.json",
+      "attempt_id": "26",
+      "section_title": "Full-metric sweep (E_regime_vol revisit) - NOT PROMOTED",
+      "timestamp": "2026-04-19T16:54:22Z",
+      "sweep_file": "local_fullmetric_sweep_result_20260419_1647_regimevol_revisit.json",
       "genes": [
-        "entry_score_threshold",
-        "volume_confirm_mode",
-        "momentum_confirm_days",
+        "ma_filter_period",
+        "ma_filter_mode",
+        "vol_regime_mode",
+        "volatility_filter_percentile",
         "regime_threshold",
-        "score_strength_scaling",
-        "consecutive_loss_cooldown"
+        "volume_confirm_mode",
+        "momentum_confirm_days"
       ],
-      "moves": [
-        {
-          "gene": "consecutive_loss_cooldown",
-          "from": 6.0,
-          "to": 7.0
-        },
-        {
-          "gene": "entry_score_threshold",
-          "from": 0.15,
-          "to": 0.2
-        }
-      ],
+      "moves": [],
       "metrics": {
         "incumbent": {
-          "fit": 20.7172,
+          "fit": 20.9898,
           "wr_med_all": 0.6970000000000001,
           "wr_target_med_all": 0.6944,
-          "mean_alpha_ann": -0.0827,
-          "mdd_med": 0.1159
+          "mean_alpha_ann": -0.08259999999999999,
+          "mdd_med": 0.1131,
+          "mdd_duration_med": 226.5,
+          "trades_med": 31.5
         },
         "candidate": {
-          "fit": 21.0068,
-          "wr_med_all": 0.7,
+          "fit": 20.7059,
+          "wr_med_all": 0.6970000000000001,
           "wr_target_med_all": 0.6944,
-          "mean_alpha_ann": -0.0827,
-          "mdd_med": 0.11380000000000001
+          "mean_alpha_ann": -0.0825,
+          "mdd_med": 0.1131,
+          "mdd_duration_med": 228.5,
+          "trades_med": 32.0
         }
       },
-      "promoted": true,
-      "learning": "a slightly stricter entry gating (`entry_score_threshold`) plus a longer loss cooldown can lift WR and reduce drawdown simultaneously *without* collapsing trade counts, suggesting the incumbent still has local “signal quality” headroom even after the `volatility_filter_percentile` and regime-mode safety promotions."
-    },
-    {
-      "attempt_id": "13",
-      "section_title": "Full-metric sweep (take-profit levels neighborhood) â€” PROMOTED",
-      "timestamp": "2026-04-18T15:56",
-      "sweep_file": "local_fullmetric_sweep_result_20260418_1620_alphaexit.json",
-      "genes": [
-        "reward_risk_ratio",
-        "partial_take_pct",
-        "partial_take_level",
-        "partial_take_pct_2",
-        "partial_take_level_2",
-        "trailing_stop_mode",
-        "entry_discount_atr_frac"
-      ],
-      "moves": [
-        {
-          "gene": "partial_take_level",
-          "from": 0.75,
-          "to": 1.0
-        }
-      ],
-      "metrics": {
-        "incumbent": {
-          "fit": 21.0068,
-          "wr_med_all": 0.7,
-          "wr_target_med_all": 0.6944,
-          "mean_alpha_ann": -0.0827,
-          "mdd_med": 0.11380000000000001
-        },
-        "candidate": {
-          "fit": 21.0214,
-          "wr_med_all": 0.7,
-          "wr_target_med_all": 0.6944,
-          "mean_alpha_ann": -0.0824,
-          "mdd_med": 0.11220000000000001
-        }
-      },
-      "promoted": true,
-      "learning": "`partial_take_level` is a useful local refinement lever: raising the first partial take threshold can improve median drawdown (and slightly improve alpha) without damaging hit-rate, but it may worsen tail MDD (`MDD_p75`) and should be monitored in future sweeps."
+      "promoted": false,
+      "learning": "`momentum_confirm_days: 5 -> 4` is the strongest uncovered E-category direction: it improves `WR_target`, alpha, and drawdown simultaneously, but it gives back about `0.25pp` of `WR_med_all` on its own and therefore needs a paired WR-restoring lever. extra volatility filtering (`volatility_filter_percentile: 0.05 -> 0.10`) is over-defensive here: fit and risk improve, but alpha regresses to `-8.34%` and `alpha_ann_pos_rate` falls below the acceptance floor. `regime_threshold: 0.25 -> 0.20` is st"
     }
   ]
 }

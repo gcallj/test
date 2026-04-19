@@ -791,3 +791,38 @@ Daily workbook + Telegram status after promotion:
 - ran `py ensure_daily_telegram_file.py` to send [`summary_latest.xlsx`](/C:/Users/gabri/.codex/worktrees/0b30/test/summary_latest.xlsx) for the latest store day (`2026-04-17`)
 - Telegram send failed in this environment due to socket/network permissions (`WinError 10013`), so delivery could not be confirmed here.
 - follow-up fix: updated `ensure_daily_telegram_file.py` to **avoid** best-effort workbook rebuilds purely due to checkpoint mtime changes (can OOM in this environment); it now rebuilds only when the workbook is stale/missing, unless `--refresh-model` is explicitly requested.
+
+### Attempt 26: Full-metric sweep (E_regime_vol revisit) - NOT PROMOTED
+
+Timestamp: `2026-04-19T16:54:22Z`
+
+Method:
+
+- `py run_local_fullmetric_sweep.py --alpha-focus off --genes "ma_filter_period,ma_filter_mode,vol_regime_mode,volatility_filter_percentile,regime_threshold,volume_confirm_mode,momentum_confirm_days" --combo-budget 10 --seed 59 --out local_fullmetric_sweep_result_20260419_1647_regimevol_revisit.json`
+
+Genes touched: `[ma_filter_period, ma_filter_mode, vol_regime_mode, volatility_filter_percentile, regime_threshold, volume_confirm_mode, momentum_confirm_days]`
+
+Windows tested: full-metric across all tickers (data range: `2005-01-04 -> 2026-04-17`, `36` walk-forward windows)
+
+Candidate summary:
+| Metric | main baseline | Prior incumbent | Candidate | delta vs incumbent |
+|---|---:|---:|---:|---:|
+| fit | 20.9898 | 20.9898 | 20.7059 | -0.2838 |
+| WR_med_all | 69.70% | 69.70% | 69.70% | +0.00pp |
+| WR_target_med_all | 69.44% | 69.44% | 69.44% | +0.00pp |
+| mean_alpha_ann | -8.26% | -8.26% | -8.25% | +0.01pp |
+| MDD_med | 11.31% | 11.31% | 11.31% | +0.00pp |
+| MDD_duration_med | 226.5 | 226.5 | 228.5 | +2.0 |
+| trades_med | 31.5 | 31.5 | 32.0 | +0.5 |
+
+Outcome:
+
+- `promote = false`
+- rationale: the best guardrail-safe candidate (`regime_threshold: 0.25 -> 0.20`) kept `WR_med_all` and `WR_target_med_all` flat and recovered a tiny amount of alpha, but `MDD_duration_med` lengthened from `226.5` to `228.5`, so the staged priority comparator left `priority_better = false`. Higher-fit variants were not promotable: `momentum_confirm_days: 5 -> 4` lifted `WR_target_med_all` to `70.00%`, improved alpha to `-8.22%`, and reduced `MDD_med` to `11.04%`, but `WR_med_all` slipped to `69.44%`, missing the incumbent floor (`69.45%`) and failing the shared hit-rate guardrail.
+
+What was learned:
+
+- `momentum_confirm_days: 5 -> 4` is the strongest uncovered E-category direction: it improves `WR_target`, alpha, and drawdown simultaneously, but it gives back about `0.25pp` of `WR_med_all` on its own and therefore needs a paired WR-restoring lever.
+- extra volatility filtering (`volatility_filter_percentile: 0.05 -> 0.10`) is over-defensive here: fit and risk improve, but alpha regresses to `-8.34%` and `alpha_ann_pos_rate` falls below the acceptance floor.
+- `regime_threshold: 0.25 -> 0.20` is still guardrail-safe, but only as a tie-preserving nudge; with drawdown duration worsening and no hit-rate gain, this local E frontier looks saturated for single-step regime loosening.
+- Proxima direcao sugerida: revisit `C_timing` or a hot-zone combo around `momentum_confirm_days` plus a WR restorer such as `consecutive_loss_cooldown` after `D_entry_filter` ages out of the 4h exclusion window (`2026-04-19T19:25:06Z`).
