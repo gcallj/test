@@ -1,6 +1,6 @@
 # Sweep Learnings Summary
 
-_Generated: 2026-04-19T15:25:25+00:00_
+_Generated: 2026-04-19T16:29:58+00:00_
 
 Aggregates all `local_fullmetric_sweep_result*.json` files plus the
 continuous-improvement state. Use this file to plan the next cycle.
@@ -8,16 +8,16 @@ continuous-improvement state. Use this file to plan the next cycle.
 ## Current snapshot
 
 - Checkpoint fitness: `19.694077272237788`
-- Total sweeps seen: **25**
+- Total sweeps seen: **26**
 - Total promotions: **11** (including 2 from codex log)
-- Promotion rate: **28.2%** (over 39 total attempts)
-- Continuous cycles run: 17
+- Promotion rate: **27.5%** (over 40 total attempts)
+- Continuous cycles run: 18
 - Continuous promotions: 4
 - Codex attempts synced: **14** (7 promoted) from `optimization_attempts_20260416.md`
 
 ## Next suggested sweep
 
-categoria mais antiga: **B_take_profit** (ultima vez: 2026-04-19T08:12:23+00:00) -> `python run_continuous_improvement.py --category B`
+categoria mais antiga: **C_timing** (ultima vez: 2026-04-19T09:39:50+00:00) -> `python run_continuous_improvement.py --category C`
 
 ## Promotion timeline (chronological)
 
@@ -42,9 +42,9 @@ Genes tentados >= 2 vezes sem nenhuma promocao. Considere SKIP no proximo ciclo.
 
 | Gene | Attempts | Promotions | (codex) Attempts | (codex) Promotions |
 |---|---:|---:|---:|---:|
-| `reward_risk_ratio` | 9 | 0 | 1 | 0 |
-| `partial_take_level_2` | 9 | 0 | 1 | 0 |
-| `partial_take_pct_2` | 8 | 0 | 1 | 0 |
+| `reward_risk_ratio` | 10 | 0 | 1 | 0 |
+| `partial_take_level_2` | 10 | 0 | 1 | 0 |
+| `partial_take_pct_2` | 9 | 0 | 1 | 0 |
 | `stop_atr_mult` | 6 | 0 | 0 | 0 |
 | `score_percentile_trigger` | 6 | 0 | 0 | 0 |
 | `entry_discount_atr_frac` | 6 | 0 | 1 | 0 |
@@ -77,15 +77,15 @@ Genes onde alguma combinacao funcionou. Vale revisitar com novos vizinhos.
 | `regime_threshold` | 1 | 5 | 20% | 0 |
 | `volatility_filter_percentile` | 1 | 5 | 20% | 0 |
 | `trailing_stop_mode` | 1 | 6 | 17% | 0 |
-| `partial_take_pct` | 1 | 8 | 12% | 0 |
-| `partial_take_level` | 1 | 9 | 11% | 1 |
+| `partial_take_pct` | 1 | 9 | 11% | 0 |
+| `partial_take_level` | 1 | 10 | 10% | 1 |
 
 ## Category rotation status
 
 | Category | Last swept | Runs | Promotions |
 |---|---|---:|---:|
 | A_risk_management | 2026-04-19T12:29:52+00:00 | 3 | 1 |
-| B_take_profit | 2026-04-19T08:12:23+00:00 | 4 | 0 |
+| B_take_profit | 2026-04-19T16:29:41+00:00 | 5 | 0 |
 | C_timing | 2026-04-19T09:39:50+00:00 | 2 | 1 |
 | D_entry_filter | 2026-04-19T15:25:06+00:00 | 4 | 1 |
 | E_regime_vol | 2026-04-19T10:51:45+00:00 | 2 | 1 |
