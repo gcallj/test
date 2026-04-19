@@ -3548,23 +3548,33 @@ def run():
     results_summary: List[Dict[str, Any]] = []
     results_apply: List[Dict[str, Any]] = []
 
-    # Load universe quality tags (Premium/HighQuality/Regular)
-    # baseados em analysis/ticker_alpha_analysis.json (pre-computed)
-    _universe_quality = {}
-    _analysis_path = "analysis/ticker_alpha_analysis.json"
-    if os.path.exists(_analysis_path):
-        try:
-            with open(_analysis_path, "r", encoding="utf-8") as _fq:
-                _q_data = json.load(_fq)
-            _prem = set(_q_data.get("premium_subset", {}).get("tickers", []))
-            _hq = set(_q_data.get("high_quality_subset", {}).get("tickers", []))
-            for _t in _hq:
-                _universe_quality[_t] = "HIGH_QUAL"
-            for _t in _prem:
-                _universe_quality[_t] = "PREMIUM"  # overrides HQ if both
-            print(f"[UNIVERSE] loaded: {len(_prem)} PREMIUM + {len(_hq)} HIGH_QUAL tags")
-        except Exception as _e:
-            print(f"[WARN] universe tags load failed: {_e}")
+    # Dynamic operational tiers based on CURRENT model snapshot
+    # (swing-trade usability), not on stale offline JSON. Ported from codex branch.
+    def _classify_universe_tier(_wr, _wr_tgt, _alpha_ann, _mdd_abs, _n_trades):
+        """
+        Dynamic operational tiers for the CURRENT model snapshot.
+
+        These tiers are intentionally based on swing-trade usability rather than
+        only on beating buy&hold, because the user prioritizes hit rate and
+        operational safety.
+        """
+        if (
+            _n_trades >= 30
+            and _wr >= 0.74
+            and _wr_tgt >= 0.72
+            and _alpha_ann >= -0.12
+            and _mdd_abs <= 0.13
+        ):
+            return "PREMIUM"
+        if (
+            _n_trades >= 20
+            and _wr >= 0.67
+            and _wr_tgt >= 0.65
+            and _alpha_ann >= -0.20
+            and _mdd_abs <= 0.16
+        ):
+            return "HIGH_QUAL"
+        return "REGULAR"
 
     n_tickers_phase3 = len(store.tickers)
     for ix_tkr, tkr in enumerate(store.tickers, 1):
@@ -3934,8 +3944,15 @@ def run():
 
             # (gate de potencial minimo movido para APOS pivot override + coerce)
 
-            # Universe quality tag
-            _univ_tag = _universe_quality.get(tkr, "REGULAR")
+            # Universe quality tag based on CURRENT model metrics, not on a
+            # stale offline subset file.
+            _univ_tag = _classify_universe_tier(
+                bt_win_rate,
+                bt_win_rate_target,
+                float(st.get("alpha_ann", 0.0)),
+                abs(float(st["mdd"])),
+                int(st["n_trades"]),
+            )
 
             # ── UPSIDE SCORE: qualidade da oportunidade de subida (0-100) ──
             # Combina fatores que historicamente predizem subida:
@@ -4446,7 +4463,7 @@ def run():
                 "confidence": round(confidence, 1),
                 "win_rate": round(bt_win_rate * 100, 2),
                 "wr_alvo": round(bt_win_rate_target * 100, 2),  # v8: % alvo hits (2 decimais)
-                "universe": _universe_quality.get(tkr, "REGULAR"),  # PREMIUM/HIGH_QUAL/REGULAR
+                "universe": _univ_tag,  # PREMIUM/HIGH_QUAL/REGULAR (dynamic from current metrics)
                 "queda_max": round(queda_max_esperada * 100, 1),
                 "regime": _regime_str,
                 # === Auditoria ===
