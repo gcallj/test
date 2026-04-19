@@ -3,9 +3,9 @@
   "created_at": "2026-04-18T14:14:23+02:00",
   "categories": {
     "A_risk_management": {
-      "last_swept": "2026-04-19T03:31:30+00:00",
-      "n_runs": 2,
-      "n_promotions": 0
+      "last_swept": "2026-04-19T12:29:52+00:00",
+      "n_runs": 3,
+      "n_promotions": 1
     },
     "B_take_profit": {
       "last_swept": "2026-04-19T08:12:23+00:00",
@@ -33,7 +33,7 @@
       "n_promotions": 0
     }
   },
-  "total_cycles": 15,
-  "total_promotions": 2,
-  "last_updated": "2026-04-19T11:29:21+00:00"
+  "total_cycles": 16,
+  "total_promotions": 3,
+  "last_updated": "2026-04-19T12:29:52+00:00"
 }
