@@ -1,6 +1,6 @@
 # Pristine holdout report
 
-- **Cutoff date** (final do treino, inicio do holdout): 2026-01-06
+- **Cutoff date** (final do treino, inicio do holdout): 2026-01-10
 - **Holdout days**: 90
 - **Baseline**: `git:1bd4217`
 - **Incumbent**: `file:global_ga_checkpoint.json`
@@ -11,13 +11,13 @@
 
 | Metric | Baseline | Incumbent | Δ (incb-base) |
 |---|---:|---:|---:|
-| fit | -15.6529 | -17.8510 | -2.198 |
-| WR | 65.28% | 63.64% | -1.64pp |
-| WR_target | 67.46% | 67.95% | +0.49pp |
-| alpha_ann | -3.54% | -3.74% | -0.20pp |
-| MDD | 18.13% | 18.11% | -0.02pp |
-| trades | 85.5000 | 80.5000 | -5.000 |
-| n_tickers_active | 118.0000 | 118.0000 | +0.000 |
+| fit | 18.2217 | 18.5353 | +0.314 |
+| WR | 68.66% | 68.42% | -0.24pp |
+| WR_target | 68.00% | 68.00% | +0.00pp |
+| alpha_ann | -8.22% | -8.22% | -0.00pp |
+| MDD | 11.57% | 11.53% | -0.04pp |
+| trades | 31.0000 | 29.0000 | -2.000 |
+| n_tickers_active | 101.0000 | 101.0000 | +0.000 |
 
 ## 2. Pre-holdout (training range, dataset minus last N days)
 
@@ -25,13 +25,13 @@
 
 | Metric | Baseline | Incumbent | Δ (incb-base) |
 |---|---:|---:|---:|
-| fit | -13.3964 | -14.2265 | -0.830 |
-| WR | 65.26% | 63.54% | -1.72pp |
-| WR_target | 67.16% | 67.71% | +0.55pp |
-| alpha_ann | -3.51% | -3.68% | -0.17pp |
-| MDD | 18.13% | 18.10% | -0.03pp |
-| trades | 84.5000 | 79.5000 | -5.000 |
-| n_tickers_active | 118.0000 | 118.0000 | +0.000 |
+| fit | 16.8212 | 16.9877 | +0.166 |
+| WR | 68.38% | 67.09% | -1.29pp |
+| WR_target | 67.11% | 67.21% | +0.11pp |
+| alpha_ann | -8.26% | -8.26% | +0.00pp |
+| MDD | 11.75% | 11.62% | -0.13pp |
+| trades | 29.0000 | 29.0000 | +0.000 |
+| n_tickers_active | 98.0000 | 98.0000 | +0.000 |
 
 ## 3. Holdout only (last 90 days — UNSEEN)
 
@@ -39,13 +39,13 @@
 
 | Metric | Baseline | Incumbent | Δ (incb-base) |
 |---|---:|---:|---:|
-| fit | -15.0921 | -17.7102 | -2.618 |
-| WR | 50.00% | 50.00% | +0.00pp |
-| WR_target | 60.00% | 60.00% | +0.00pp |
-| alpha_ann | -16.79% | -17.26% | -0.48pp |
-| MDD | 4.20% | 4.37% | +0.17pp |
-| trades | 7.0000 | 7.0000 | +0.000 |
-| n_tickers_active | 6.0000 | 7.0000 | +1.000 |
+| fit | -126.4845 | -127.4540 | -0.969 |
+| WR | 0.00% | 0.00% | +0.00pp |
+| WR_target | 0.00% | 0.00% | +0.00pp |
+| alpha_ann | -49.43% | -49.43% | -0.00pp |
+| MDD | 0.00% | 0.00% | +0.00pp |
+| trades | 0.0000 | 0.0000 | +0.000 |
+| n_tickers_active | 0.0000 | 0.0000 | +0.000 |
 
 ## Veredito
 
@@ -53,12 +53,11 @@
 
 | Metric | Δ pre-holdout | Δ holdout | Gap (pre - holdout) |
 |---|---:|---:|---:|
-| fit | -0.830 | -2.618 | +1.788 |
-| WR | -1.72pp | +0.00pp | -1.72pp |
-| alpha_ann | -0.17pp | -0.48pp | +0.31pp |
-| MDD | -0.03pp | +0.17pp | -0.20pp |
+| fit | +0.166 | -0.969 | +1.136 |
+| WR | -1.29pp | +0.00pp | -1.29pp |
+| alpha_ann | +0.00pp | -0.00pp | +0.01pp |
+| MDD | -0.13pp | +0.00pp | -0.13pp |
 
-- 🔴 Fit gap `1.788` — incumbent teve vantagem grande em pre-holdout que NAO sustenta no holdout
-- 🔴 Alpha holdout: incumbent -17.26% < baseline -16.79% (incumbent pior no unseen)
+- 🔴 Fit gap `1.136` — incumbent teve vantagem grande em pre-holdout que NAO sustenta no holdout
 
-**VEREDITO**: OVERFIT DETECTADO. Multiplas metricas degradam no holdout. Recomenda-se: ativar Fase B1, considerar reverter para um commit pre-tuning.
+**VEREDITO**: OVERFIT MARGINAL. Uma metrica degrada no holdout. Monitorar; considerar ativar Fase B1 (holdout no acceptance gate).
