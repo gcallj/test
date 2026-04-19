@@ -277,3 +277,26 @@ tells future iterations which gene moves are dead ends.
 **Learning**: candidato `signal_ema_span: 8->9` parecia bom mas falhou nos gates: acceptance_vs_main. Esses moves entram para o graveyard: nao tentar novamente sem mudar contexto.
 
 ---
+## 2026-04-19T08:12:23+00:00 - B_take_profit
+**Cycle**: #12  |  **Promoted**: NO  |  **Codex sync**: YES
+**Genes swept**: `reward_risk_ratio, partial_take_pct, partial_take_level, partial_take_pct_2, partial_take_level_2`
+**Sweep file**: `local_fullmetric_sweep_continuous_B_take_profit_20260419_080739.json`
+
+### Metrics
+
+| Source | fit | WR | WR_tgt | alpha_ann | MDD | trades |
+|---|---:|---:|---:|---:|---:|---:|
+| baseline (git:main) | 21.3465 | 69.70% | 69.44% | -8.28% | 10.79% | 31 |
+| incumbent (worktree) | 21.3465 | 69.70% | 69.44% | -8.28% | 10.79% | 31 |
+| **candidate** | 20.9070 | 70.00% | 69.44% | -8.34% | 10.91% | 31 |
+
+**Best candidate label**: `partial_take_pct:-1`
+
+**Moves applied to incumbent**:
+
+- `partial_take_pct`: `0.2` -> `0.1` (step 0.1)
+
+**Learning**: candidato `partial_take_pct: 0.2->0.1` parecia bom mas falhou nos gates: acceptance_vs_main. Esses moves entram para o graveyard: nao tentar novamente sem mudar contexto.
+
+---
+
