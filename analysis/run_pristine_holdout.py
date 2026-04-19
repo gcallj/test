@@ -253,20 +253,30 @@ def main():
         print("[PRISTINE_HOLDOUT] WARNING: baseline == incumbent. "
               "Resultados serao identicos. Especifique --baseline-ref.")
 
-    # Setup PayloadStore
+    # Setup PayloadStore (prefer primary ga_memmap; fallback to ga_memmap_staged)
     print("\n[PRISTINE_HOLDOUT] Loading PayloadStore...", flush=True)
     import ga_run as gr
     import run_local_ga_staged as rls
     import pandas as pd
+    from payload_store import PayloadStore
 
-    store_dir = gr.OUTPUT_DIR + "/ga_memmap"
-    if not os.path.exists(os.path.join(store_dir, "meta.json")):
+    candidates = [
+        os.path.abspath(gr.GA_MEMMAP_DIR),
+        os.path.abspath("output/ga_memmap_staged"),
+    ]
+    store_dir = None
+    for cand in candidates:
+        if os.path.exists(os.path.join(cand, "meta.json")):
+            store_dir = cand
+            break
+    if store_dir is None:
         raise SystemExit(
-            f"PayloadStore nao encontrado em {store_dir}. Rode antes:\n"
+            f"PayloadStore nao encontrado em {candidates}. Rode antes:\n"
             "  GA_RUN_MODE=load GA_FAST_MODE=true python -u ga_run.py"
         )
+    print(f"  Using store: {store_dir}", flush=True)
 
-    store = gr.PayloadStore(store_dir, mode="r")
+    store = PayloadStore(store_dir, mode="r")
     print(f"  Store: {len(store.tickers)} tickers, {store.min_date.date()} -> "
           f"{store.max_date.date()}", flush=True)
 
