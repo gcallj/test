@@ -765,6 +765,75 @@ def build_ticker_arrays_cache(store):
     return cache
 
 
+def slice_ticker_arrays_cache(cache, start_date=None, end_date=None, min_rows=60):
+    """
+    A1 (pristine holdout): retorna novo cache com arrays fatiados por data.
+
+    start_date / end_date: pd.Timestamp ou string parseavel. Inclusivos.
+      - start_date=None: nao filtra inicio (usa o primeiro)
+      - end_date=None:   nao filtra fim (usa o ultimo)
+    min_rows: tickers com < min_rows bars apos o slice sao excluidos do cache
+              (analogo ao filtro >=252 do build_ticker_arrays_cache).
+
+    Cada payload precisa ter "dates" (array de datetime64). O slice por data
+    aplica a mesma mascara a TODOS os arrays do payload (open, close, atr,
+    score_matrix, etc.), preservando alinhamento temporal.
+
+    Uso tipico:
+        # Pre-holdout slice (tudo exceto ultimos 90d)
+        cutoff = store.max_date - pd.Timedelta(days=90)
+        cache_pre = slice_ticker_arrays_cache(cache, end_date=cutoff)
+
+        # Holdout only (ultimos 90d)
+        cache_holdout = slice_ticker_arrays_cache(cache, start_date=cutoff)
+    """
+    import pandas as pd  # local import: pd nao esta no escopo global do modulo
+    if start_date is not None:
+        start_date = pd.Timestamp(start_date).normalize()
+    if end_date is not None:
+        end_date = pd.Timestamp(end_date).normalize()
+
+    out = {}
+    for tk, p in cache.items():
+        dates = p.get("dates")
+        if dates is None:
+            # sem dates, nao da pra fatiar por data -> skip
+            continue
+        dates_arr = np.asarray(dates)
+        # normalizar para numpy datetime64[D] para comparacao robusta
+        try:
+            dates_norm = np.asarray(dates_arr, dtype="datetime64[ns]")
+        except (TypeError, ValueError):
+            continue
+
+        mask = np.ones(len(dates_norm), dtype=bool)
+        if start_date is not None:
+            mask &= dates_norm >= np.datetime64(start_date)
+        if end_date is not None:
+            mask &= dates_norm <= np.datetime64(end_date)
+        n = int(mask.sum())
+        if n < min_rows:
+            continue
+
+        # Aplica mask a TODOS os arrays do payload, respeitando shape
+        sliced = {}
+        for k, v in p.items():
+            if v is None:
+                continue
+            arr = np.asarray(v) if not isinstance(v, np.ndarray) else v
+            if arr.ndim == 0:
+                sliced[k] = v
+            elif arr.ndim == 1 and len(arr) == len(dates_norm):
+                sliced[k] = arr[mask]
+            elif arr.ndim == 2 and arr.shape[0] == len(dates_norm):
+                sliced[k] = arr[mask, :]
+            else:
+                # tamanho incompativel com dates -> preserva original (ex: escalares)
+                sliced[k] = v
+        out[tk] = sliced
+    return out
+
+
 def run_chunk(
     chunk_id,
     stage,
