@@ -69,11 +69,24 @@ def main() -> None:
     seed_metrics = sweep.get("seed_metrics") or staged.evaluate_genome_full(seed_genome_store, cache, gr)
     cand_metrics = staged.evaluate_genome_full(candidate_genome, cache, gr)
 
-    decision = staged._candidate_beats_incumbent(cand_metrics, base_metrics, seed_metrics)
+    # B4 drift guard: passa `moves` para que _candidate_beats_incumbent detecte
+    # drift direcional de genes. Ativo apenas se GA_DRIFT_GUARD=1 no env.
+    proposed_moves = [
+        {"gene": mv.get("gene"), "from": mv.get("from"), "to": mv.get("to")}
+        for mv in moves
+        if mv.get("gene") is not None and mv.get("from") is not None and mv.get("to") is not None
+    ]
+    decision = staged._candidate_beats_incumbent(cand_metrics, base_metrics, seed_metrics,
+                                                  proposed_moves=proposed_moves)
     promote = bool(decision.get("promote"))
 
     print(f"[SWEEP] {sweep_path.name}")
     print(f"[BEST] label={label} moves={len(moves)} promote={promote}")
+    # Log drift status quando guard ativo
+    drift_info = decision.get("parameter_drift") or {}
+    if decision.get("drift_guard_active") and drift_info.get("drift_detected"):
+        drifting_names = [g.get("gene") for g in drift_info.get("drifting_genes", [])]
+        print(f"[DRIFT] detected on: {', '.join(drifting_names)} — promotion blocked")
     print(
         f"[CAND] fit={cand_metrics.get('fit'):.6f} "
         f"WR={cand_metrics.get('wr_med_all'):.6f} "

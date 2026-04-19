@@ -256,21 +256,136 @@ def _compute_incumbent_safety_guardrail(candidate_metrics, incumbent_metrics):
     return safety
 
 
-def _candidate_beats_incumbent(candidate_metrics, base_metrics, incumbent_metrics):
+def _detect_parameter_drift(proposed_moves, min_consecutive: int = 3,
+                             log_path: str | None = None) -> dict:
+    """B4 (overfitting prevention): detecta genes que ja foram movidos na
+    mesma direcao em N promocoes consecutivas.
+
+    Le analysis/optimization_log.md e constroi historico por gene. Se um
+    gene foi promovido >=min_consecutive vezes na mesma direcao, e o
+    `proposed_moves` inclui um move adicional nessa mesma direcao, flagga
+    como drift.
+
+    proposed_moves: lista de dicts {"gene": str, "from": num, "to": num}
+    min_consecutive: quantos moves consecutivos no mesmo sentido disparam
+                     o alerta (default 3 = a 4a promocao e suspeita)
+    log_path: path custom pro optimization_log (default: analysis/optimization_log.md)
+
+    Returns:
+        {
+          "drift_detected": bool,
+          "drifting_genes": [{"gene": ..., "history": [...], "direction": "up"|"down"}],
+          "all_pass": bool  # True se nenhum drift encontrado
+        }
+
+    Comportamento conservador: se nao consegue ler o log, retorna
+    {"drift_detected": False, "all_pass": True}.
+    """
+    import re as _re
+    if log_path is None:
+        log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                "analysis", "optimization_log.md")
+    try:
+        with open(log_path, "r", encoding="utf-8") as f:
+            log_text = f.read()
+    except (OSError, FileNotFoundError):
+        return {"drift_detected": False, "drifting_genes": [],
+                "all_pass": True, "_skipped": "log_not_found"}
+
+    # Constroi historico de moves promovidos por gene, em ordem cronologica
+    gene_history: dict[str, list[tuple[float, float]]] = {}
+    # Match entries: "## <ts> - <cat>" blocks com "**Promoted**: YES" + moves
+    entry_pattern = _re.compile(
+        r"^## (\d{4}-\d{2}-\d{2}T[\d:+-]+)\s*-\s*[\w_]+\s*\n(.*?)(?=^## |^---$|\Z)",
+        _re.MULTILINE | _re.DOTALL)
+    for m in entry_pattern.finditer(log_text):
+        body = m.group(2)
+        if "**Promoted**: YES" not in body:
+            continue
+        # Parse moves
+        for mv in _re.findall(r"^-\s*`([\w_]+)`:\s*`([^`]+)`\s*->\s*`([^`]+)`",
+                               body, _re.MULTILINE):
+            gene = mv[0]
+            try:
+                fv = float(mv[1])
+                tv = float(mv[2])
+                gene_history.setdefault(gene, []).append((fv, tv))
+            except (TypeError, ValueError):
+                continue
+
+    drifting = []
+    for pm in (proposed_moves or []):
+        gene = pm.get("gene")
+        if not gene or gene not in gene_history:
+            continue
+        try:
+            pf = float(pm["from"])
+            pt = float(pm["to"])
+        except (TypeError, ValueError, KeyError):
+            continue
+        proposed_delta = pt - pf
+        if abs(proposed_delta) < 1e-12:
+            continue
+
+        recent = gene_history[gene][-min_consecutive:]
+        if len(recent) < min_consecutive:
+            continue
+        deltas = [tv - fv for fv, tv in recent]
+        all_up = all(d > 0 for d in deltas)
+        all_down = all(d < 0 for d in deltas)
+        direction = "up" if all_up else ("down" if all_down else None)
+        if direction is None:
+            continue
+        # Drift: proposto segue o mesmo padrao
+        if (direction == "up" and proposed_delta > 0) or \
+           (direction == "down" and proposed_delta < 0):
+            drifting.append({
+                "gene": gene,
+                "direction": direction,
+                "consecutive_prior": len(recent),
+                "proposed": {"from": pf, "to": pt, "delta": proposed_delta},
+                "history": [{"from": fv, "to": tv} for fv, tv in recent],
+            })
+
+    drift_detected = len(drifting) > 0
+    return {
+        "drift_detected": drift_detected,
+        "drifting_genes": drifting,
+        "all_pass": not drift_detected,
+        "min_consecutive": min_consecutive,
+    }
+
+
+def _candidate_beats_incumbent(candidate_metrics, base_metrics, incumbent_metrics,
+                                proposed_moves=None):
     acceptance = _compute_acceptance(candidate_metrics, base_metrics)
     wr_guardrail = _compute_incumbent_wr_guardrail(candidate_metrics, incumbent_metrics)
     safety_guardrail = _compute_incumbent_safety_guardrail(candidate_metrics, incumbent_metrics)
     priority_better = _is_better_by_priority(candidate_metrics, incumbent_metrics)
+
+    # B4 drift guard: opt-in via GA_DRIFT_GUARD=1 (default 0 ate validarmos).
+    # Quando ativo, bloqueia promocoes que continuam drift direcional de genes
+    # movidos >=3 vezes na mesma direcao.
+    drift_guard_enabled = os.environ.get("GA_DRIFT_GUARD", "0") == "1"
+    drift_result = _detect_parameter_drift(
+        proposed_moves or [],
+        min_consecutive=int(os.environ.get("GA_DRIFT_MIN_CONSECUTIVE", "3")),
+    )
+    drift_blocks_promote = drift_guard_enabled and drift_result.get("drift_detected", False)
+
     return {
         "acceptance_vs_main": acceptance,
         "incumbent_wr_guardrail": wr_guardrail,
         "incumbent_safety_guardrail": safety_guardrail,
         "priority_better": priority_better,
+        "parameter_drift": drift_result,
+        "drift_guard_active": drift_guard_enabled,
         "promote": bool(
             acceptance.get("all_pass", False)
             and wr_guardrail.get("all_pass", False)
             and safety_guardrail.get("all_pass", False)
             and priority_better
+            and not drift_blocks_promote
         ),
     }
 
