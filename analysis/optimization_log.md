@@ -162,3 +162,26 @@ tells future iterations which gene moves are dead ends.
 
 ---
 
+## 2026-04-19T01:44:00+00:00 - D_entry_filter
+**Cycle**: #7  |  **Promoted**: NO  |  **Codex sync**: YES
+**Genes swept**: `vote_threshold_long, vote_threshold_short, z_threshold, signal_ema_span, entry_confirmation_days, entry_discount_atr_frac, score_strength_scaling, min_signal_strength, entry_score_threshold, score_percentile_trigger`
+**Sweep file**: `local_fullmetric_sweep_continuous_D_entry_filter_20260419_013636.json`
+
+### Metrics
+
+| Source | fit | WR | WR_tgt | alpha_ann | MDD | trades |
+|---|---:|---:|---:|---:|---:|---:|
+| baseline (git:main) | 19.6338 | 69.57% | 68.83% | -8.30% | 10.26% | 31 |
+| incumbent (worktree) | 19.6338 | 69.57% | 68.83% | -8.30% | 10.26% | 31 |
+| **candidate** | 20.0916 | 69.70% | 69.52% | -8.32% | 10.68% | 31 |
+
+**Best candidate label**: `score_percentile_trigger:+1`
+
+**Moves applied to incumbent**:
+
+- `score_percentile_trigger`: `0.6000000000000001` -> `0.65` (step 0.05)
+
+**Learning**: candidato `score_percentile_trigger: 0.6000000000000001->0.65` parecia bom mas falhou nos gates: acceptance_vs_main. Esses moves entram para o graveyard: nao tentar novamente sem mudar contexto.
+
+---
+
