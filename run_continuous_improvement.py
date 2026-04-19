@@ -248,6 +248,10 @@ def _append_log_entry(entry: dict) -> None:
     md.append(f"**Cycle**: #{entry['cycle_number']}  |  **Promoted**: {'YES' if entry['applied'] else 'NO'}")
     if "codex_synced" in entry:
         md.append(f"  |  **Codex sync**: {'YES' if entry['codex_synced'] else 'skipped'}")
+    if "combo_budget" in entry:
+        md.append(f"  |  **combo_budget**: {entry['combo_budget']}")
+    if entry.get("n_recent_rejections", 0) >= 3:
+        md.append(f"  |  **PLATEAU** ({entry['n_recent_rejections']} NO em sequencia)")
     md.append("\n")
     md.append(f"**Genes swept**: `{', '.join(entry['genes'])}`\n")
     md.append(f"**Sweep file**: `{entry['sweep_filename']}`\n\n")
@@ -293,8 +297,57 @@ def _append_log_entry(entry: dict) -> None:
         f.write("".join(md))
 
 
-def _run_sweep(category: str, alpha_focus: str = "off") -> tuple[Path, dict]:
+def _recent_consecutive_rejections(n: int = 3) -> int:
+    """Conta ciclos consecutivos (a partir do mais recente) sem promocao.
+
+    Le analysis/optimization_log.md e conta entries com "**Promoted**: NO"
+    antes de encontrar "**Promoted**: YES" (ou ate o limite `n`).
+    Retorna 0 se log vazio / nao encontrado.
+    """
+    if not LOG_FILE.exists():
+        return 0
+    try:
+        text = LOG_FILE.read_text(encoding="utf-8")
+    except Exception:
+        return 0
+    # Split em entries (cada entry comeca com "## ")
+    import re
+    entries = re.split(r"(?m)^## \d{4}-\d{2}-\d{2}T", text)
+    # entries[0] = header do arquivo; entries[1:] = ciclos do mais antigo ao mais novo
+    rejections = 0
+    for entry in reversed(entries[1:]):  # do mais recente pro antigo
+        if "**Promoted**: YES" in entry:
+            break
+        if "**Promoted**: NO" in entry:
+            rejections += 1
+            if rejections >= n:
+                break
+    return rejections
+
+
+def _pick_combo_budget(default: int = 8, plateau_budget: int = 16,
+                       plateau_threshold: int = 3) -> tuple[int, int]:
+    """Escolhe combo_budget baseado em plateau detection.
+
+    Se houver >= plateau_threshold ciclos consecutivos sem promocao,
+    retorna plateau_budget (explorar mais combos). Caso contrario,
+    retorna default.
+
+    Returns (combo_budget, n_recent_rejections).
+    """
+    n_rej = _recent_consecutive_rejections(plateau_threshold)
+    if n_rej >= plateau_threshold:
+        return plateau_budget, n_rej
+    return default, n_rej
+
+
+def _run_sweep(category: str, alpha_focus: str = "off",
+               combo_budget: int = 8) -> tuple[Path, dict]:
     """Run run_local_fullmetric_sweep.py for the given category.
+
+    combo_budget: largura da busca (numero de combos multi-gene).
+    Default 8 e rapido. Em plateau (3+ ciclos NO em sequencia), o chamador
+    pode aumentar para 16-24 para explorar combos mais amplos.
 
     Returns (sweep_file_path, parsed_sweep_dict).
     """
@@ -312,7 +365,7 @@ def _run_sweep(category: str, alpha_focus: str = "off") -> tuple[Path, dict]:
         "--genes",
         ",".join(genes),
         "--combo-budget",
-        "8",
+        str(int(combo_budget)),
         "--out",
         str(out_path),
     ]
@@ -383,7 +436,8 @@ def _run_codex_sync() -> bool:
 
 
 def _do_one_cycle(category_override: str | None, alpha_focus: str,
-                  run_codex_sync: bool = True) -> dict:
+                  run_codex_sync: bool = True,
+                  combo_budget: int | None = None) -> dict:
     state = _load_state()
     state["total_cycles"] += 1
     cycle_num = state["total_cycles"]
@@ -394,7 +448,17 @@ def _do_one_cycle(category_override: str | None, alpha_focus: str,
     if run_codex_sync:
         codex_synced = _run_codex_sync()
 
-    sweep_path, sweep = _run_sweep(category, alpha_focus)
+    # Adaptive combo_budget: em plateau (3+ NO em sequencia) aumenta para 16.
+    # Override explicito via CLI tem prioridade.
+    if combo_budget is None:
+        combo_budget, n_recent_rej = _pick_combo_budget(default=8, plateau_budget=16)
+        if n_recent_rej >= 3:
+            print(f"[CONTINUOUS] PLATEAU detected ({n_recent_rej} consecutive NO) "
+                  f"-> combo_budget elevado para {combo_budget}")
+    else:
+        n_recent_rej = _recent_consecutive_rejections(3)
+
+    sweep_path, sweep = _run_sweep(category, alpha_focus, combo_budget=combo_budget)
     applied = _try_apply(sweep_path, sweep)
 
     # Update state for this category
@@ -416,6 +480,8 @@ def _do_one_cycle(category_override: str | None, alpha_focus: str,
         "sweep_result": sweep,
         "applied": applied,
         "codex_synced": codex_synced,
+        "combo_budget": combo_budget,
+        "n_recent_rejections": n_recent_rej,
     }
     _append_log_entry(entry)
     _save_state(state)
@@ -466,6 +532,10 @@ def main() -> int:
     parser.add_argument("--no-codex-sync", action="store_true",
                         help="Skip calling analysis/codex_attempts_sync.py at "
                              "the start of each cycle (useful offline / in CI).")
+    parser.add_argument("--combo-budget", type=int, default=None,
+                        help="Override combo_budget do sweep (default 8; adaptive "
+                             "para 16 em plateau de 3+ ciclos NO consecutivos). "
+                             "Valor explicito desliga a adaptacao.")
     args = parser.parse_args()
 
     if args.status:
@@ -487,6 +557,7 @@ def main() -> int:
                 args.category,
                 args.alpha_focus,
                 run_codex_sync=not args.no_codex_sync,
+                combo_budget=args.combo_budget,
             )
             cycles_done += 1
             if entry["applied"]:
