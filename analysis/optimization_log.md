@@ -497,3 +497,26 @@ tells future iterations which gene moves are dead ends.
 
 ---
 
+## 2026-04-19T23:55:12+00:00 - A_risk_management
+**Cycle**: #22  |  **Promoted**: YES  |  **Codex sync**: YES  |  **combo_budget**: 8
+**Genes swept**: `stop_atr_mult, stop_tighten_after_bars, stop_tighten_factor, max_loss_per_trade_pct, equity_drawdown_stop_pct`
+**Sweep file**: `local_fullmetric_sweep_continuous_A_risk_management_20260419_235131.json`
+
+### Metrics
+
+| Source | fit | WR | WR_tgt | alpha_ann | MDD | trades |
+|---|---:|---:|---:|---:|---:|---:|
+| baseline (git:main) | 19.3035 | 69.23% | 68.25% | -8.31% | 11.09% | 32 |
+| incumbent (worktree) | 20.5747 | 69.70% | 69.57% | -8.25% | 10.90% | 32 |
+| **candidate** | 20.9670 | 69.70% | 69.70% | -8.27% | 10.90% | 32 |
+
+**Best candidate label**: `max_loss_per_trade_pct:+1`
+
+**Moves applied to incumbent**:
+
+- `max_loss_per_trade_pct`: `0.08` -> `0.09` (step 0.01)
+
+**Learning**: o move `max_loss_per_trade_pct: 0.08->0.09` foi promovido. Categoria/genes adjacentes podem render melhorias semelhantes; considerar sweep daquela categoria no proximo ciclo.
+
+---
+
