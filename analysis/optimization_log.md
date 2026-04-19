@@ -300,3 +300,26 @@ tells future iterations which gene moves are dead ends.
 
 ---
 
+## 2026-04-19T09:39:50+00:00 - C_timing
+**Cycle**: #13  |  **Promoted**: YES  |  **Codex sync**: YES
+**Genes swept**: `time_stop_bars, consecutive_loss_cooldown`
+**Sweep file**: `local_fullmetric_sweep_continuous_C_timing_20260419_093647.json`
+
+### Metrics
+
+| Source | fit | WR | WR_tgt | alpha_ann | MDD | trades |
+|---|---:|---:|---:|---:|---:|---:|
+| baseline (git:main) | 19.8977 | 69.44% | 69.12% | -8.32% | 10.46% | 30 |
+| incumbent (worktree) | 19.8977 | 69.44% | 69.12% | -8.32% | 10.46% | 30 |
+| **candidate** | 19.7585 | 70.00% | 69.12% | -8.31% | 10.72% | 29 |
+
+**Best candidate label**: `consecutive_loss_cooldown:+1`
+
+**Moves applied to incumbent**:
+
+- `consecutive_loss_cooldown`: `6` -> `7` (step 1.0)
+
+**Learning**: o move `consecutive_loss_cooldown: 6->7` foi promovido. Categoria/genes adjacentes podem render melhorias semelhantes; considerar sweep daquela categoria no proximo ciclo.
+
+---
+
