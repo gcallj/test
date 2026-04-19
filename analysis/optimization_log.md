@@ -387,3 +387,26 @@ tells future iterations which gene moves are dead ends.
 
 ---
 
+## 2026-04-19T15:25:06+00:00 - D_entry_filter
+**Cycle**: #17  |  **Promoted**: YES  |  **Codex sync**: YES  |  **combo_budget**: 8
+**Genes swept**: `vote_threshold_long, vote_threshold_short, z_threshold, signal_ema_span, entry_confirmation_days, entry_discount_atr_frac, score_strength_scaling, min_signal_strength, entry_score_threshold, score_percentile_trigger`
+**Sweep file**: `local_fullmetric_sweep_continuous_D_entry_filter_20260419_151906.json`
+
+### Metrics
+
+| Source | fit | WR | WR_tgt | alpha_ann | MDD | trades |
+|---|---:|---:|---:|---:|---:|---:|
+| baseline (git:main) | 19.2118 | 69.70% | 69.70% | -8.33% | 11.18% | 31 |
+| incumbent (worktree) | 19.2118 | 69.70% | 69.70% | -8.33% | 11.18% | 31 |
+| **candidate** | 19.6941 | 69.70% | 69.70% | -8.33% | 11.18% | 31 |
+
+**Best candidate label**: `entry_score_threshold:+1`
+
+**Moves applied to incumbent**:
+
+- `entry_score_threshold`: `0.15000000000000002` -> `0.2` (step 0.05)
+
+**Learning**: o move `entry_score_threshold: 0.15000000000000002->0.2` foi promovido. Categoria/genes adjacentes podem render melhorias semelhantes; considerar sweep daquela categoria no proximo ciclo.
+
+---
+
