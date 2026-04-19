@@ -456,3 +456,26 @@ tells future iterations which gene moves are dead ends.
 
 ---
 
+## 2026-04-19T21:28:53+00:00 - E_regime_vol
+**Cycle**: #20  |  **Promoted**: YES  |  **Codex sync**: YES  |  **combo_budget**: 8
+**Genes swept**: `ma_filter_period, ma_filter_mode, vol_regime_mode, volatility_filter_percentile, regime_threshold, volume_confirm_mode, momentum_confirm_days`
+**Sweep file**: `local_fullmetric_sweep_continuous_E_regime_vol_20260419_212524.json`
+
+### Metrics
+
+| Source | fit | WR | WR_tgt | alpha_ann | MDD | trades |
+|---|---:|---:|---:|---:|---:|---:|
+| baseline (git:main) | 21.8884 | 69.92% | 70.45% | -8.30% | 11.20% | 32 |
+| incumbent (worktree) | 21.8884 | 69.92% | 70.45% | -8.30% | 11.20% | 32 |
+| **candidate** | 21.9074 | 69.92% | 70.45% | -8.28% | 11.20% | 32 |
+
+**Best candidate label**: `regime_threshold:-1`
+
+**Moves applied to incumbent**:
+
+- `regime_threshold`: `0.25` -> `0.2` (step 0.05)
+
+**Learning**: o move `regime_threshold: 0.25->0.2` foi promovido. Categoria/genes adjacentes podem render melhorias semelhantes; considerar sweep daquela categoria no proximo ciclo.
+
+---
+

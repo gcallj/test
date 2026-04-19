@@ -1,23 +1,23 @@
 # Sweep Learnings Summary
 
-_Generated: 2026-04-19T19:30:46+00:00_
+_Generated: 2026-04-19T21:29:15+00:00_
 
 Aggregates all `local_fullmetric_sweep_result*.json` files plus the
 continuous-improvement state. Use this file to plan the next cycle.
 
 ## Current snapshot
 
-- Checkpoint fitness: `19.694077272237788`
-- Total sweeps seen: **27**
-- Total promotions: **11** (including 2 from codex log)
-- Promotion rate: **26.8%** (over 41 total attempts)
-- Continuous cycles run: 19
-- Continuous promotions: 4
+- Checkpoint fitness: `21.907355821756024`
+- Total sweeps seen: **28**
+- Total promotions: **12** (including 2 from codex log)
+- Promotion rate: **28.6%** (over 42 total attempts)
+- Continuous cycles run: 20
+- Continuous promotions: 5
 - Codex attempts synced: **14** (7 promoted) from `optimization_attempts_20260416.md`
 
 ## Next suggested sweep
 
-categoria mais antiga: **E_regime_vol** (ultima vez: 2026-04-19T10:51:45+00:00) -> `python run_continuous_improvement.py --category E`
+categoria mais antiga: **F_trailing** (ultima vez: 2026-04-19T11:29:21+00:00) -> `python run_continuous_improvement.py --category F`
 
 ## Promotion timeline (chronological)
 
@@ -34,6 +34,7 @@ categoria mais antiga: **E_regime_vol** (ultima vez: 2026-04-19T10:51:45+00:00) 
 | 2026-04-19 | local | `local_fullmetric_sweep_continuous_E_regime_vol_20260419_104733.json` | `ma_filter_mode 1->0` | fit=19.835 WR=69.7% alpha=-8.30% MDD=11.2% |
 | 2026-04-19 | local | `local_fullmetric_sweep_continuous_A_risk_management_20260419_122638.json` | `stop_tighten_factor 0.45->0.4` | fit=21.014 WR=69.7% alpha=-8.29% MDD=10.4% |
 | 2026-04-19 | local | `local_fullmetric_sweep_continuous_D_entry_filter_20260419_151906.json` | `entry_score_threshold 0.15000000000000002->0.2` | fit=19.694 WR=69.7% alpha=-8.33% MDD=11.2% |
+| 2026-04-19 | local | `local_fullmetric_sweep_continuous_E_regime_vol_20260419_212524.json` | `regime_threshold 0.25->0.2` | fit=21.907 WR=69.9% alpha=-8.28% MDD=11.2% |
 
 ## Graveyard (genes que falharam multiplas vezes)
 
@@ -53,15 +54,15 @@ Genes tentados >= 2 vezes sem nenhuma promocao. Considere SKIP no proximo ciclo.
 | `max_loss_per_trade_pct` | 5 | 0 | 0 | 0 |
 | `equity_drawdown_stop_pct` | 5 | 0 | 0 | 0 |
 | `min_signal_strength` | 5 | 0 | 0 | 0 |
+| `volume_confirm_mode` | 5 | 0 | 1 | 0 |
+| `momentum_confirm_days` | 5 | 0 | 1 | 0 |
 | `vote_threshold_long` | 5 | 0 | 0 | 0 |
 | `vote_threshold_short` | 5 | 0 | 0 | 0 |
 | `z_threshold` | 5 | 0 | 0 | 0 |
 | `signal_ema_span` | 5 | 0 | 0 | 0 |
 | `entry_confirmation_days` | 5 | 0 | 0 | 0 |
 | `stop_tighten_after_bars` | 4 | 0 | 0 | 0 |
-| `volume_confirm_mode` | 4 | 0 | 1 | 0 |
-| `momentum_confirm_days` | 4 | 0 | 1 | 0 |
-| `ma_filter_period` | 2 | 0 | 0 | 0 |
+| `ma_filter_period` | 3 | 0 | 0 | 0 |
 
 ## Hot zones (genes que ja promoveram)
 
@@ -70,13 +71,13 @@ Genes onde alguma combinacao funcionou. Vale revisitar com novos vizinhos.
 | Gene | Promotions | Attempts | Hit rate | (codex) Promotions |
 |---|---:|---:|---:|---:|
 | `entry_score_threshold` | 2 | 6 | 33% | 1 |
+| `regime_threshold` | 2 | 6 | 33% | 0 |
 | `consecutive_loss_cooldown` | 2 | 6 | 33% | 1 |
-| `ma_filter_mode` | 1 | 2 | 50% | 0 |
-| `vol_regime_mode` | 1 | 3 | 33% | 0 |
+| `ma_filter_mode` | 1 | 3 | 33% | 0 |
+| `vol_regime_mode` | 1 | 4 | 25% | 0 |
 | `stop_tighten_factor` | 1 | 5 | 20% | 0 |
-| `regime_threshold` | 1 | 5 | 20% | 0 |
-| `volatility_filter_percentile` | 1 | 5 | 20% | 0 |
 | `trailing_stop_mode` | 1 | 6 | 17% | 0 |
+| `volatility_filter_percentile` | 1 | 6 | 17% | 0 |
 | `partial_take_pct` | 1 | 9 | 11% | 0 |
 | `partial_take_level` | 1 | 10 | 10% | 1 |
 
@@ -88,7 +89,7 @@ Genes onde alguma combinacao funcionou. Vale revisitar com novos vizinhos.
 | B_take_profit | 2026-04-19T16:29:41+00:00 | 5 | 0 |
 | C_timing | 2026-04-19T19:30:20+00:00 | 3 | 1 |
 | D_entry_filter | 2026-04-19T15:25:06+00:00 | 4 | 1 |
-| E_regime_vol | 2026-04-19T10:51:45+00:00 | 2 | 1 |
+| E_regime_vol | 2026-04-19T21:28:53+00:00 | 3 | 2 |
 | F_trailing | 2026-04-19T11:29:21+00:00 | 2 | 0 |
 
 ## Codex sync history (latest attempts)
