@@ -13,8 +13,8 @@
       "n_promotions": 0
     },
     "C_timing": {
-      "last_swept": "2026-04-19T09:39:50+00:00",
-      "n_runs": 2,
+      "last_swept": "2026-04-19T19:30:20+00:00",
+      "n_runs": 3,
       "n_promotions": 1
     },
     "D_entry_filter": {
@@ -33,7 +33,7 @@
       "n_promotions": 0
     }
   },
-  "total_cycles": 18,
+  "total_cycles": 19,
   "total_promotions": 4,
-  "last_updated": "2026-04-19T16:29:41+00:00"
+  "last_updated": "2026-04-19T19:30:20+00:00"
 }

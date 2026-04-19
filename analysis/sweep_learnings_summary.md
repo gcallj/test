@@ -1,6 +1,6 @@
 # Sweep Learnings Summary
 
-_Generated: 2026-04-19T16:29:58+00:00_
+_Generated: 2026-04-19T19:30:46+00:00_
 
 Aggregates all `local_fullmetric_sweep_result*.json` files plus the
 continuous-improvement state. Use this file to plan the next cycle.
@@ -8,16 +8,16 @@ continuous-improvement state. Use this file to plan the next cycle.
 ## Current snapshot
 
 - Checkpoint fitness: `19.694077272237788`
-- Total sweeps seen: **26**
+- Total sweeps seen: **27**
 - Total promotions: **11** (including 2 from codex log)
-- Promotion rate: **27.5%** (over 40 total attempts)
-- Continuous cycles run: 18
+- Promotion rate: **26.8%** (over 41 total attempts)
+- Continuous cycles run: 19
 - Continuous promotions: 4
 - Codex attempts synced: **14** (7 promoted) from `optimization_attempts_20260416.md`
 
 ## Next suggested sweep
 
-categoria mais antiga: **C_timing** (ultima vez: 2026-04-19T09:39:50+00:00) -> `python run_continuous_improvement.py --category C`
+categoria mais antiga: **E_regime_vol** (ultima vez: 2026-04-19T10:51:45+00:00) -> `python run_continuous_improvement.py --category E`
 
 ## Promotion timeline (chronological)
 
@@ -49,6 +49,7 @@ Genes tentados >= 2 vezes sem nenhuma promocao. Considere SKIP no proximo ciclo.
 | `score_percentile_trigger` | 6 | 0 | 0 | 0 |
 | `entry_discount_atr_frac` | 6 | 0 | 1 | 0 |
 | `score_strength_scaling` | 6 | 0 | 1 | 0 |
+| `time_stop_bars` | 5 | 0 | 0 | 0 |
 | `max_loss_per_trade_pct` | 5 | 0 | 0 | 0 |
 | `equity_drawdown_stop_pct` | 5 | 0 | 0 | 0 |
 | `min_signal_strength` | 5 | 0 | 0 | 0 |
@@ -58,7 +59,6 @@ Genes tentados >= 2 vezes sem nenhuma promocao. Considere SKIP no proximo ciclo.
 | `signal_ema_span` | 5 | 0 | 0 | 0 |
 | `entry_confirmation_days` | 5 | 0 | 0 | 0 |
 | `stop_tighten_after_bars` | 4 | 0 | 0 | 0 |
-| `time_stop_bars` | 4 | 0 | 0 | 0 |
 | `volume_confirm_mode` | 4 | 0 | 1 | 0 |
 | `momentum_confirm_days` | 4 | 0 | 1 | 0 |
 | `ma_filter_period` | 2 | 0 | 0 | 0 |
@@ -69,8 +69,8 @@ Genes onde alguma combinacao funcionou. Vale revisitar com novos vizinhos.
 
 | Gene | Promotions | Attempts | Hit rate | (codex) Promotions |
 |---|---:|---:|---:|---:|
-| `consecutive_loss_cooldown` | 2 | 5 | 40% | 1 |
 | `entry_score_threshold` | 2 | 6 | 33% | 1 |
+| `consecutive_loss_cooldown` | 2 | 6 | 33% | 1 |
 | `ma_filter_mode` | 1 | 2 | 50% | 0 |
 | `vol_regime_mode` | 1 | 3 | 33% | 0 |
 | `stop_tighten_factor` | 1 | 5 | 20% | 0 |
@@ -86,7 +86,7 @@ Genes onde alguma combinacao funcionou. Vale revisitar com novos vizinhos.
 |---|---|---:|---:|
 | A_risk_management | 2026-04-19T12:29:52+00:00 | 3 | 1 |
 | B_take_profit | 2026-04-19T16:29:41+00:00 | 5 | 0 |
-| C_timing | 2026-04-19T09:39:50+00:00 | 2 | 1 |
+| C_timing | 2026-04-19T19:30:20+00:00 | 3 | 1 |
 | D_entry_filter | 2026-04-19T15:25:06+00:00 | 4 | 1 |
 | E_regime_vol | 2026-04-19T10:51:45+00:00 | 2 | 1 |
 | F_trailing | 2026-04-19T11:29:21+00:00 | 2 | 0 |

@@ -433,3 +433,26 @@ tells future iterations which gene moves are dead ends.
 
 ---
 
+## 2026-04-19T19:30:20+00:00 - C_timing
+**Cycle**: #19  |  **Promoted**: NO  |  **Codex sync**: YES  |  **combo_budget**: 8
+**Genes swept**: `time_stop_bars, consecutive_loss_cooldown`
+**Sweep file**: `local_fullmetric_sweep_continuous_C_timing_20260419_192718.json`
+
+### Metrics
+
+| Source | fit | WR | WR_tgt | alpha_ann | MDD | trades |
+|---|---:|---:|---:|---:|---:|---:|
+| baseline (git:main) | 20.4057 | 69.70% | 69.88% | -8.31% | 11.17% | 33 |
+| incumbent (worktree) | 20.4358 | 69.57% | 69.70% | -8.30% | 10.60% | 32 |
+| **candidate** | 20.4000 | 69.70% | 70.00% | -8.30% | 10.60% | 32 |
+
+**Best candidate label**: `consecutive_loss_cooldown:+1`
+
+**Moves applied to incumbent**:
+
+- `consecutive_loss_cooldown`: `7` -> `8` (step 1.0)
+
+**Learning**: candidato `consecutive_loss_cooldown: 7->8` parecia bom mas falhou nos gates: priority_better. Esses moves entram para o graveyard: nao tentar novamente sem mudar contexto.
+
+---
+
