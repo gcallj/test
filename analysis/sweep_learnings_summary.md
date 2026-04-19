@@ -1,6 +1,6 @@
 # Sweep Learnings Summary
 
-_Generated: 2026-04-19T07:43:20+00:00_
+_Generated: 2026-04-19T07:45:14+00:00_
 
 Aggregates all `local_fullmetric_sweep_result*.json` files plus the
 continuous-improvement state. Use this file to plan the next cycle.
@@ -8,9 +8,9 @@ continuous-improvement state. Use this file to plan the next cycle.
 ## Current snapshot
 
 - Checkpoint fitness: `20.717201265906507`
-- Total sweeps seen: **16**
+- Total sweeps seen: **17**
 - Total promotions: **7** (including 2 from codex log)
-- Promotion rate: **23.3%** (over 30 total attempts)
+- Promotion rate: **22.6%** (over 31 total attempts)
 - Continuous cycles run: 9
 - Continuous promotions: 0
 - Codex attempts synced: **14** (7 promoted) from `optimization_attempts_20260416.md`
@@ -38,10 +38,10 @@ Genes tentados >= 2 vezes sem nenhuma promocao. Considere SKIP no proximo ciclo.
 
 | Gene | Attempts | Promotions | (codex) Attempts | (codex) Promotions |
 |---|---:|---:|---:|---:|
-| `reward_risk_ratio` | 6 | 0 | 1 | 0 |
-| `partial_take_level_2` | 6 | 0 | 1 | 0 |
+| `reward_risk_ratio` | 7 | 0 | 1 | 0 |
+| `partial_take_level_2` | 7 | 0 | 1 | 0 |
+| `partial_take_pct_2` | 6 | 0 | 1 | 0 |
 | `stop_atr_mult` | 5 | 0 | 0 | 0 |
-| `partial_take_pct_2` | 5 | 0 | 1 | 0 |
 | `stop_tighten_factor` | 4 | 0 | 0 | 0 |
 | `max_loss_per_trade_pct` | 4 | 0 | 0 | 0 |
 | `equity_drawdown_stop_pct` | 4 | 0 | 0 | 0 |
@@ -70,9 +70,9 @@ Genes onde alguma combinacao funcionou. Vale revisitar com novos vizinhos.
 | `regime_threshold` | 1 | 4 | 25% | 0 |
 | `volatility_filter_percentile` | 1 | 4 | 25% | 0 |
 | `consecutive_loss_cooldown` | 1 | 4 | 25% | 1 |
-| `partial_take_pct` | 1 | 5 | 20% | 0 |
 | `trailing_stop_mode` | 1 | 5 | 20% | 0 |
-| `partial_take_level` | 1 | 6 | 17% | 1 |
+| `partial_take_pct` | 1 | 6 | 17% | 0 |
+| `partial_take_level` | 1 | 7 | 14% | 1 |
 
 ## Category rotation status
 
