@@ -1,6 +1,6 @@
 # Sweep Learnings Summary
 
-_Generated: 2026-04-18T22:37:05+00:00_
+_Generated: 2026-04-19T07:41:35+00:00_
 
 Aggregates all `local_fullmetric_sweep_result*.json` files plus the
 continuous-improvement state. Use this file to plan the next cycle.
@@ -8,16 +8,16 @@ continuous-improvement state. Use this file to plan the next cycle.
 ## Current snapshot
 
 - Checkpoint fitness: `20.717201265906507`
-- Total sweeps seen: **13**
+- Total sweeps seen: **14**
 - Total promotions: **7** (including 2 from codex log)
-- Promotion rate: **25.9%** (over 27 total attempts)
-- Continuous cycles run: 6
+- Promotion rate: **25.0%** (over 28 total attempts)
+- Continuous cycles run: 7
 - Continuous promotions: 0
 - Codex attempts synced: **14** (7 promoted) from `optimization_attempts_20260416.md`
 
 ## Next suggested sweep
 
-categoria mais antiga: **D_entry_filter** (ultima vez: 2026-04-18T14:37:35+02:00) -> `python run_continuous_improvement.py --category D`
+categoria mais antiga: **A_risk_management** (ultima vez: 2026-04-18T15:42:25+00:00) -> `python run_continuous_improvement.py --category A`
 
 ## Promotion timeline (chronological)
 
@@ -42,22 +42,22 @@ Genes tentados >= 2 vezes sem nenhuma promocao. Considere SKIP no proximo ciclo.
 | `partial_take_level_2` | 5 | 0 | 1 | 0 |
 | `stop_atr_mult` | 4 | 0 | 0 | 0 |
 | `partial_take_pct_2` | 4 | 0 | 1 | 0 |
+| `score_percentile_trigger` | 4 | 0 | 0 | 0 |
+| `entry_discount_atr_frac` | 4 | 0 | 1 | 0 |
+| `score_strength_scaling` | 4 | 0 | 1 | 0 |
 | `stop_tighten_factor` | 3 | 0 | 0 | 0 |
 | `time_stop_bars` | 3 | 0 | 0 | 0 |
 | `max_loss_per_trade_pct` | 3 | 0 | 0 | 0 |
 | `equity_drawdown_stop_pct` | 3 | 0 | 0 | 0 |
-| `score_percentile_trigger` | 3 | 0 | 0 | 0 |
-| `entry_discount_atr_frac` | 3 | 0 | 1 | 0 |
+| `min_signal_strength` | 3 | 0 | 0 | 0 |
 | `volume_confirm_mode` | 3 | 0 | 1 | 0 |
 | `momentum_confirm_days` | 3 | 0 | 1 | 0 |
-| `score_strength_scaling` | 3 | 0 | 1 | 0 |
+| `vote_threshold_long` | 3 | 0 | 0 | 0 |
+| `vote_threshold_short` | 3 | 0 | 0 | 0 |
+| `z_threshold` | 3 | 0 | 0 | 0 |
+| `signal_ema_span` | 3 | 0 | 0 | 0 |
+| `entry_confirmation_days` | 3 | 0 | 0 | 0 |
 | `stop_tighten_after_bars` | 2 | 0 | 0 | 0 |
-| `min_signal_strength` | 2 | 0 | 0 | 0 |
-| `vote_threshold_long` | 2 | 0 | 0 | 0 |
-| `vote_threshold_short` | 2 | 0 | 0 | 0 |
-| `z_threshold` | 2 | 0 | 0 | 0 |
-| `signal_ema_span` | 2 | 0 | 0 | 0 |
-| `entry_confirmation_days` | 2 | 0 | 0 | 0 |
 
 ## Hot zones (genes que ja promoveram)
 
@@ -66,8 +66,8 @@ Genes onde alguma combinacao funcionou. Vale revisitar com novos vizinhos.
 | Gene | Promotions | Attempts | Hit rate | (codex) Promotions |
 |---|---:|---:|---:|---:|
 | `vol_regime_mode` | 1 | 2 | 50% | 0 |
-| `entry_score_threshold` | 1 | 3 | 33% | 1 |
 | `partial_take_pct` | 1 | 4 | 25% | 0 |
+| `entry_score_threshold` | 1 | 4 | 25% | 1 |
 | `regime_threshold` | 1 | 4 | 25% | 0 |
 | `volatility_filter_percentile` | 1 | 4 | 25% | 0 |
 | `consecutive_loss_cooldown` | 1 | 4 | 25% | 1 |
@@ -81,7 +81,7 @@ Genes onde alguma combinacao funcionou. Vale revisitar com novos vizinhos.
 | A_risk_management | 2026-04-18T15:42:25+00:00 | 1 | 0 |
 | B_take_profit | 2026-04-18T19:15:37+00:00 | 1 | 0 |
 | C_timing | 2026-04-18T20:39:53+00:00 | 1 | 0 |
-| D_entry_filter | 2026-04-18T14:37:35+02:00 | 1 | 0 |
+| D_entry_filter | 2026-04-19T07:41:20+00:00 | 2 | 0 |
 | E_regime_vol | 2026-04-18T21:31:21+00:00 | 1 | 0 |
 | F_trailing | 2026-04-18T22:36:36+00:00 | 1 | 0 |
 
