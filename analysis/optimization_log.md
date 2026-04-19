@@ -323,3 +323,26 @@ tells future iterations which gene moves are dead ends.
 
 ---
 
+## 2026-04-19T10:51:45+00:00 - E_regime_vol
+**Cycle**: #14  |  **Promoted**: YES  |  **Codex sync**: YES  |  **combo_budget**: 8
+**Genes swept**: `ma_filter_period, ma_filter_mode, vol_regime_mode, volatility_filter_percentile, regime_threshold, volume_confirm_mode, momentum_confirm_days`
+**Sweep file**: `local_fullmetric_sweep_continuous_E_regime_vol_20260419_104733.json`
+
+### Metrics
+
+| Source | fit | WR | WR_tgt | alpha_ann | MDD | trades |
+|---|---:|---:|---:|---:|---:|---:|
+| baseline (git:main) | 19.6525 | 69.12% | 69.12% | -8.32% | 11.09% | 31 |
+| incumbent (worktree) | 19.5709 | 69.70% | 69.12% | -8.32% | 11.09% | 31 |
+| **candidate** | 19.8349 | 69.70% | 69.57% | -8.30% | 11.16% | 32 |
+
+**Best candidate label**: `ma_filter_mode:-1`
+
+**Moves applied to incumbent**:
+
+- `ma_filter_mode`: `1` -> `0` (step 1.0)
+
+**Learning**: o move `ma_filter_mode: 1->0` foi promovido. Categoria/genes adjacentes podem render melhorias semelhantes; considerar sweep daquela categoria no proximo ciclo.
+
+---
+
