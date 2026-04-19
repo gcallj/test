@@ -41,3 +41,8 @@ Thumbs.db
 
 # Claude worktrees
 .claude/worktrees/
+
+# Local GA promotion backups (never commit)
+.local_ga_backups/
+catboost_info/
+ga_checkpoints_H*/
