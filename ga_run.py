@@ -4723,8 +4723,18 @@ def run():
 
     print(f"Saved: {out_xlsx} | {out_apply_csv}")
 
-    # Cleanup memmap store
-    store.cleanup()
+    # Cleanup memmap store (unless GA_KEEP_STORE=1, which preserves it for
+    # downstream tools like analysis/run_pristine_holdout.py).
+    # Rationale: ga_run's cleanup uses shutil.rmtree with ignore_errors=True.
+    # On Windows, large .dat files may be locked (mmap still mapped), so rmtree
+    # deletes meta.json but leaves the .dat files — leading to a "half-deleted"
+    # store. Setting GA_KEEP_STORE=1 skips the cleanup entirely so the store
+    # remains usable for subsequent sweeps/analyses. Default 0 keeps legacy
+    # behavior.
+    if os.environ.get("GA_KEEP_STORE", "0") == "1":
+        print(f"[STORE] GA_KEEP_STORE=1 -> preservando memmap em {store.store_dir}")
+    else:
+        store.cleanup()
 
     # -- Send to Telegram with metrics summary -----------------------------
     if os.path.exists(out_xlsx):
