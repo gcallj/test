@@ -1,6 +1,6 @@
 # Sweep Learnings Summary
 
-_Generated: 2026-04-19T10:52:13+00:00_
+_Generated: 2026-04-19T11:29:49+00:00_
 
 Aggregates all `local_fullmetric_sweep_result*.json` files plus the
 continuous-improvement state. Use this file to plan the next cycle.
@@ -8,16 +8,16 @@ continuous-improvement state. Use this file to plan the next cycle.
 ## Current snapshot
 
 - Checkpoint fitness: `19.834867879294194`
-- Total sweeps seen: **22**
+- Total sweeps seen: **23**
 - Total promotions: **9** (including 2 from codex log)
-- Promotion rate: **25.0%** (over 36 total attempts)
-- Continuous cycles run: 14
+- Promotion rate: **24.3%** (over 37 total attempts)
+- Continuous cycles run: 15
 - Continuous promotions: 2
 - Codex attempts synced: **14** (7 promoted) from `optimization_attempts_20260416.md`
 
 ## Next suggested sweep
 
-categoria mais antiga: **F_trailing** (ultima vez: 2026-04-18T22:36:36+00:00) -> `python run_continuous_improvement.py --category F`
+categoria mais antiga: **A_risk_management** (ultima vez: 2026-04-19T03:31:30+00:00) -> `python run_continuous_improvement.py --category A`
 
 ## Promotion timeline (chronological)
 
@@ -71,10 +71,10 @@ Genes onde alguma combinacao funcionou. Vale revisitar com novos vizinhos.
 | `consecutive_loss_cooldown` | 2 | 5 | 40% | 1 |
 | `ma_filter_mode` | 1 | 2 | 50% | 0 |
 | `vol_regime_mode` | 1 | 3 | 33% | 0 |
-| `trailing_stop_mode` | 1 | 5 | 20% | 0 |
 | `entry_score_threshold` | 1 | 5 | 20% | 1 |
 | `regime_threshold` | 1 | 5 | 20% | 0 |
 | `volatility_filter_percentile` | 1 | 5 | 20% | 0 |
+| `trailing_stop_mode` | 1 | 6 | 17% | 0 |
 | `partial_take_pct` | 1 | 8 | 12% | 0 |
 | `partial_take_level` | 1 | 9 | 11% | 1 |
 
@@ -87,7 +87,7 @@ Genes onde alguma combinacao funcionou. Vale revisitar com novos vizinhos.
 | C_timing | 2026-04-19T09:39:50+00:00 | 2 | 1 |
 | D_entry_filter | 2026-04-19T07:56:24+00:00 | 3 | 0 |
 | E_regime_vol | 2026-04-19T10:51:45+00:00 | 2 | 1 |
-| F_trailing | 2026-04-18T22:36:36+00:00 | 1 | 0 |
+| F_trailing | 2026-04-19T11:29:21+00:00 | 2 | 0 |
 
 ## Codex sync history (latest attempts)
 
