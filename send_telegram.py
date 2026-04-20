@@ -307,6 +307,33 @@ if buys:
 
 wb.close()
 
+# -- Guide overlay caption (optional, set by guide_overlay.apply_overlay) --
+# Appended so o user ve quantas recomendacoes do guide PDF batem/divergem.
+# Silent no-op se arquivo nao existir (caso comum quando sem PDF).
+guide_caption = ""
+_guide_json = "analysis/guide_overlay_last.json"
+if os.path.exists(_guide_json):
+    try:
+        with open(_guide_json, "r", encoding="utf-8") as _fg:
+            _g = json.load(_fg)
+        if _g.get("enabled"):
+            _conflicts = (
+                _g.get("n_conflict_buy_vs_sell", 0)
+                + _g.get("n_conflict_sell_vs_buy", 0)
+            )
+            guide_caption = (
+                f"\n\nGuia ({_g.get('pdf_file', '?')}):\n"
+                f"  Match: {_g.get('tickers_matched', 0)} | "
+                f"Confirma BUY: {_g.get('n_agree_buy', 0)} | "
+                f"Confirma SELL: {_g.get('n_agree_sell', 0)} | "
+                f"Conflitos: {_conflicts}\n"
+                f"  Promove HOLD->BUY: {_g.get('n_promoted_hold_to_buy', 0)} "
+                f"(bloqueados: {_g.get('n_promote_vetoed', 0)}) | "
+                f"Demove BUY->HOLD: {_g.get('n_demoted_buy_to_hold', 0)}"
+            )
+    except Exception as _e:
+        print(f"[WARN] guide caption build failed: {_e}")
+
 # Optional prefix for identification (ex: "Pos merge", "Dev run", "Backfill").
 # Set via env var GA_TELEGRAM_PREFIX. Appears as first line da caption.
 _prefix = os.environ.get("GA_TELEGRAM_PREFIX", "").strip()
@@ -326,6 +353,7 @@ caption = (
     f"Confidence: {conf_med:.0f} | Fitness: {global_fit:.2f}"
     f"{wr_breakdown_caption}"
     f"{premium_caption}"
+    f"{guide_caption}"
     f"{top_buys}"
 )
 

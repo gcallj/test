@@ -1,0 +1,10 @@
+{
+  "enabled": true,
+  "xlsx": "summary_latest.xlsx",
+  "n_rows": 119,
+  "n_refreshed": 118,
+  "n_missing": 1,
+  "max_new_date": "2026-04-20",
+  "reason": null,
+  "n_rebuilt_buy_modes": 113
+}
