@@ -21,7 +21,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install test dependencies
-        run: pip install pandas pyarrow
+        run: pip install pandas pyarrow numpy openpyxl xlsxwriter scipy
 
       - name: Baixar history_consolidated.csv (opcional)
         if: env.HISTORY_CSV_URL != ''

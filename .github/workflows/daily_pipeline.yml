@@ -43,13 +43,19 @@ jobs:
           echo "Checkpoint file:"
           cat global_ga_checkpoint.json | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'  fitness={d[\"fitness\"]:.4f}  genome_len={len(d[\"genome\"])}')"
 
-      - name: Run daily pipeline (ETL + GA causal)
+      - name: Run daily pipeline (ETL + GA causal) — Telegram suppressed
+        # Suppress ga_run internal Telegram: send_telegram.py below tem caption
+        # mais rico (WR breakdown + Premium/HQ subsets + top buys). Um unico
+        # envio por dia.
+        env:
+          GA_DISABLE_TELEGRAM_SEND: "1"
         run: python -u predict_daily.py
 
-      - name: Send enhanced Telegram (WR breakdown + subsets)
+      - name: Send Telegram (enhanced caption, dedup-guarded)
         if: success()
-        run: |
-          python -u send_telegram.py || echo "WARNING: send_telegram.py failed, basic Telegram already sent by ga_run.py"
+        # Dedup guard (.telegram_last_sent.json) evita duplicata se o cron
+        # rodar duas vezes no mesmo dia ou se o modelo nao melhorou.
+        run: python -u send_telegram.py
 
       - name: Verify outputs
         if: always()
