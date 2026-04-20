@@ -630,3 +630,26 @@ tells future iterations which gene moves are dead ends.
 
 ---
 
+## 2026-04-20T08:24:30+00:00 - A_risk_management
+**Cycle**: #28  |  **Promoted**: YES  |  **Codex sync**: YES  |  **combo_budget**: 8
+**Genes swept**: `stop_atr_mult, stop_tighten_after_bars, stop_tighten_factor, max_loss_per_trade_pct, equity_drawdown_stop_pct`
+**Sweep file**: `local_fullmetric_sweep_continuous_A_risk_management_20260420_082054.json`
+
+### Metrics
+
+| Source | fit | WR | WR_tgt | alpha_ann | MDD | trades |
+|---|---:|---:|---:|---:|---:|---:|
+| baseline (git:main) | 19.7032 | 69.23% | 68.66% | -8.28% | 10.49% | 33 |
+| incumbent (worktree) | 24.3079 | 70.00% | 70.59% | -8.05% | 10.37% | 33 |
+| **candidate** | 25.5206 | 70.00% | 70.59% | -8.04% | 10.56% | 33 |
+
+**Best candidate label**: `equity_drawdown_stop_pct:+1`
+
+**Moves applied to incumbent**:
+
+- `equity_drawdown_stop_pct`: `0.18` -> `0.2` (step 0.02)
+
+**Learning**: o move `equity_drawdown_stop_pct: 0.18->0.2` foi promovido. Categoria/genes adjacentes podem render melhorias semelhantes; considerar sweep daquela categoria no proximo ciclo.
+
+---
+
