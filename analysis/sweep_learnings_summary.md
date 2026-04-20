@@ -1,6 +1,6 @@
 # Sweep Learnings Summary
 
-_Generated: 2026-04-20T15:03:22+00:00_
+_Generated: 2026-04-20T17:31:42+02:00_
 
 Aggregates all `local_fullmetric_sweep_result*.json` files plus the
 continuous-improvement state. Use this file to plan the next cycle.
@@ -8,9 +8,9 @@ continuous-improvement state. Use this file to plan the next cycle.
 ## Current snapshot
 
 - Checkpoint fitness: `24.17362580623272`
-- Total sweeps seen: **60**
+- Total sweeps seen: **63**
 - Total promotions: **27** (including 1 from codex log)
-- Promotion rate: **32.1%** (over 84 total attempts)
+- Promotion rate: **31.0%** (over 87 total attempts)
 - Continuous cycles run: 31
 - Continuous promotions: 12
 - Codex attempts synced: **24** (11 promoted) from `codex_attempts_source.md`
@@ -80,21 +80,21 @@ Genes onde alguma combinacao funcionou. Vale revisitar com novos vizinhos.
 
 | Gene | Promotions | Attempts | Hit rate | (codex) Promotions |
 |---|---:|---:|---:|---:|
-| `regime_threshold` | 6 | 26 | 23% | 1 |
-| `consecutive_loss_cooldown` | 5 | 20 | 25% | 1 |
-| `partial_take_pct` | 3 | 12 | 25% | 0 |
-| `entry_score_threshold` | 3 | 21 | 14% | 0 |
-| `momentum_confirm_days` | 2 | 12 | 17% | 0 |
-| `partial_take_level` | 2 | 19 | 11% | 1 |
-| `equity_drawdown_stop_pct` | 1 | 7 | 14% | 0 |
-| `max_loss_per_trade_pct` | 1 | 8 | 12% | 0 |
+| `regime_threshold` | 6 | 28 | 21% | 1 |
+| `consecutive_loss_cooldown` | 5 | 21 | 24% | 1 |
+| `partial_take_pct` | 3 | 13 | 23% | 0 |
+| `entry_score_threshold` | 3 | 22 | 14% | 0 |
+| `momentum_confirm_days` | 2 | 13 | 15% | 0 |
+| `partial_take_level` | 2 | 20 | 10% | 1 |
+| `equity_drawdown_stop_pct` | 1 | 8 | 12% | 0 |
 | `trailing_stop_mode` | 1 | 9 | 11% | 0 |
 | `vol_regime_mode` | 1 | 10 | 10% | 0 |
-| `score_percentile_trigger` | 1 | 11 | 9% | 0 |
-| `stop_tighten_factor` | 1 | 13 | 8% | 0 |
-| `partial_take_level_2` | 1 | 14 | 7% | 0 |
-| `volatility_filter_percentile` | 1 | 17 | 6% | 0 |
-| `ma_filter_mode` | 1 | 17 | 6% | 0 |
+| `max_loss_per_trade_pct` | 1 | 11 | 9% | 0 |
+| `score_percentile_trigger` | 1 | 13 | 8% | 0 |
+| `stop_tighten_factor` | 1 | 14 | 7% | 0 |
+| `partial_take_level_2` | 1 | 15 | 7% | 0 |
+| `volatility_filter_percentile` | 1 | 18 | 6% | 0 |
+| `ma_filter_mode` | 1 | 18 | 6% | 0 |
 
 ## Category rotation status
 
