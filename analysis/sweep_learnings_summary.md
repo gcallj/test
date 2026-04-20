@@ -1,23 +1,23 @@
 # Sweep Learnings Summary
 
-_Generated: 2026-04-20T04:37:24+00:00_
+_Generated: 2026-04-20T05:43:10+00:00_
 
 Aggregates all `local_fullmetric_sweep_result*.json` files plus the
 continuous-improvement state. Use this file to plan the next cycle.
 
 ## Current snapshot
 
-- Checkpoint fitness: `20.19626620974371`
-- Total sweeps seen: **33**
-- Total promotions: **15** (including 2 from codex log)
-- Promotion rate: **31.9%** (over 47 total attempts)
-- Continuous cycles run: 25
-- Continuous promotions: 8
+- Checkpoint fitness: `22.22022921755596`
+- Total sweeps seen: **34**
+- Total promotions: **16** (including 2 from codex log)
+- Promotion rate: **33.3%** (over 48 total attempts)
+- Continuous cycles run: 26
+- Continuous promotions: 9
 - Codex attempts synced: **14** (7 promoted) from `optimization_attempts_20260416.md`
 
 ## Next suggested sweep
 
-categoria mais antiga: **E_regime_vol** (ultima vez: 2026-04-19T21:28:53+00:00) -> `python run_continuous_improvement.py --category E`
+categoria mais antiga: **F_trailing** (ultima vez: 2026-04-19T22:35:21+00:00) -> `python run_continuous_improvement.py --category F`
 
 ## Promotion timeline (chronological)
 
@@ -38,6 +38,7 @@ categoria mais antiga: **E_regime_vol** (ultima vez: 2026-04-19T21:28:53+00:00) 
 | 2026-04-19 | local | `local_fullmetric_sweep_continuous_A_risk_management_20260419_235131.json` | `max_loss_per_trade_pct 0.08->0.09` | fit=20.967 WR=69.7% alpha=-8.27% MDD=10.9% |
 | 2026-04-20 | local | `local_fullmetric_sweep_continuous_B_take_profit_20260420_023246.json` | `partial_take_level_2 1.75->1.5` | fit=21.018 WR=69.7% alpha=-8.24% MDD=11.0% |
 | 2026-04-20 | local | `local_fullmetric_sweep_continuous_C_timing_20260420_043330.json` | `consecutive_loss_cooldown 7->8` | fit=20.196 WR=69.7% alpha=-8.26% MDD=10.8% |
+| 2026-04-20 | local | `local_fullmetric_sweep_continuous_E_regime_vol_20260420_054005.json` | `momentum_confirm_days 5->4` | fit=22.220 WR=70.0% alpha=-8.15% MDD=10.6% |
 
 ## Graveyard (genes que falharam multiplas vezes)
 
@@ -55,15 +56,14 @@ Genes tentados >= 2 vezes sem nenhuma promocao. Considere SKIP no proximo ciclo.
 | `time_stop_bars` | 6 | 0 | 0 | 0 |
 | `equity_drawdown_stop_pct` | 6 | 0 | 0 | 0 |
 | `min_signal_strength` | 6 | 0 | 0 | 0 |
+| `volume_confirm_mode` | 6 | 0 | 1 | 0 |
 | `vote_threshold_long` | 6 | 0 | 0 | 0 |
 | `vote_threshold_short` | 6 | 0 | 0 | 0 |
 | `z_threshold` | 6 | 0 | 0 | 0 |
 | `signal_ema_span` | 6 | 0 | 0 | 0 |
 | `entry_confirmation_days` | 6 | 0 | 0 | 0 |
 | `stop_tighten_after_bars` | 5 | 0 | 0 | 0 |
-| `volume_confirm_mode` | 5 | 0 | 1 | 0 |
-| `momentum_confirm_days` | 5 | 0 | 1 | 0 |
-| `ma_filter_period` | 3 | 0 | 0 | 0 |
+| `ma_filter_period` | 4 | 0 | 0 | 0 |
 
 ## Hot zones (genes que ja promoveram)
 
@@ -72,14 +72,15 @@ Genes onde alguma combinacao funcionou. Vale revisitar com novos vizinhos.
 | Gene | Promotions | Attempts | Hit rate | (codex) Promotions |
 |---|---:|---:|---:|---:|
 | `consecutive_loss_cooldown` | 3 | 7 | 43% | 1 |
-| `regime_threshold` | 2 | 6 | 33% | 0 |
 | `entry_score_threshold` | 2 | 7 | 29% | 1 |
-| `ma_filter_mode` | 1 | 3 | 33% | 0 |
-| `vol_regime_mode` | 1 | 4 | 25% | 0 |
+| `regime_threshold` | 2 | 7 | 29% | 0 |
+| `ma_filter_mode` | 1 | 4 | 25% | 0 |
+| `vol_regime_mode` | 1 | 5 | 20% | 0 |
 | `stop_tighten_factor` | 1 | 6 | 17% | 0 |
 | `max_loss_per_trade_pct` | 1 | 6 | 17% | 0 |
-| `volatility_filter_percentile` | 1 | 6 | 17% | 0 |
+| `momentum_confirm_days` | 1 | 6 | 17% | 0 |
 | `trailing_stop_mode` | 1 | 7 | 14% | 0 |
+| `volatility_filter_percentile` | 1 | 7 | 14% | 0 |
 | `partial_take_pct` | 1 | 10 | 10% | 0 |
 | `partial_take_level` | 1 | 11 | 9% | 1 |
 | `partial_take_level_2` | 1 | 11 | 9% | 0 |
@@ -92,7 +93,7 @@ Genes onde alguma combinacao funcionou. Vale revisitar com novos vizinhos.
 | B_take_profit | 2026-04-20T02:36:23+00:00 | 6 | 1 |
 | C_timing | 2026-04-20T04:36:50+00:00 | 4 | 2 |
 | D_entry_filter | 2026-04-20T01:36:41+00:00 | 5 | 1 |
-| E_regime_vol | 2026-04-19T21:28:53+00:00 | 3 | 2 |
+| E_regime_vol | 2026-04-20T05:42:53+00:00 | 4 | 3 |
 | F_trailing | 2026-04-19T22:35:21+00:00 | 3 | 0 |
 
 ## Codex sync history (latest attempts)
