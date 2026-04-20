@@ -18,3 +18,4 @@ catboost
 deap
 optuna
 numba
+pdfplumber

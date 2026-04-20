@@ -84,6 +84,50 @@ def step_ga_load():
     print(f"[OK] GA done in {time.time() - t0:.0f}s")
 
 
+def step_refresh_close():
+    """Patch Apply.close/Date with live yfinance closes.
+
+    stock_etl.py intentionally shifts features by 1 bar to prevent leakage, but
+    the shift also moves the OHLCV base columns — so Apply.close for Date=T
+    ends up carrying T-1 close. This step pulls live closes from yfinance and
+    overwrites just the close+Date cells so the sheet matches broker quotes.
+    Other fields (entrada/alvo/stop/pivot/recomendacao) stay as the GA
+    computed them — they are forward-looking levels and remain consistent.
+    """
+    print("\n" + "=" * 60)
+    print("STEP REFRESH: refresh Apply.close / Date from yfinance")
+    print("=" * 60)
+    try:
+        from refresh_close import refresh
+        stats = refresh()
+        if stats.get("enabled"):
+            print(f"[OK] refresh_close: {stats.get('n_refreshed')} refreshed, "
+                  f"{stats.get('n_missing')} missing, "
+                  f"max_date={stats.get('max_new_date')}")
+        else:
+            print(f"[SKIP] refresh_close: {stats.get('reason')}")
+    except Exception as e:
+        print(f"[WARN] refresh_close failed (non-fatal): {e}")
+
+
+def step_guide_overlay():
+    """Overlay analyst-guide PDF onto summary_latest.xlsx. No-op if no PDF present."""
+    print("\n" + "=" * 60)
+    print("STEP GUIDE: apply PDF guide overlay (if any)")
+    print("=" * 60)
+    try:
+        from guide_overlay import apply_overlay
+        stats = apply_overlay()
+        if stats.get("enabled"):
+            print(f"[OK] guide overlay: {stats}")
+        else:
+            reason = stats.get("reason") or "unknown"
+            print(f"[SKIP] guide overlay: {reason} "
+                  f"(drop a PDF in ./guides/ or set PDF_GUIDE_PATH)")
+    except Exception as e:
+        print(f"[WARN] guide overlay failed (non-fatal): {e}")
+
+
 def step_log_predictions():
     """C1 (overfitting prevention): append signals do summary_latest.xlsx
     em analysis/predictions_log.jsonl para criar ground truth no futuro.
@@ -124,6 +168,8 @@ def main():
         step_final()
 
     step_ga_load()
+    step_refresh_close()
+    step_guide_overlay()
     step_log_predictions()
 
     elapsed = time.time() - t_start
