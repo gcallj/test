@@ -566,3 +566,26 @@ tells future iterations which gene moves are dead ends.
 
 ---
 
+## 2026-04-20T04:36:50+00:00 - C_timing
+**Cycle**: #25  |  **Promoted**: YES  |  **Codex sync**: YES  |  **combo_budget**: 8
+**Genes swept**: `time_stop_bars, consecutive_loss_cooldown`
+**Sweep file**: `local_fullmetric_sweep_continuous_C_timing_20260420_043330.json`
+
+### Metrics
+
+| Source | fit | WR | WR_tgt | alpha_ann | MDD | trades |
+|---|---:|---:|---:|---:|---:|---:|
+| baseline (git:main) | 20.1996 | 69.43% | 69.23% | -8.28% | 10.49% | 33 |
+| incumbent (worktree) | 20.1668 | 69.70% | 69.70% | -8.26% | 10.78% | 32 |
+| **candidate** | 20.1963 | 69.70% | 69.70% | -8.26% | 10.78% | 32 |
+
+**Best candidate label**: `consecutive_loss_cooldown:+1`
+
+**Moves applied to incumbent**:
+
+- `consecutive_loss_cooldown`: `7` -> `8` (step 1.0)
+
+**Learning**: o move `consecutive_loss_cooldown: 7->8` foi promovido. Categoria/genes adjacentes podem render melhorias semelhantes; considerar sweep daquela categoria no proximo ciclo.
+
+---
+
