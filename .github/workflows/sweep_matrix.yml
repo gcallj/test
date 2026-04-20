@@ -72,10 +72,14 @@ jobs:
           pip install -r requirements.txt
 
       - name: Download PayloadStore artifact
+        # Note: upload-artifact@v4 usa o ancestor comum como base do zip.
+        # Upload de `output/ga_memmap/` + `output/data/*.parquet` gera zip com
+        # `ga_memmap/...` + `data/...` (sem prefixo output/). Extraimos dentro
+        # de `output/` pra reconstruir o path esperado pelo codigo.
         uses: actions/download-artifact@v4
         with:
           name: payload-store
-          path: ./
+          path: output/
           github-token: ${{ secrets.GITHUB_TOKEN }}
           run-id: ${{ github.event.workflow_run.id || github.run_id }}
 
