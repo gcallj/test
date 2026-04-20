@@ -195,7 +195,8 @@ if uni_col_s >= 0 and cagr_col_s >= 0 and alpha_col_s >= 0:
 ck = json.load(open("global_ga_checkpoint.json"))
 global_fit = float(ck.get("fitness", 0.0))
 
-# Top BUYS por rank
+# Top BUYS por rank — usa a coluna 'recomendacao' (texto rico com modo de
+# execucao, stage, stop, cancelar) em vez de so ticker+preco.
 buys = []
 for r in rows_app:
     if r[sig_col] != "buy":
@@ -206,15 +207,52 @@ for r in rows_app:
         "pot": str(r[pot_col]),
         "ent": float(r[ent_col]) if r[ent_col] is not None else 0.0,
         "alvo": float(r[alvo_col]) if r[alvo_col] is not None else 0.0,
+        "rec": str(r[rec_col]) if rec_col >= 0 and r[rec_col] is not None else "",
     })
 buys.sort(key=lambda x: -x["rank"])
 
 top_buys = ""
 if buys:
-    top_buys = "\n\nTop BUY (por rank):\n" + "\n".join(
-        f"  {b['ticker']} @{b['ent']:.2f} alvo @{b['alvo']:.2f} ({b['pot']})"
-        for b in buys[:8]
-    )
+    # Formato compacto: 1 linha por ticker com TAG + modo de execucao da
+    # coluna `recomendacao`, extraindo so o essencial (antes do 1o asterisco).
+    # Limite Telegram caption = 1024 chars; cabe ~7 BUYs.
+    def _rec_essence(rec: str) -> str:
+        """Extrai '[TAG] MODO_EXECUCAO' do texto completo de recomendacao.
+        Ex: '[PREMIUM] AGUARDAR ROMPER PIVOT @54.40 * S2 Alta momentum * ...' ->
+            '[PREMIUM] AGUARDAR ROMPER PIVOT @54.40 S2mom'
+        """
+        if not rec:
+            return ""
+        rec = rec.replace("\n", " ").strip()
+        parts = [p.strip() for p in rec.split("*")]
+        if not parts:
+            return rec[:60]
+        # parts[0] = "[TAG] MODO @preco" | parts[1] = "Stage+timing"
+        mode = parts[0]
+        stage = parts[1] if len(parts) > 1 else ""
+        # Compacta stage: "S2 Alta ideal" -> "S2 ideal"; "S2 Alta momentum" -> "S2 mom"
+        stage_short = (stage
+                       .replace("S2 Alta ", "S2 ")
+                       .replace("momentum", "mom")
+                       .replace("pullback", "pull")
+                       .replace("atrasado", "late")
+                       .replace("S1 Base", "S1")
+                       .replace("Stage 1", "S1")
+                       .replace("Stage 2", "S2")
+                       .replace("Stage 3", "S3")
+                       .replace("Stage 4", "S4"))
+        out = f"{mode} | {stage_short}" if stage_short else mode
+        return out[:115]
+
+    lines = []
+    for b in buys[:7]:
+        header = f"  {b['ticker']} @{b['ent']:.2f}->{b['alvo']:.2f} ({b['pot']})"
+        essence = _rec_essence(b.get("rec", ""))
+        if essence:
+            lines.append(f"{header}\n    {essence}")
+        else:
+            lines.append(header)
+    top_buys = "\n\nTop BUY:\n" + "\n".join(lines)
 
 wb.close()
 
