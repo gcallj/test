@@ -21,6 +21,7 @@ __pycache__/
 
 # Logs
 *.log
+logs/
 _*.txt
 
 # Generated reports
