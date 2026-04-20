@@ -1,6 +1,6 @@
 # Sweep Learnings Summary
 
-_Generated: 2026-04-20T05:43:10+00:00_
+_Generated: 2026-04-20T07:43:42+00:00_
 
 Aggregates all `local_fullmetric_sweep_result*.json` files plus the
 continuous-improvement state. Use this file to plan the next cycle.
@@ -8,16 +8,16 @@ continuous-improvement state. Use this file to plan the next cycle.
 ## Current snapshot
 
 - Checkpoint fitness: `22.22022921755596`
-- Total sweeps seen: **34**
+- Total sweeps seen: **35**
 - Total promotions: **16** (including 2 from codex log)
-- Promotion rate: **33.3%** (over 48 total attempts)
-- Continuous cycles run: 26
+- Promotion rate: **32.7%** (over 49 total attempts)
+- Continuous cycles run: 27
 - Continuous promotions: 9
 - Codex attempts synced: **14** (7 promoted) from `optimization_attempts_20260416.md`
 
 ## Next suggested sweep
 
-categoria mais antiga: **F_trailing** (ultima vez: 2026-04-19T22:35:21+00:00) -> `python run_continuous_improvement.py --category F`
+categoria mais antiga: **A_risk_management** (ultima vez: 2026-04-19T23:55:12+00:00) -> `python run_continuous_improvement.py --category A`
 
 ## Promotion timeline (chronological)
 
@@ -79,8 +79,8 @@ Genes onde alguma combinacao funcionou. Vale revisitar com novos vizinhos.
 | `stop_tighten_factor` | 1 | 6 | 17% | 0 |
 | `max_loss_per_trade_pct` | 1 | 6 | 17% | 0 |
 | `momentum_confirm_days` | 1 | 6 | 17% | 0 |
-| `trailing_stop_mode` | 1 | 7 | 14% | 0 |
 | `volatility_filter_percentile` | 1 | 7 | 14% | 0 |
+| `trailing_stop_mode` | 1 | 8 | 12% | 0 |
 | `partial_take_pct` | 1 | 10 | 10% | 0 |
 | `partial_take_level` | 1 | 11 | 9% | 1 |
 | `partial_take_level_2` | 1 | 11 | 9% | 0 |
@@ -94,7 +94,7 @@ Genes onde alguma combinacao funcionou. Vale revisitar com novos vizinhos.
 | C_timing | 2026-04-20T04:36:50+00:00 | 4 | 2 |
 | D_entry_filter | 2026-04-20T01:36:41+00:00 | 5 | 1 |
 | E_regime_vol | 2026-04-20T05:42:53+00:00 | 4 | 3 |
-| F_trailing | 2026-04-19T22:35:21+00:00 | 3 | 0 |
+| F_trailing | 2026-04-20T07:43:17+00:00 | 4 | 0 |
 
 ## Codex sync history (latest attempts)
 

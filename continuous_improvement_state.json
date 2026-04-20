@@ -28,12 +28,12 @@
       "n_promotions": 3
     },
     "F_trailing": {
-      "last_swept": "2026-04-19T22:35:21+00:00",
-      "n_runs": 3,
+      "last_swept": "2026-04-20T07:43:17+00:00",
+      "n_runs": 4,
       "n_promotions": 0
     }
   },
-  "total_cycles": 26,
+  "total_cycles": 27,
   "total_promotions": 9,
-  "last_updated": "2026-04-20T05:42:53+00:00"
+  "last_updated": "2026-04-20T07:43:17+00:00"
 }
