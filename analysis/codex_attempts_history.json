@@ -1,11 +1,11 @@
 {
   "codex_sync_metadata": {
-    "source_file": "C:/Users/gabri/.codex/worktrees/0b30/test/analysis/optimization_attempts_20260416.md",
-    "source_sha1": "8e35342600b97fe4f6558b45b3c010de1727cd28",
-    "last_parsed": "2026-04-18T16:33:25+02:00",
+    "source_file": "C:/Users/gabri/OneDrive/Documentos/GitHub/test/analysis/codex_attempts_source.md",
+    "source_sha1": "3e9190520ec9d8b1af719c163419513a4f6d839f",
+    "last_parsed": "2026-04-20T09:52:09+02:00",
     "parser_version": 1,
-    "n_attempts_parsed": 14,
-    "n_promoted": 7,
+    "n_attempts_parsed": 23,
+    "n_promoted": 11,
     "n_parse_errors": 0
   },
   "attempts": [
@@ -360,88 +360,495 @@
       "learning": "`volatility_filter_percentile` appears to be another high-leverage operational safety knob: a tiny filter (`+0.05`) improved hit rate and reduced drawdown without collapsing trade counts."
     },
     {
-      "attempt_id": "12",
-      "section_title": "Full-metric sweep (signal confirmations + entry threshold) — PROMOTED",
-      "timestamp": "2026-04-18T13:55",
-      "sweep_file": "local_fullmetric_sweep_result_20260418_135553.json",
+      "attempt_id": "26",
+      "section_title": "Full-metric sweep (E_regime_vol revisit) - NOT PROMOTED",
+      "timestamp": "2026-04-19T16:54:22Z",
+      "sweep_file": "local_fullmetric_sweep_result_20260419_1647_regimevol_revisit.json",
       "genes": [
-        "entry_score_threshold",
-        "volume_confirm_mode",
-        "momentum_confirm_days",
+        "ma_filter_period",
+        "ma_filter_mode",
+        "vol_regime_mode",
+        "volatility_filter_percentile",
         "regime_threshold",
-        "score_strength_scaling",
-        "consecutive_loss_cooldown"
+        "volume_confirm_mode",
+        "momentum_confirm_days"
+      ],
+      "moves": [],
+      "metrics": {
+        "incumbent": {
+          "fit": 20.9898,
+          "wr_med_all": 0.6970000000000001,
+          "wr_target_med_all": 0.6944,
+          "mean_alpha_ann": -0.08259999999999999,
+          "mdd_med": 0.1131,
+          "mdd_duration_med": 226.5,
+          "trades_med": 31.5
+        },
+        "candidate": {
+          "fit": 20.7059,
+          "wr_med_all": 0.6970000000000001,
+          "wr_target_med_all": 0.6944,
+          "mean_alpha_ann": -0.0825,
+          "mdd_med": 0.1131,
+          "mdd_duration_med": 228.5,
+          "trades_med": 32.0
+        }
+      },
+      "promoted": false,
+      "learning": "`momentum_confirm_days: 5 -> 4` is the strongest uncovered E-category direction: it improves `WR_target`, alpha, and drawdown simultaneously, but it gives back about `0.25pp` of `WR_med_all` on its own and therefore needs a paired WR-restoring lever. extra volatility filtering (`volatility_filter_percentile: 0.05 -> 0.10`) is over-defensive here: fit and risk improve, but alpha regresses to `-8.34%` and `alpha_ann_pos_rate` falls below the acceptance floor. `regime_threshold: 0.25 -> 0.20` is st"
+    },
+    {
+      "attempt_id": "27",
+      "section_title": "Full-metric sweep (momentum WR-restore combo probe) - PROMOTED",
+      "timestamp": "2026-04-19T18:54:45Z",
+      "sweep_file": "local_fullmetric_sweep_result_20260419_2047_momentum_wrrestore.json",
+      "genes": [
+        "momentum_confirm_days",
+        "consecutive_loss_cooldown",
+        "partial_take_level",
+        "regime_threshold",
+        "ma_filter_mode",
+        "volatility_filter_percentile"
+      ],
+      "moves": [],
+      "metrics": {
+        "incumbent": {
+          "fit": 20.9898,
+          "wr_med_all": 0.6970000000000001,
+          "wr_target_med_all": 0.6944,
+          "mean_alpha_ann": -0.08259999999999999,
+          "mdd_med": 0.1131,
+          "mdd_duration_med": 226.5,
+          "trades_med": 31.5
+        },
+        "candidate": {
+          "fit": 21.2051,
+          "wr_med_all": 0.6970000000000001,
+          "wr_target_med_all": 0.6970000000000001,
+          "mean_alpha_ann": -0.0825,
+          "mdd_med": 0.1131,
+          "mdd_duration_med": 228.5,
+          "trades_med": 31.0
+        }
+      },
+      "promoted": true,
+      "learning": "`consecutive_loss_cooldown` still has one more safe step beyond the prior `6 -> 7` promotion: `7 -> 8` adds one more `>=70%` ticker (`57 -> 58`) and upgrades `WR_target_med_all` without giving back `WR_med_all`. The intended `momentum_confirm_days:-1` rescue still did not materialize in this budget. Even with multiple hot-zone WR restorers in the sweep, no momentum-including variant beat the incumbent guardrails, so the WR-restoration burden remains the binding constraint. `partial_take_level:+1"
+    },
+    {
+      "attempt_id": "28",
+      "section_title": "Anchored full-metric sweep (entry/momentum rescue path) - PROMOTED",
+      "timestamp": "2026-04-19T22:51:31+02:00",
+      "sweep_file": "local_fullmetric_sweep_result_20260419_2248_entry_momentum_anchor.json",
+      "genes": [
+        "momentum_confirm_days",
+        "entry_score_threshold",
+        "score_percentile_trigger",
+        "signal_ema_span",
+        "partial_take_level",
+        "regime_threshold"
       ],
       "moves": [
         {
-          "gene": "consecutive_loss_cooldown",
-          "from": 6.0,
-          "to": 7.0
-        },
-        {
-          "gene": "entry_score_threshold",
-          "from": 0.15,
-          "to": 0.2
+          "gene": "momentum_confirm_days",
+          "from": 5.0,
+          "to": 4.0
         }
       ],
       "metrics": {
         "incumbent": {
-          "fit": 20.7172,
+          "fit": 21.2051,
           "wr_med_all": 0.6970000000000001,
-          "wr_target_med_all": 0.6944,
-          "mean_alpha_ann": -0.0827,
-          "mdd_med": 0.1159
+          "wr_target_med_all": 0.6970000000000001,
+          "mean_alpha_ann": -0.0825,
+          "mdd_med": 0.1131,
+          "mdd_duration_med": 228.5,
+          "trades_med": 31.0
         },
         "candidate": {
-          "fit": 21.0068,
+          "fit": 23.5293,
           "wr_med_all": 0.7,
-          "wr_target_med_all": 0.6944,
-          "mean_alpha_ann": -0.0827,
-          "mdd_med": 0.11380000000000001
+          "wr_target_med_all": 0.7,
+          "mean_alpha_ann": -0.0815,
+          "mdd_med": 0.11,
+          "mdd_duration_med": 209.0,
+          "trades_med": 33.0
         }
       },
       "promoted": true,
-      "learning": "a slightly stricter entry gating (`entry_score_threshold`) plus a longer loss cooldown can lift WR and reduce drawdown simultaneously *without* collapsing trade counts, suggesting the incumbent still has local “signal quality” headroom even after the `volatility_filter_percentile` and regime-mode safety promotions."
+      "learning": "the prior momentum-rescue miss was partly workflow-driven: the old combo phase only combined WR-safe single moves, so it could not test true rescue pairs for a singleton that narrowly missed the WR floor. The new anchored-combo option removes that search hole for future cross-category rescue attempts. after the Attempt 27 promotion shifted the local frontier, `momentum_confirm_days: 5 -> 4` no longer needed rescue; under the current incumbent it became directly promotable and materially improved"
     },
     {
-      "attempt_id": "13",
-      "section_title": "Full-metric sweep (take-profit levels neighborhood) â€” PROMOTED",
-      "timestamp": "2026-04-18T15:56",
-      "sweep_file": "local_fullmetric_sweep_result_20260418_1620_alphaexit.json",
+      "attempt_id": "34",
+      "section_title": "Anchored take-profit sweep (partial-take hit-rate recovery) - PROMOTED",
+      "timestamp": "2026-04-20T08:55:59+02:00",
+      "sweep_file": "local_fullmetric_sweep_result_20260420_085552_takeprofit_anchor_recovery.json",
       "genes": [
         "reward_risk_ratio",
         "partial_take_pct",
         "partial_take_level",
+        "consecutive_loss_cooldown",
+        "regime_threshold",
+        "entry_score_threshold",
+        "ma_filter_mode"
+      ],
+      "moves": [
+        {
+          "gene": "partial_take_pct",
+          "from": 0.2,
+          "to": 0.1
+        }
+      ],
+      "metrics": {
+        "incumbent": {
+          "fit": 23.8167,
+          "wr_med_all": 0.7,
+          "wr_target_med_all": 0.7,
+          "mean_alpha_ann": -0.0823,
+          "mdd_med": 0.10339999999999999,
+          "mdd_p75": 0.1558,
+          "mdd_duration_med": 203.0,
+          "trades_med": 33.0
+        },
+        "candidate": {
+          "fit": 23.5861,
+          "wr_med_all": 0.7042,
+          "wr_target_med_all": 0.7,
+          "mean_alpha_ann": -0.08220000000000001,
+          "mdd_med": 0.1103,
+          "mdd_p75": 0.1574,
+          "mdd_duration_med": 203.0,
+          "trades_med": 33.0
+        }
+      },
+      "promoted": true,
+      "learning": "the B-side search space is not globally dead; it was only dead under the older frontiers. On the current `partial_take_level = 0.50 / consecutive_loss_cooldown = 9 / regime_threshold = 0.25` seed, a smaller first partial take restored additional `>=70%` breadth (`60 -> 63`) without sacrificing `WR_target`. the direction that failed repeatedly was broad take-profit reshaping, not every take-profit tweak. `partial_take_pct:+1` remained over-defensive and lost hit rate, while `partial_take_pct:-1` "
+    },
+    {
+      "attempt_id": "36",
+      "section_title": "Post-partial-take repair sweep - PROMOTED",
+      "timestamp": "2026-04-20T09:19:32+02:00",
+      "sweep_file": "local_fullmetric_sweep_result_20260420_0918_postpartialtake_repair.json",
+      "genes": [
+        "entry_score_threshold",
+        "volatility_filter_percentile",
+        "consecutive_loss_cooldown",
+        "ma_filter_mode",
+        "regime_threshold",
+        "vol_regime_mode"
+      ],
+      "moves": [
+        {
+          "gene": "consecutive_loss_cooldown",
+          "from": 9.0,
+          "to": 10.0
+        }
+      ],
+      "metrics": {
+        "incumbent": {
+          "fit": 23.5861,
+          "wr_med_all": 0.7042,
+          "wr_target_med_all": 0.7,
+          "mean_alpha_ann": -0.08220000000000001,
+          "mdd_med": 0.1103,
+          "mdd_p75": 0.1574,
+          "mdd_duration_med": 203.0,
+          "trades_med": 33.0
+        },
+        "candidate": {
+          "fit": 23.6358,
+          "wr_med_all": 0.7075,
+          "wr_target_med_all": 0.7,
+          "mean_alpha_ann": -0.0823,
+          "mdd_med": 0.1103,
+          "mdd_p75": 0.1595,
+          "mdd_duration_med": 224.0,
+          "trades_med": 32.0
+        }
+      },
+      "promoted": true,
+      "learning": "Attempt 34 materially changed the frontier. Once `partial_take_pct` moved to `0.10`, the system could absorb one more cooldown step without giving back `WR_target`, and the old D-side near-miss became guardrail-safe again. the post-partial-take checkpoint now prefers slower re-entry after losses: `consecutive_loss_cooldown = 10` added another high-WR ticker (`63` `>=70%` names retained) and became the clean first-priority promotion, even though it modestly lengthened drawdown duration and reduce"
+    },
+    {
+      "attempt_id": "35",
+      "section_title": "Bounded staged-GA refine pass (new window slice) - NOT PROMOTED",
+      "timestamp": "2026-04-20T09:09:41+02:00",
+      "sweep_file": "",
+      "genes": [
+        "vote_threshold_short",
         "partial_take_pct_2",
-        "partial_take_level_2",
-        "trailing_stop_mode",
-        "entry_discount_atr_frac"
+        "partial_take_level_2"
+      ],
+      "moves": [
+        {
+          "gene": "vote_threshold_short",
+          "from": 0.15,
+          "to": 0.1550698474225143
+        },
+        {
+          "gene": "partial_take_pct_2",
+          "from": 0.3,
+          "to": 0.2982570491636789
+        },
+        {
+          "gene": "partial_take_level_2",
+          "from": 1.75,
+          "to": 1.749652013590458
+        }
+      ],
+      "metrics": {
+        "incumbent": {
+          "fit": 23.8167,
+          "wr_med_all": 0.7,
+          "wr_target_med_all": 0.7,
+          "mean_alpha_ann": -0.0823,
+          "mdd_med": 0.10339999999999999,
+          "mdd_p75": 0.1558,
+          "mdd_duration_med": 203.0,
+          "trades_med": 33.0
+        },
+        "candidate": {
+          "fit": 23.8167,
+          "wr_med_all": 0.7,
+          "wr_target_med_all": 0.7,
+          "mean_alpha_ann": -0.0823,
+          "mdd_med": 0.10339999999999999,
+          "mdd_p75": 0.1558,
+          "mdd_duration_med": 203.0,
+          "trades_med": 33.0
+        }
+      },
+      "promoted": false,
+      "learning": "the first post-Attempt-33 staged refine slice did not open a new frontier. On windows `[1, 10, 19, 28]`, stage 2 mostly converged to seed-equivalent micro-mutations rather than a discrete step change that improved the all-ticker metrics. the surviving representative only perturbed off-grid values in `vote_threshold_short`, `partial_take_pct_2`, and `partial_take_level_2`, and those perturbations did not move `WR_med_all`, `WR_target_med_all`, alpha, drawdown, or trade count at all under the full"
+    },
+    {
+      "attempt_id": "33",
+      "section_title": "Regime-0.30 alpha-rescue pattern search - NOT PROMOTED",
+      "timestamp": "2026-04-20T07:08:00+02:00",
+      "sweep_file": "local_pattern_search_result_20260420_0708_regime30_alpha_rescue.json",
+      "genes": [
+        "regime_threshold"
+      ],
+      "moves": [
+        {
+          "gene": "regime_threshold",
+          "from": 0.25,
+          "to": 0.3
+        }
+      ],
+      "metrics": {
+        "incumbent": {
+          "fit": 23.8167,
+          "wr_med_all": 0.7,
+          "wr_target_med_all": 0.7,
+          "mean_alpha_ann": -0.0823,
+          "mdd_med": 0.10339999999999999,
+          "mdd_p75": 0.1558,
+          "mdd_duration_med": 203.0,
+          "trades_med": 33.0
+        },
+        "candidate": {
+          "fit": 23.9901,
+          "wr_med_all": 0.7,
+          "wr_target_med_all": 0.7,
+          "mean_alpha_ann": -0.0825,
+          "mdd_med": 0.10339999999999999,
+          "mdd_p75": 0.1536,
+          "mdd_duration_med": 197.0,
+          "trades_med": 33.0
+        }
+      },
+      "promoted": false,
+      "learning": "the strict-regime branch is now locally exhausted: `regime_threshold: 0.25 -> 0.30` remains the best tail-risk shape on the promoted checkpoint, but the missing alpha does not come back through `vol_regime_mode`, `ma_filter_mode`, or another cooldown step. `vol_regime_mode: 2 -> 1` is decisively incompatible with the post-Attempt-31 seed. On this frontier it drops both hit-rate priorities by about `1.8pp` and worsens drawdown metrics at the same time, so it should be treated as a local dead end "
+    },
+    {
+      "attempt_id": "32",
+      "section_title": "Tail-risk alpha-repair full-metric sweep - NOT PROMOTED",
+      "timestamp": "2026-04-20T06:54:31+02:00",
+      "sweep_file": "local_fullmetric_sweep_result_20260420_0753_tailrisk_alpha_repair.json",
+      "genes": [
+        "entry_score_threshold",
+        "stop_tighten_factor",
+        "ma_filter_mode",
+        "volatility_filter_percentile",
+        "consecutive_loss_cooldown",
+        "regime_threshold"
+      ],
+      "moves": [
+        {
+          "gene": "regime_threshold",
+          "from": 0.25,
+          "to": 0.3
+        }
+      ],
+      "metrics": {
+        "incumbent": {
+          "fit": 23.8167,
+          "wr_med_all": 0.7,
+          "wr_target_med_all": 0.7,
+          "mean_alpha_ann": -0.0823,
+          "mdd_med": 0.10339999999999999,
+          "mdd_p75": 0.1558,
+          "mdd_duration_med": 203.0,
+          "trades_med": 33.0
+        },
+        "candidate": {
+          "fit": 23.9901,
+          "wr_med_all": 0.7,
+          "wr_target_med_all": 0.7,
+          "mean_alpha_ann": -0.0825,
+          "mdd_med": 0.10339999999999999,
+          "mdd_p75": 0.1536,
+          "mdd_duration_med": 197.0,
+          "trades_med": 33.0
+        }
+      },
+      "promoted": false,
+      "learning": "the current frontier now has two clear but incomplete branches: `regime_threshold: 0.25 -> 0.30` repairs tail risk (`MDD_p75 -0.22pp`, duration `-6`) but misses the shared alpha floor by a hair, while `regime_threshold: 0.25 -> 0.20` clears alpha but gives back tail risk and loses on priority. the anchored helper set in this run did not rescue the strict-regime near-miss. Pairing `regime_threshold:+1` with `ma_filter_mode:+1` or `consecutive_loss_cooldown:+1` kept `WR_med_all` and `WR_target_med"
+    },
+    {
+      "attempt_id": "31",
+      "section_title": "Anchored risk-rescue sweep + local pattern search - PROMOTED",
+      "timestamp": "2026-04-20T04:20:00+02:00",
+      "sweep_file": "local_pattern_search_result_20260420_0612_partialtake_cooldown_regime.json",
+      "genes": [
+        "partial_take_level",
+        "consecutive_loss_cooldown",
+        "regime_threshold",
+        "ma_filter_mode",
+        "momentum_confirm_days",
+        "vol_regime_mode"
       ],
       "moves": [
         {
           "gene": "partial_take_level",
           "from": 0.75,
-          "to": 1.0
+          "to": 0.5
+        },
+        {
+          "gene": "consecutive_loss_cooldown",
+          "from": 8.0,
+          "to": 9.0
+        },
+        {
+          "gene": "regime_threshold",
+          "from": 0.3,
+          "to": 0.25
         }
       ],
       "metrics": {
         "incumbent": {
-          "fit": 21.0068,
+          "fit": 23.9238,
           "wr_med_all": 0.7,
-          "wr_target_med_all": 0.6944,
-          "mean_alpha_ann": -0.0827,
-          "mdd_med": 0.11380000000000001
+          "wr_target_med_all": 0.7,
+          "mean_alpha_ann": -0.0817,
+          "mdd_med": 0.11,
+          "mdd_p75": 0.1525,
+          "mdd_duration_med": 200.0,
+          "trades_med": 33.0
         },
         "candidate": {
-          "fit": 21.0214,
+          "fit": 23.8167,
           "wr_med_all": 0.7,
-          "wr_target_med_all": 0.6944,
-          "mean_alpha_ann": -0.0824,
-          "mdd_med": 0.11220000000000001
+          "wr_target_med_all": 0.7,
+          "mean_alpha_ann": -0.0823,
+          "mdd_med": 0.10339999999999999,
+          "mdd_p75": 0.1558,
+          "mdd_duration_med": 203.0,
+          "trades_med": 33.0
         }
       },
       "promoted": true,
-      "learning": "`partial_take_level` is a useful local refinement lever: raising the first partial take threshold can improve median drawdown (and slightly improve alpha) without damaging hit-rate, but it may worsen tail MDD (`MDD_p75`) and should be monitored in future sweeps."
+      "learning": "the current frontier has a real rescue path for `partial_take_level: 0.75 -> 0.50`: by itself it improves median drawdown strongly but misses both the incumbent WR floor and the shared alpha floor; pairing it with `consecutive_loss_cooldown: 8 -> 9` restores the incumbent hit-rate profile, and adding `regime_threshold: 0.30 -> 0.25` recovers just enough alpha to clear `git:main`. this is a useful counterexample to the latest D-side miss: the closest promotable improvement was not another entry-s"
+    },
+    {
+      "attempt_id": "30",
+      "section_title": "Anchored full-metric sweep (entry WR rescue at regime 0.30) - NOT PROMOTED",
+      "timestamp": "2026-04-20T02:52:41+02:00",
+      "sweep_file": "local_fullmetric_sweep_result_20260420_025231_entry_wrrescue.json",
+      "genes": [
+        "entry_score_threshold",
+        "consecutive_loss_cooldown",
+        "regime_threshold",
+        "partial_take_level",
+        "stop_tighten_factor",
+        "ma_filter_mode"
+      ],
+      "moves": [
+        {
+          "gene": "entry_score_threshold",
+          "from": 0.2,
+          "to": 0.25
+        }
+      ],
+      "metrics": {
+        "incumbent": {
+          "fit": 23.9238,
+          "wr_med_all": 0.7,
+          "wr_target_med_all": 0.7,
+          "mean_alpha_ann": -0.0817,
+          "mdd_med": 0.11,
+          "mdd_p75": 0.1525,
+          "mdd_duration_med": 200.0,
+          "trades_med": 33.0
+        },
+        "candidate": {
+          "fit": 24.2903,
+          "wr_med_all": 0.6970000000000001,
+          "wr_target_med_all": 0.7,
+          "mean_alpha_ann": -0.0819,
+          "mdd_med": 0.11,
+          "mdd_p75": 0.1525,
+          "mdd_duration_med": 181.0,
+          "trades_med": 33.0
+        }
+      },
+      "promoted": false,
+      "learning": "`entry_score_threshold:+1` remains the strongest D-side fit/drawdown-duration lever at this frontier, but it still costs one `>=70%` ticker unless paired with a WR restorer. `consecutive_loss_cooldown:+1` is the best currently known rescue partner: it recovers the lost WR ticker, lifts `WR_target_med_all` slightly, and improves tail risk (`MDD_p75 -0.30pp`, `MDD_duration_med -14.0`) without violating any shared guardrails, but the gain is still too small to clear the comparator tolerance bands. "
+    },
+    {
+      "attempt_id": "29",
+      "section_title": "Full-metric sweep (hot-zone rebalance after momentum promotion) - PROMOTED",
+      "timestamp": "2026-04-20T00:50:13+02:00",
+      "sweep_file": "local_fullmetric_sweep_result_20260420_001_hotzone_rebalance.json",
+      "genes": [
+        "partial_take_level",
+        "entry_score_threshold",
+        "regime_threshold",
+        "consecutive_loss_cooldown",
+        "stop_tighten_factor",
+        "volatility_filter_percentile"
+      ],
+      "moves": [
+        {
+          "gene": "regime_threshold",
+          "from": 0.25,
+          "to": 0.3
+        }
+      ],
+      "metrics": {
+        "incumbent": {
+          "fit": 23.5293,
+          "wr_med_all": 0.7,
+          "wr_target_med_all": 0.7,
+          "mean_alpha_ann": -0.0815,
+          "mdd_med": 0.11,
+          "mdd_p75": 0.1545,
+          "mdd_duration_med": 209.0,
+          "trades_med": 33.0
+        },
+        "candidate": {
+          "fit": 23.9238,
+          "wr_med_all": 0.7,
+          "wr_target_med_all": 0.7,
+          "mean_alpha_ann": -0.0817,
+          "mdd_med": 0.11,
+          "mdd_p75": 0.1525,
+          "mdd_duration_med": 200.0,
+          "trades_med": 33.0
+        }
+      },
+      "promoted": true,
+      "learning": "the post-momentum incumbent prefers a slightly stricter regime gate again: the earlier `0.25 -> 0.20` loosening remained guardrail-safe but was still not priority-better, while `0.25 -> 0.30` now preserves hit rate and trims tail risk. `entry_score_threshold: 0.20 -> 0.25` improved fit and shortened drawdowns, but it still missed the incumbent WR floor (`69.70%` vs required `69.75%`), so D-side tightening remains just below the no-regression bar at this frontier. `partial_take_level` remains a u"
     }
   ]
 }

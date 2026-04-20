@@ -37,9 +37,19 @@ ANALYSIS = ROOT / "analysis"
 HISTORY_JSON = ANALYSIS / "codex_attempts_history.json"
 RAW_COPY = ANALYSIS / "codex_attempts_imported.md"
 
-DEFAULT_SOURCE = Path(
+# In-repo source (committed copy of codex markdown). Preferida quando roda
+# em runner remoto (GitHub Actions, trigger remoto Anthropic) onde o path
+# local do codex worktree nao existe.
+REPO_SOURCE = ANALYSIS / "codex_attempts_source.md"
+
+# Local codex worktree path (so existe em maquinas de devs com codex
+# instalado). Mantido como fallback se REPO_SOURCE estiver ausente.
+LOCAL_SOURCE = Path(
     "C:/Users/gabri/.codex/worktrees/0b30/test/analysis/optimization_attempts_20260416.md"
 )
+
+# Default: tenta REPO_SOURCE, depois LOCAL_SOURCE. `--source` no CLI sobrescreve.
+DEFAULT_SOURCE = REPO_SOURCE if REPO_SOURCE.exists() else LOCAL_SOURCE
 
 PARSER_VERSION = 1
 
@@ -422,10 +432,21 @@ def main() -> int:
     args = parser.parse_args()
 
     source: Path = args.source
+    # Fallback chain: se --source nao existe, tenta REPO_SOURCE depois LOCAL_SOURCE.
+    # Isso faz o script funcionar tanto localmente (dev com codex worktree) quanto
+    # em runner remoto (so tem REPO_SOURCE, commitada em main).
     if not source.exists():
-        _log(f"[CODEX SYNC] source not available at {source} — skipping (exit 0)",
-             args.quiet)
-        return 0
+        for fallback in (REPO_SOURCE, LOCAL_SOURCE):
+            if fallback != source and fallback.exists():
+                _log(f"[CODEX SYNC] --source {source} not found, fallback -> {fallback}",
+                     args.quiet)
+                source = fallback
+                break
+        else:
+            _log(f"[CODEX SYNC] no source available (tried {args.source}, "
+                 f"{REPO_SOURCE}, {LOCAL_SOURCE}) — skipping (exit 0)",
+                 args.quiet)
+            return 0
 
     try:
         raw_bytes = source.read_bytes()

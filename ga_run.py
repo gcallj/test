@@ -4825,8 +4825,34 @@ def run():
         except Exception:
             caption = f"Trading Signals B3 - fitness={global_fit:.2f}"
 
-        print(f"[TELEGRAM] Sending {out_xlsx} ({os.path.getsize(out_xlsx)} bytes)...")
-        _send_telegram(out_xlsx, caption=caption)
+        # Dedup guard: evita enviar planilha identica (mesmo genome, mesma data,
+        # mesmo fit) duas vezes. Override via GA_FORCE_TELEGRAM_SEND=1.
+        _telegram_record = None
+        try:
+            from analysis.telegram_dedup import (
+                should_send_telegram as _dedup_check,
+                record_telegram_sent as _dedup_record,
+            )
+            _telegram_record = _dedup_record
+            _should, _reason = _dedup_check(xlsx_path=out_xlsx)
+            if not _should:
+                print(f"[TELEGRAM] SKIP (dedup): {_reason}")
+                _send_now = False
+            else:
+                print(f"[TELEGRAM] dedup OK: {_reason}")
+                _send_now = True
+        except Exception as _e:
+            print(f"[TELEGRAM] WARN: dedup guard falhou: {_e} — enviando sem guard")
+            _send_now = True
+
+        if _send_now:
+            print(f"[TELEGRAM] Sending {out_xlsx} ({os.path.getsize(out_xlsx)} bytes)...")
+            ok = _send_telegram(out_xlsx, caption=caption)
+            if ok and _telegram_record is not None:
+                try:
+                    _telegram_record(xlsx_path=out_xlsx)
+                except Exception as _e:
+                    print(f"[TELEGRAM] WARN: falha ao registrar no tracker: {_e}")
     else:
         print(f"[TELEGRAM] SKIP — file not found: {out_xlsx}")
 

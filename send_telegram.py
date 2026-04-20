@@ -12,6 +12,23 @@ if _disable not in ("", "0", "false", "no", "off"):
     print("[TELEGRAM] GA_DISABLE_TELEGRAM_SEND is set; skipping Telegram send.")
     raise SystemExit(0)
 
+# Dedup guard: so envia se houve mudanca real (data nova, genome novo, ou
+# fit >= last + 0.05). Override via GA_FORCE_TELEGRAM_SEND=1.
+try:
+    from analysis.telegram_dedup import should_send_telegram, record_telegram_sent
+    _should, _dedup_reason = should_send_telegram()
+    if not _should:
+        print(f"[TELEGRAM] SKIP (dedup): {_dedup_reason}")
+        print("[TELEGRAM] Use GA_FORCE_TELEGRAM_SEND=1 para forcar envio.")
+        raise SystemExit(0)
+    print(f"[TELEGRAM] dedup OK: {_dedup_reason}")
+except SystemExit:
+    raise
+except Exception as _e:
+    # Nao-fatal: se guard falhar, mantem comportamento antigo (sempre envia)
+    print(f"[TELEGRAM] WARN: dedup guard falhou, enviando mesmo assim: {_e}")
+    record_telegram_sent = None  # noqa: F811 — sinalizador para fim do script
+
 # Use current env token if set, otherwise fallback to the one in ga_run.py
 if not os.environ.get("TELEGRAM_BOT_TOKEN"):
     from ga_run import TELEGRAM_BOT_TOKEN as _default_token
@@ -224,3 +241,11 @@ print(f"=== SENDING {xlsx} ({os.path.getsize(xlsx)} bytes) ===")
 ok = _send_telegram(xlsx, caption)
 if not ok:
     raise SystemExit(2)
+
+# Registra envio bem-sucedido no tracker para dedup futuro
+if record_telegram_sent is not None:
+    try:
+        record_telegram_sent()
+        print("[TELEGRAM] tracker atualizado")
+    except Exception as _e:
+        print(f"[TELEGRAM] WARN: falha ao atualizar tracker: {_e}")
