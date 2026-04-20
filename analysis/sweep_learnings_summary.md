@@ -1,23 +1,23 @@
 # Sweep Learnings Summary
 
-_Generated: 2026-04-20T10:29:54+00:00_
+_Generated: 2026-04-20T11:52:01+00:00_
 
 Aggregates all `local_fullmetric_sweep_result*.json` files plus the
 continuous-improvement state. Use this file to plan the next cycle.
 
 ## Current snapshot
 
-- Checkpoint fitness: `23.897881028591236`
-- Total sweeps seen: **37**
-- Total promotions: **22** (including 6 from codex log)
-- Promotion rate: **36.7%** (over 60 total attempts)
-- Continuous cycles run: 29
-- Continuous promotions: 11
-- Codex attempts synced: **23** (11 promoted) from `codex_attempts_source.md`
+- Checkpoint fitness: `24.17362580623272`
+- Total sweeps seen: **59**
+- Total promotions: **27** (including 1 from codex log)
+- Promotion rate: **32.5%** (over 83 total attempts)
+- Continuous cycles run: 30
+- Continuous promotions: 12
+- Codex attempts synced: **24** (11 promoted) from `codex_attempts_source.md`
 
 ## Next suggested sweep
 
-categoria mais antiga: **B_take_profit** (ultima vez: 2026-04-20T02:36:23+00:00) -> `python run_continuous_improvement.py --category B`
+categoria mais antiga: **C_timing** (ultima vez: 2026-04-20T04:36:50+00:00) -> `python run_continuous_improvement.py --category C`
 
 ## Promotion timeline (chronological)
 
@@ -46,9 +46,10 @@ categoria mais antiga: **B_take_profit** (ultima vez: 2026-04-20T02:36:23+00:00)
 | 2026-04-20 | local | `local_fullmetric_sweep_continuous_C_timing_20260420_043330.json` | `consecutive_loss_cooldown 7->8` | fit=20.196 WR=69.7% alpha=-8.26% MDD=10.8% |
 | 2026-04-20 | local | `local_fullmetric_sweep_continuous_E_regime_vol_20260420_054005.json` | `momentum_confirm_days 5->4` | fit=22.220 WR=70.0% alpha=-8.15% MDD=10.6% |
 | 2026-04-20 | local | `local_fullmetric_sweep_continuous_A_risk_management_20260420_082054.json` | `equity_drawdown_stop_pct 0.18->0.2` | fit=25.521 WR=70.0% alpha=-8.04% MDD=10.6% |
-| 2026-04-20 | codex | `local_fullmetric_sweep_result_20260420_085552_takeprofit_anchor_recovery.json` | `partial_take_pct 0.2->0.1` | fit=23.586 WR=70.4% alpha=-8.22% MDD=11.0% |
-| 2026-04-20 | codex | `local_fullmetric_sweep_result_20260420_0918_postpartialtake_repair.json` | `consecutive_loss_cooldown 9.0->10.0` | fit=23.636 WR=70.8% alpha=-8.23% MDD=11.0% |
+| 2026-04-20 | local | `local_fullmetric_sweep_result_20260420_085552_takeprofit_anchor_recovery.json` | `partial_take_pct 0.2->0.1` | fit=23.586 WR=70.4% alpha=-8.22% MDD=11.0% |
+| 2026-04-20 | local | `local_fullmetric_sweep_result_20260420_0918_postpartialtake_repair.json` | `consecutive_loss_cooldown 9->10` | fit=23.636 WR=70.7% alpha=-8.23% MDD=11.0% |
 | 2026-04-20 | local | `local_fullmetric_sweep_continuous_D_entry_filter_20260420_102407.json` | `score_percentile_trigger 0.6000000000000001->0.55` | fit=23.898 WR=69.8% alpha=-8.13% MDD=10.6% |
+| 2026-04-20 | local | `local_fullmetric_sweep_continuous_B_take_profit_20260420_113233.json` | `partial_take_pct 0.2->0.1` | fit=24.174 WR=70.0% alpha=-8.13% MDD=11.1% |
 
 ## Graveyard (genes que falharam multiplas vezes)
 
@@ -57,21 +58,21 @@ Genes tentados >= 2 vezes sem nenhuma promocao. Considere SKIP no proximo ciclo.
 
 | Gene | Attempts | Promotions | (codex) Attempts | (codex) Promotions |
 |---|---:|---:|---:|---:|
-| `reward_risk_ratio` | 11 | 0 | 1 | 0 |
-| `partial_take_pct_2` | 10 | 0 | 1 | 0 |
-| `stop_atr_mult` | 8 | 0 | 0 | 0 |
+| `reward_risk_ratio` | 13 | 0 | 0 | 0 |
+| `partial_take_pct_2` | 12 | 0 | 1 | 0 |
+| `signal_ema_span` | 12 | 0 | 0 | 0 |
+| `vote_threshold_long` | 11 | 0 | 0 | 0 |
+| `score_strength_scaling` | 11 | 0 | 0 | 0 |
+| `min_signal_strength` | 10 | 0 | 0 | 0 |
+| `stop_atr_mult` | 9 | 0 | 0 | 0 |
+| `time_stop_bars` | 9 | 0 | 0 | 0 |
+| `entry_confirmation_days` | 9 | 0 | 0 | 0 |
+| `entry_discount_atr_frac` | 8 | 0 | 0 | 0 |
+| `volume_confirm_mode` | 8 | 0 | 1 | 0 |
 | `vote_threshold_short` | 8 | 0 | 1 | 0 |
-| `signal_ema_span` | 8 | 0 | 1 | 0 |
-| `score_strength_scaling` | 8 | 0 | 0 | 0 |
-| `entry_discount_atr_frac` | 7 | 0 | 0 | 0 |
-| `min_signal_strength` | 7 | 0 | 0 | 0 |
-| `volume_confirm_mode` | 7 | 0 | 1 | 0 |
-| `vote_threshold_long` | 7 | 0 | 0 | 0 |
+| `ma_filter_period` | 8 | 0 | 1 | 0 |
+| `stop_tighten_after_bars` | 7 | 0 | 0 | 0 |
 | `z_threshold` | 7 | 0 | 0 | 0 |
-| `entry_confirmation_days` | 7 | 0 | 0 | 0 |
-| `stop_tighten_after_bars` | 6 | 0 | 0 | 0 |
-| `time_stop_bars` | 6 | 0 | 0 | 0 |
-| `ma_filter_period` | 5 | 0 | 1 | 0 |
 
 ## Hot zones (genes que ja promoveram)
 
@@ -81,26 +82,26 @@ Genes onde alguma combinacao funcionou. Vale revisitar com novos vizinhos.
 |---|---:|---:|---:|---:|
 | `regime_threshold` | 6 | 26 | 23% | 1 |
 | `consecutive_loss_cooldown` | 5 | 19 | 26% | 1 |
-| `entry_score_threshold` | 3 | 20 | 15% | 0 |
-| `partial_take_pct` | 2 | 11 | 18% | 0 |
+| `partial_take_pct` | 3 | 12 | 25% | 0 |
+| `entry_score_threshold` | 3 | 21 | 14% | 0 |
 | `momentum_confirm_days` | 2 | 12 | 17% | 0 |
-| `partial_take_level` | 2 | 18 | 11% | 1 |
+| `partial_take_level` | 2 | 19 | 11% | 1 |
 | `equity_drawdown_stop_pct` | 1 | 7 | 14% | 0 |
-| `vol_regime_mode` | 1 | 8 | 12% | 0 |
-| `score_percentile_trigger` | 1 | 9 | 11% | 0 |
-| `stop_tighten_factor` | 1 | 10 | 10% | 0 |
-| `partial_take_level_2` | 1 | 11 | 9% | 0 |
-| `ma_filter_mode` | 1 | 11 | 9% | 0 |
-| `volatility_filter_percentile` | 1 | 12 | 8% | 0 |
-| `entry_score_threshold` | 1 | 14 | 7% | 0 |
-| `partial_take_level` | 1 | 16 | 6% | 1 |
+| `max_loss_per_trade_pct` | 1 | 8 | 12% | 0 |
+| `trailing_stop_mode` | 1 | 9 | 11% | 0 |
+| `vol_regime_mode` | 1 | 10 | 10% | 0 |
+| `score_percentile_trigger` | 1 | 11 | 9% | 0 |
+| `stop_tighten_factor` | 1 | 13 | 8% | 0 |
+| `partial_take_level_2` | 1 | 14 | 7% | 0 |
+| `volatility_filter_percentile` | 1 | 17 | 6% | 0 |
+| `ma_filter_mode` | 1 | 17 | 6% | 0 |
 
 ## Category rotation status
 
 | Category | Last swept | Runs | Promotions |
 |---|---|---:|---:|
 | A_risk_management | 2026-04-20T08:24:30+00:00 | 5 | 3 |
-| B_take_profit | 2026-04-20T02:36:23+00:00 | 6 | 1 |
+| B_take_profit | 2026-04-20T11:36:36+00:00 | 7 | 2 |
 | C_timing | 2026-04-20T04:36:50+00:00 | 4 | 2 |
 | D_entry_filter | 2026-04-20T10:29:24+00:00 | 6 | 2 |
 | E_regime_vol | 2026-04-20T05:42:53+00:00 | 4 | 3 |
@@ -108,7 +109,7 @@ Genes onde alguma combinacao funcionou. Vale revisitar com novos vizinhos.
 
 ## Codex sync history (latest attempts)
 
-Parsed `codex_attempts_source.md` at 2026-04-20T12:53:10+02:00. Total attempts: **24**, promoted: **11**. Updates via `python analysis/codex_attempts_sync.py` at the start of every continuous cycle (auto) or on demand.
+Parsed `codex_attempts_source.md` at 2026-04-20T11:32:33+00:00. Total attempts: **24**, promoted: **11**. Updates via `python analysis/codex_attempts_sync.py` at the start of every continuous cycle (auto) or on demand.
 
 | Attempt | Timestamp | Promoted | Move(s) | Learning (snippet) |
 |---|---|:-:|---|---|

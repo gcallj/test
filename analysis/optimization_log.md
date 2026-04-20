@@ -676,3 +676,26 @@ tells future iterations which gene moves are dead ends.
 
 ---
 
+## 2026-04-20T11:36:36+00:00 - B_take_profit
+**Cycle**: #30  |  **Promoted**: YES  |  **Codex sync**: YES  |  **combo_budget**: 8
+**Genes swept**: `reward_risk_ratio, partial_take_pct, partial_take_level, partial_take_pct_2, partial_take_level_2`
+**Sweep file**: `local_fullmetric_sweep_continuous_B_take_profit_20260420_113233.json`
+
+### Metrics
+
+| Source | fit | WR | WR_tgt | alpha_ann | MDD | trades |
+|---|---:|---:|---:|---:|---:|---:|
+| baseline (git:main) | 20.7554 | 70.00% | 69.44% | -8.29% | 11.09% | 32 |
+| incumbent (worktree) | 24.0138 | 69.70% | 70.00% | -8.08% | 10.99% | 33 |
+| **candidate** | 24.1736 | 70.00% | 70.00% | -8.13% | 11.09% | 33 |
+
+**Best candidate label**: `partial_take_pct:-1`
+
+**Moves applied to incumbent**:
+
+- `partial_take_pct`: `0.2` -> `0.1` (step 0.1)
+
+**Learning**: o move `partial_take_pct: 0.2->0.1` foi promovido. Categoria/genes adjacentes podem render melhorias semelhantes; considerar sweep daquela categoria no proximo ciclo.
+
+---
+

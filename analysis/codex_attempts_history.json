@@ -1,8 +1,8 @@
 {
   "codex_sync_metadata": {
-    "source_file": "C:/Users/gabri/OneDrive/Documentos/GitHub/test/analysis/codex_attempts_source.md",
-    "source_sha1": "ccb733dfd719ec8875ab682c131fd56cb374a68d",
-    "last_parsed": "2026-04-20T12:53:10+02:00",
+    "source_file": "/home/user/test/analysis/codex_attempts_source.md",
+    "source_sha1": "51c1d4aba6f2d205358f454542a885d05b99eef4",
+    "last_parsed": "2026-04-20T11:32:33+00:00",
     "parser_version": 1,
     "n_attempts_parsed": 24,
     "n_promoted": 11,
