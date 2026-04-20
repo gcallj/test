@@ -218,7 +218,13 @@ if buys:
 
 wb.close()
 
+# Optional prefix for identification (ex: "Pos merge", "Dev run", "Backfill").
+# Set via env var GA_TELEGRAM_PREFIX. Appears as first line da caption.
+_prefix = os.environ.get("GA_TELEGRAM_PREFIX", "").strip()
+_prefix_line = f"[{_prefix}]\n" if _prefix else ""
+
 caption = (
+    f"{_prefix_line}"
     f"Trading Signals B3 - {latest_date}\n"
     f"\n"
     f"Sinais: {n_buy} BUY | {n_hold} HOLD | {n_sell} SELL\n"
