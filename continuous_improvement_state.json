@@ -8,9 +8,9 @@
       "n_promotions": 2
     },
     "B_take_profit": {
-      "last_swept": "2026-04-19T16:29:41+00:00",
-      "n_runs": 5,
-      "n_promotions": 0
+      "last_swept": "2026-04-20T02:36:23+00:00",
+      "n_runs": 6,
+      "n_promotions": 1
     },
     "C_timing": {
       "last_swept": "2026-04-19T19:30:20+00:00",
@@ -33,7 +33,7 @@
       "n_promotions": 0
     }
   },
-  "total_cycles": 23,
-  "total_promotions": 6,
-  "last_updated": "2026-04-20T01:36:41+00:00"
+  "total_cycles": 24,
+  "total_promotions": 7,
+  "last_updated": "2026-04-20T02:36:23+00:00"
 }

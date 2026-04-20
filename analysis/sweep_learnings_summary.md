@@ -1,23 +1,23 @@
 # Sweep Learnings Summary
 
-_Generated: 2026-04-20T01:37:07+00:00_
+_Generated: 2026-04-20T02:36:39+00:00_
 
 Aggregates all `local_fullmetric_sweep_result*.json` files plus the
 continuous-improvement state. Use this file to plan the next cycle.
 
 ## Current snapshot
 
-- Checkpoint fitness: `20.967005487820707`
-- Total sweeps seen: **31**
-- Total promotions: **13** (including 2 from codex log)
-- Promotion rate: **28.9%** (over 45 total attempts)
-- Continuous cycles run: 23
-- Continuous promotions: 6
+- Checkpoint fitness: `21.017558786134252`
+- Total sweeps seen: **32**
+- Total promotions: **14** (including 2 from codex log)
+- Promotion rate: **30.4%** (over 46 total attempts)
+- Continuous cycles run: 24
+- Continuous promotions: 7
 - Codex attempts synced: **14** (7 promoted) from `optimization_attempts_20260416.md`
 
 ## Next suggested sweep
 
-categoria mais antiga: **B_take_profit** (ultima vez: 2026-04-19T16:29:41+00:00) -> `python run_continuous_improvement.py --category B`
+categoria mais antiga: **C_timing** (ultima vez: 2026-04-19T19:30:20+00:00) -> `python run_continuous_improvement.py --category C`
 
 ## Promotion timeline (chronological)
 
@@ -36,6 +36,7 @@ categoria mais antiga: **B_take_profit** (ultima vez: 2026-04-19T16:29:41+00:00)
 | 2026-04-19 | local | `local_fullmetric_sweep_continuous_D_entry_filter_20260419_151906.json` | `entry_score_threshold 0.15000000000000002->0.2` | fit=19.694 WR=69.7% alpha=-8.33% MDD=11.2% |
 | 2026-04-19 | local | `local_fullmetric_sweep_continuous_E_regime_vol_20260419_212524.json` | `regime_threshold 0.25->0.2` | fit=21.907 WR=69.9% alpha=-8.28% MDD=11.2% |
 | 2026-04-19 | local | `local_fullmetric_sweep_continuous_A_risk_management_20260419_235131.json` | `max_loss_per_trade_pct 0.08->0.09` | fit=20.967 WR=69.7% alpha=-8.27% MDD=10.9% |
+| 2026-04-20 | local | `local_fullmetric_sweep_continuous_B_take_profit_20260420_023246.json` | `partial_take_level_2 1.75->1.5` | fit=21.018 WR=69.7% alpha=-8.24% MDD=11.0% |
 
 ## Graveyard (genes que falharam multiplas vezes)
 
@@ -44,9 +45,8 @@ Genes tentados >= 2 vezes sem nenhuma promocao. Considere SKIP no proximo ciclo.
 
 | Gene | Attempts | Promotions | (codex) Attempts | (codex) Promotions |
 |---|---:|---:|---:|---:|
-| `reward_risk_ratio` | 10 | 0 | 1 | 0 |
-| `partial_take_level_2` | 10 | 0 | 1 | 0 |
-| `partial_take_pct_2` | 9 | 0 | 1 | 0 |
+| `reward_risk_ratio` | 11 | 0 | 1 | 0 |
+| `partial_take_pct_2` | 10 | 0 | 1 | 0 |
 | `stop_atr_mult` | 7 | 0 | 0 | 0 |
 | `score_percentile_trigger` | 7 | 0 | 0 | 0 |
 | `entry_discount_atr_frac` | 7 | 0 | 1 | 0 |
@@ -79,15 +79,16 @@ Genes onde alguma combinacao funcionou. Vale revisitar com novos vizinhos.
 | `max_loss_per_trade_pct` | 1 | 6 | 17% | 0 |
 | `volatility_filter_percentile` | 1 | 6 | 17% | 0 |
 | `trailing_stop_mode` | 1 | 7 | 14% | 0 |
-| `partial_take_pct` | 1 | 9 | 11% | 0 |
-| `partial_take_level` | 1 | 10 | 10% | 1 |
+| `partial_take_pct` | 1 | 10 | 10% | 0 |
+| `partial_take_level` | 1 | 11 | 9% | 1 |
+| `partial_take_level_2` | 1 | 11 | 9% | 0 |
 
 ## Category rotation status
 
 | Category | Last swept | Runs | Promotions |
 |---|---|---:|---:|
 | A_risk_management | 2026-04-19T23:55:12+00:00 | 4 | 2 |
-| B_take_profit | 2026-04-19T16:29:41+00:00 | 5 | 0 |
+| B_take_profit | 2026-04-20T02:36:23+00:00 | 6 | 1 |
 | C_timing | 2026-04-19T19:30:20+00:00 | 3 | 1 |
 | D_entry_filter | 2026-04-20T01:36:41+00:00 | 5 | 1 |
 | E_regime_vol | 2026-04-19T21:28:53+00:00 | 3 | 2 |
