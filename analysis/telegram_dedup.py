@@ -113,20 +113,50 @@ def _write_tracker(data: dict) -> None:
         tmp.unlink(missing_ok=True)
 
 
+def _business_days_between(d1, d2) -> int:
+    """Dias uteis entre d1 (mais antigo) e d2 (mais novo). Aproximado — conta
+    dias mas subtrai 2/7 estimativa para weekends. Zero se formatos invalidos."""
+    try:
+        from datetime import date
+        if isinstance(d1, str):
+            d1 = date.fromisoformat(d1[:10])
+        if isinstance(d2, str):
+            d2 = date.fromisoformat(d2[:10])
+        days = (d2 - d1).days
+        # Subtract weekend days (approx)
+        full_weeks = days // 7
+        remainder = days % 7
+        # remainder could overlap weekend; pessimistic = subtract all possible
+        weekend_days = full_weeks * 2 + max(0, min(2, remainder))
+        return max(0, days - weekend_days)
+    except Exception:
+        return 0
+
+
 def should_send_telegram(xlsx_path: Path | None = None,
                          checkpoint_path: Path | None = None,
-                         min_fit_improvement: float = 0.05) -> tuple[bool, str]:
+                         min_fit_improvement: float = 0.05,
+                         max_staleness_bdays: int = 5) -> tuple[bool, str]:
     """
     Decide se o envio e permitido. Retorna (should_send, reason).
 
-    Regras (OR):
-      - GA_FORCE_TELEGRAM_SEND=1 no env: ALWAYS send
-      - Data do xlsx > data do ultimo enviado: SEND
-      - genome_sha mudou vs ultimo enviado: SEND
-      - fit melhorou >= min_fit_improvement vs ultimo: SEND
-      - Nunca enviado antes: SEND
+    Politica (combinada, AND para BLOCK; OR para ALLOW):
 
-    Sem nenhum desses gatilhos: DONT SEND (evita duplicata).
+    BLOCK (nunca envia se):
+      - xlsx nao existe
+      - Data do xlsx e STALE (>= max_staleness_bdays dias uteis atras). Evita
+        enviar dados velhos se o cron ETL falhou por muitos dias.
+      - Fit do checkpoint REGREDIU >= min_fit_improvement vs ultimo envio.
+        Nao spammar usuario com modelo pior.
+
+    ALLOW (envia se qualquer):
+      - GA_FORCE_TELEGRAM_SEND=1 no env (override manual)
+      - Primeiro envio (tracker vazio)
+      - Data do xlsx e MAIS NOVA que ultimo envio E fit nao regrediu
+      - genome_sha mudou E fit nao regrediu (modelo updated)
+      - fit melhorou >= min_fit_improvement vs ultimo
+
+    Sem nenhum desses gatilhos: DONT SEND (duplicata sem melhoria).
     """
     if os.environ.get("GA_FORCE_TELEGRAM_SEND", "") in ("1", "true", "yes", "on"):
         return True, "GA_FORCE_TELEGRAM_SEND=1"
@@ -141,33 +171,68 @@ def should_send_telegram(xlsx_path: Path | None = None,
         "genome_sha": _genome_sha(ck),
         "fit": _checkpoint_fit(ck),
     }
+
+    # GUARD 1: data do xlsx nao pode estar muito antiga (evita envio de xlsx
+    # stale se o ETL falhou dias seguidos).
+    if current["data_date"]:
+        from datetime import date, timedelta
+        today = date.today()
+        try:
+            xlsx_date = date.fromisoformat(current["data_date"][:10])
+            bdays_old = _business_days_between(xlsx_date, today)
+            if bdays_old > max_staleness_bdays:
+                return False, (
+                    f"dados stale: xlsx date={current['data_date']} "
+                    f"({bdays_old} dias uteis atras, max={max_staleness_bdays}). "
+                    f"Rode ETL fresh antes de enviar."
+                )
+        except (ValueError, TypeError):
+            pass  # fall through se nao conseguir parsear
+
     last = _load_tracker()
 
     if not last:
-        return True, "nenhum envio anterior registrado"
+        return True, f"primeiro envio (data={current['data_date']}, fit={current['fit']:.3f})"
 
-    # data mais nova
-    if current["data_date"] and last.get("data_date"):
-        if current["data_date"] > last["data_date"]:
-            return True, f"data nova: {last['data_date']} -> {current['data_date']}"
-
-    # genome mudou
-    if current["genome_sha"] != last.get("genome_sha"):
-        return True, (f"genome mudou: {last.get('genome_sha','?')} -> "
-                      f"{current['genome_sha']}")
-
-    # fit melhorou significativamente
+    # GUARD 2: fit NUNCA pode ter regredido (nao envia downgrade).
     last_fit = float(last.get("fit", 0.0) or 0.0)
     delta = current["fit"] - last_fit
-    if delta >= min_fit_improvement:
-        return True, (f"fit melhorou: {last_fit:.3f} -> {current['fit']:.3f} "
-                      f"(delta {delta:+.3f})")
+    if delta < -min_fit_improvement:
+        return False, (
+            f"fit REGREDIU: {last_fit:.3f} -> {current['fit']:.3f} "
+            f"(delta {delta:+.3f}). NAO enviar modelo pior que o ultimo."
+        )
 
-    # nenhum criterio atendido
-    return False, (f"duplicata (ultimo: data={last.get('data_date')}, "
-                   f"sha={last.get('genome_sha','?')[:8]}, fit={last_fit:.3f} | "
-                   f"atual: data={current['data_date']}, "
-                   f"sha={current['genome_sha'][:8]}, fit={current['fit']:.3f})")
+    # ALLOW 1: data mais nova que ultima enviada (AND fit nao regrediu)
+    if current["data_date"] and last.get("data_date"):
+        if current["data_date"] > last["data_date"]:
+            return True, (
+                f"data nova: {last['data_date']} -> {current['data_date']} "
+                f"(fit {last_fit:.3f} -> {current['fit']:.3f})"
+            )
+
+    # ALLOW 2: genome mudou (modelo atualizado) AND fit nao regrediu
+    if current["genome_sha"] != last.get("genome_sha"):
+        return True, (
+            f"genome mudou: {last.get('genome_sha','?')[:8]} -> "
+            f"{current['genome_sha'][:8]} (fit {last_fit:.3f} -> {current['fit']:.3f})"
+        )
+
+    # ALLOW 3: fit melhorou significativamente (>= threshold)
+    if delta >= min_fit_improvement:
+        return True, (
+            f"fit melhorou: {last_fit:.3f} -> {current['fit']:.3f} "
+            f"(delta {delta:+.3f})"
+        )
+
+    # BLOCK default: nada mudou o suficiente
+    return False, (
+        f"duplicata (ultimo: data={last.get('data_date')}, "
+        f"sha={last.get('genome_sha','?')[:8]}, fit={last_fit:.3f} | "
+        f"atual: data={current['data_date']}, "
+        f"sha={current['genome_sha'][:8]}, fit={current['fit']:.3f}, "
+        f"delta={delta:+.4f})"
+    )
 
 
 def record_telegram_sent(xlsx_path: Path | None = None,

@@ -1,0 +1,80 @@
+name: Build PayloadStore
+
+# Roda ETL + PayloadStore a cada 4h e sobe como artifact pra sweep_matrix
+# paralelizar 6 categorias sem reETL cada uma.
+#
+# - public repo: Actions minutes unlimited
+# - artifact: output/ga_memmap/ (~200MB) + parquet (~480MB), retention 1 dia
+# - NAO envia Telegram (GA_DISABLE_TELEGRAM_SEND=1)
+
+on:
+  schedule:
+    - cron: '15 */4 * * *'   # 00:15, 04:15, 08:15, 12:15, 16:15, 20:15 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: build-store
+  cancel-in-progress: false   # nao cancela se outro ja estiver rodando
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      GA_RUN_MODE: load
+      GA_FAST_MODE: 'true'
+      GA_KEEP_STORE: '1'
+      GA_DISABLE_TELEGRAM_SEND: '1'   # build nao envia — so prepara store
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ hashFiles('requirements.txt') }}
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Verify checkpoint
+        run: |
+          python -c "import json; d=json.load(open('global_ga_checkpoint.json')); print(f'  fit={d.get(\"fitness\", 0):.4f} genes={len(d.get(\"genome\", []))}')"
+
+      - name: ETL (yfinance 119 tickers)
+        run: |
+          mkdir -p output/data
+          python -c "from stock_etl import run_etl; run_etl()"
+
+      - name: Build PayloadStore (ga_run load)
+        run: |
+          python -u ga_run.py
+          # Pos-condicao: meta.json DEVE existir
+          test -f output/ga_memmap/meta.json || (echo "ERROR: meta.json missing" && exit 1)
+          ls -la output/ga_memmap/meta.json
+
+      - name: Upload PayloadStore artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: payload-store
+          path: |
+            output/ga_memmap/
+            output/data/expanded_stock_reduced.parquet
+            output/data/expanded_stock.parquet
+          retention-days: 1
+          if-no-files-found: error
+          compression-level: 6
+
+      - name: Report
+        run: |
+          echo "::notice::PayloadStore built. meta.json + parquets uploaded as artifact 'payload-store'. sweep_matrix.yml will trigger next."

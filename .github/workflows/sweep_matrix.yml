@@ -1,0 +1,302 @@
+name: Parallel Sweep Matrix
+
+# Roda 6 sweeps em paralelo (1 por categoria A-F) reutilizando o artifact
+# do build_store.yml (evita re-ETL por categoria). Cada matrix job salva
+# APENAS o JSON de sweep; um job 'consolidate' sequencial aplica os melhores
+# respeitando B2 alpha floor + B4 drift guard e commita 1 vez no fim.
+#
+# Throughput: 6 categorias em ~25 min wall-time (vs ~3h serial).
+# NAO envia Telegram (sweep nao muda dados do dia; so mexe genome).
+
+on:
+  workflow_run:
+    workflows: ["Build PayloadStore"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: sweep-matrix
+  cancel-in-progress: false
+
+jobs:
+  # ========================================================================
+  # MATRIX: 1 job por categoria, paralelo.
+  # Cada job APENAS roda o sweep + salva JSON. NAO commita nada.
+  # ========================================================================
+  sweep:
+    # So roda se build_store teve sucesso OU se foi dispatch manual
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        category:
+          - A_risk_management
+          - B_take_profit
+          - C_timing
+          - D_entry_filter
+          - E_regime_vol
+          - F_trailing
+    env:
+      GA_DRIFT_GUARD: '1'
+      GA_DRIFT_MIN_CONSECUTIVE: '3'
+      GA_ALPHA_FLOOR_TOLERANCE_PP: '0.0'
+      GA_KEEP_STORE: '1'
+      GA_DISABLE_TELEGRAM_SEND: '1'
+    steps:
+      - name: Checkout (latest main)
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ hashFiles('requirements.txt') }}
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Download PayloadStore artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: payload-store
+          path: ./
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id || github.run_id }}
+
+      - name: Verify store ready
+        run: |
+          test -f output/ga_memmap/meta.json || (echo "ERROR: meta.json missing after artifact download" && exit 1)
+          test -f output/data/expanded_stock_reduced.parquet || (echo "ERROR: parquet missing" && exit 1)
+          ls -la output/ga_memmap/meta.json output/data/expanded_stock_reduced.parquet
+
+      - name: Run sweep for category ${{ matrix.category }} (NO commit)
+        # Usamos run_continuous_improvement.py diretamente — ele ja gerencia
+        # gene list por categoria, combo_budget adaptivo, plateau detection.
+        # --no-codex-sync: consolidate job fara esse sync uma vez, nao N vezes.
+        run: |
+          python -u run_continuous_improvement.py \
+            --max-cycles 1 \
+            --category ${{ matrix.category }} \
+            --alpha-focus off \
+            --no-codex-sync
+
+      - name: Stage result files for this category
+        run: |
+          mkdir -p _sweep_result
+          # Sweep JSON (unique per category + timestamp)
+          cp -f local_fullmetric_sweep_continuous_${{ matrix.category }}_*.json _sweep_result/ 2>/dev/null || echo "no sweep JSON"
+          # Checkpoint se foi promovido (apply mutou)
+          cp -f global_ga_checkpoint.json _sweep_result/checkpoint.json 2>/dev/null || true
+          cp -f global_ga_checkpoint_*.json.bak _sweep_result/ 2>/dev/null || true
+          cp -f continuous_improvement_state.json _sweep_result/state.json 2>/dev/null || true
+          cp -f local_ga_best_so_far.json _sweep_result/best_so_far.json 2>/dev/null || true
+          # Log entry que foi append (ultimas 50 linhas do md)
+          tail -100 analysis/optimization_log.md > _sweep_result/optimization_log_tail.md 2>/dev/null || true
+          ls -la _sweep_result/
+
+      - name: Upload sweep artifact (category-specific)
+        uses: actions/upload-artifact@v4
+        with:
+          name: sweep-${{ matrix.category }}
+          path: _sweep_result/
+          retention-days: 1
+          if-no-files-found: warn
+
+  # ========================================================================
+  # CONSOLIDATE: 1 job sequencial que:
+  #   1. Baixa TODOS os artefatos sweep-*
+  #   2. Para cada sweep, re-aplica apply_fullmetric_sweep_best (com gates)
+  #   3. Commita 1 vez no fim com resumo de quantas promocoes ocorreram
+  # ========================================================================
+  consolidate:
+    needs: sweep
+    if: always() && (needs.sweep.result == 'success' || needs.sweep.result == 'failure')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GA_DRIFT_GUARD: '1'
+      GA_DRIFT_MIN_CONSECUTIVE: '3'
+      GA_ALPHA_FLOOR_TOLERANCE_PP: '0.0'
+      GA_KEEP_STORE: '1'
+      GA_DISABLE_TELEGRAM_SEND: '1'
+    steps:
+      - name: Checkout (latest main)
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Download PayloadStore artifact (reuse build_store's)
+        uses: actions/download-artifact@v4
+        with:
+          name: payload-store
+          path: ./
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id || github.run_id }}
+
+      - name: Download all sweep artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: sweep-*
+          path: sweep_artifacts/
+          merge-multiple: false
+
+      - name: List downloaded sweeps
+        run: |
+          echo "Available sweep artifacts:"
+          ls -la sweep_artifacts/ 2>/dev/null || echo "none"
+          find sweep_artifacts -name "local_fullmetric_sweep_continuous_*.json" | head -20
+
+      - name: Consolidate + apply in sequence
+        run: |
+          set -euo pipefail
+          # Copy sweep JSONs to root so apply script can find them
+          find sweep_artifacts -name "local_fullmetric_sweep_continuous_*.json" -exec cp {} . \;
+
+          # Re-aplica cada sweep em sequencia. Cada apply:
+          #   - Re-avalia contra o INCUMBENT ATUAL (depois de possivel apply anterior)
+          #   - Respeita B2 alpha floor + B4 drift guard
+          # Ordem de aplicacao: ordem alfabetica dos arquivos (por timestamp).
+          # Promocoes iterativas: se cycle #28 promove equity_drawdown_stop_pct,
+          # cycle #29 re-avalia contra esse novo incumbent.
+
+          applied_count=0
+          rejected_count=0
+          for sweep_json in $(ls -1 local_fullmetric_sweep_continuous_*.json 2>/dev/null | sort); do
+            echo ""
+            echo "==== Applying: $sweep_json ===="
+            # apply_fullmetric_sweep_best retorna exit != 0 se gates falham — nao
+            # queremos abortar todo o workflow, so seguir para o proximo.
+            if python -u apply_fullmetric_sweep_best.py --sweep "$sweep_json" 2>&1; then
+              applied_count=$((applied_count + 1))
+              echo "-> APPLIED"
+            else
+              rejected_count=$((rejected_count + 1))
+              echo "-> REJECTED (gates falharam — esperado)"
+            fi
+          done
+
+          echo ""
+          echo "=== RESUMO: applied=$applied_count  rejected=$rejected_count ==="
+          echo "applied=$applied_count" >> $GITHUB_ENV
+          echo "rejected=$rejected_count" >> $GITHUB_ENV
+
+      - name: Sync codex attempts + aggregator (once)
+        run: |
+          python analysis/codex_attempts_sync.py --force --quiet || echo "[WARN] codex sync skipped"
+          python analysis/sweep_learnings.py || echo "[WARN] sweep_learnings skipped"
+          python analysis/overfitting_diagnostic.py || echo "[WARN] diagnostic skipped"
+
+      - name: Rebuild optimization_log.md from per-category tails
+        # Each matrix job appended its own entries via run_continuous_improvement.
+        # Consolidate needs to MERGE them back. Use the tails saved in artifacts.
+        run: |
+          if [ -d "sweep_artifacts" ]; then
+            # Collect all new log entries from category tails (dedup by timestamp)
+            for tail in sweep_artifacts/*/optimization_log_tail.md; do
+              if [ -f "$tail" ]; then
+                # Extract only NEW entries (ones not already in main log)
+                # Simple approach: append tail if tail has new ## headers not in log
+                cat "$tail"
+                echo "---"
+              fi
+            done > _merged_new_entries.md
+            # Use python to dedup+merge into analysis/optimization_log.md
+            python -c "
+            from pathlib import Path
+            import re
+            main_log = Path('analysis/optimization_log.md')
+            new_entries = Path('_merged_new_entries.md')
+            if not new_entries.exists() or not main_log.exists():
+                raise SystemExit(0)
+            existing = main_log.read_text(encoding='utf-8')
+            # Timestamps ja presentes em main_log
+            existing_ts = set(re.findall(r'^## (\d{4}-\d{2}-\d{2}T[\d:+-]+)', existing, re.MULTILINE))
+            text = new_entries.read_text(encoding='utf-8')
+            # Split new entries by '## <ts>' marker
+            pattern = re.compile(r'(^## \d{4}-\d{2}-\d{2}T[\d:+-]+.*?)(?=^## |^---$|\Z)', re.MULTILINE | re.DOTALL)
+            added = []
+            for m in pattern.finditer(text):
+                block = m.group(1)
+                ts_m = re.match(r'^## (\d{4}-\d{2}-\d{2}T[\d:+-]+)', block)
+                if ts_m and ts_m.group(1) not in existing_ts:
+                    added.append(block.rstrip() + '\n\n---\n')
+                    existing_ts.add(ts_m.group(1))
+            if added:
+                main_log.write_text(existing.rstrip() + '\n\n' + ''.join(added), encoding='utf-8')
+                print(f'[merge] appended {len(added)} new cycle entries')
+            else:
+                print('[merge] no new entries')
+            " || echo "[WARN] log merge skipped"
+          fi
+
+      - name: Commit + push (1 commit for the entire matrix cycle)
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+
+          # Safety: NAO commitar output/ ou pycache
+          git status --short | grep -E '^(A |M |\?\?).+(output/|__pycache__/)' && (echo "ERROR: sensitive paths staged" && exit 1) || true
+
+          git add -A \
+            global_ga_checkpoint.json \
+            continuous_improvement_state.json \
+            analysis/optimization_log.md \
+            analysis/sweep_learnings_summary.md \
+            analysis/overfitting_diagnostic_report.md \
+            analysis/codex_attempts_history.json \
+            analysis/codex_attempts_imported.md \
+            local_fullmetric_sweep_continuous_*.json \
+            local_ga_best_so_far.json \
+            global_ga_checkpoint_*.json.bak \
+            2>/dev/null || true
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+
+          git commit -m "[sweep-matrix] $(date -u +%Y-%m-%dT%H:%M:%SZ) applied=${applied:-0} rejected=${rejected:-0}"
+
+          # Retry 3x se houver race com daily_pipeline ou outro push
+          for i in 1 2 3; do
+            if git pull --rebase origin main && git push origin main; then
+              echo "Pushed on attempt $i"
+              exit 0
+            fi
+            echo "Retry $i/3 after rebase conflict"
+            sleep $(( (RANDOM % 10) + 3 ))
+          done
+          echo "ERROR: push falhou apos 3 retries"
+          exit 1
+
+      - name: Report summary
+        if: always()
+        run: |
+          echo "::notice::Sweep matrix cycle: applied=${applied:-0} promotions, rejected=${rejected:-0} (B2/B4 gates)."
