@@ -520,3 +520,26 @@ tells future iterations which gene moves are dead ends.
 
 ---
 
+## 2026-04-20T01:36:41+00:00 - D_entry_filter
+**Cycle**: #23  |  **Promoted**: NO  |  **Codex sync**: YES  |  **combo_budget**: 8
+**Genes swept**: `vote_threshold_long, vote_threshold_short, z_threshold, signal_ema_span, entry_confirmation_days, entry_discount_atr_frac, score_strength_scaling, min_signal_strength, entry_score_threshold, score_percentile_trigger`
+**Sweep file**: `local_fullmetric_sweep_continuous_D_entry_filter_20260420_013020.json`
+
+### Metrics
+
+| Source | fit | WR | WR_tgt | alpha_ann | MDD | trades |
+|---|---:|---:|---:|---:|---:|---:|
+| baseline (git:main) | 19.0320 | 69.12% | 68.57% | -8.35% | 10.99% | 31 |
+| incumbent (worktree) | 20.3067 | 69.18% | 69.44% | -8.33% | 11.09% | 32 |
+| **candidate** | 19.7627 | 69.23% | 69.44% | -8.35% | 11.09% | 32 |
+
+**Best candidate label**: `signal_ema_span:-1`
+
+**Moves applied to incumbent**:
+
+- `signal_ema_span`: `8` -> `7` (step 1.0)
+
+**Learning**: candidato `signal_ema_span: 8->7` parecia bom mas falhou nos gates: acceptance_vs_main, priority_better. Esses moves entram para o graveyard: nao tentar novamente sem mudar contexto.
+
+---
+
