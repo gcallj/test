@@ -1,6 +1,6 @@
 # Sweep Learnings Summary
 
-_Generated: 2026-04-20T11:52:01+00:00_
+_Generated: 2026-04-20T15:03:22+00:00_
 
 Aggregates all `local_fullmetric_sweep_result*.json` files plus the
 continuous-improvement state. Use this file to plan the next cycle.
@@ -8,16 +8,16 @@ continuous-improvement state. Use this file to plan the next cycle.
 ## Current snapshot
 
 - Checkpoint fitness: `24.17362580623272`
-- Total sweeps seen: **59**
+- Total sweeps seen: **60**
 - Total promotions: **27** (including 1 from codex log)
-- Promotion rate: **32.5%** (over 83 total attempts)
-- Continuous cycles run: 30
+- Promotion rate: **32.1%** (over 84 total attempts)
+- Continuous cycles run: 31
 - Continuous promotions: 12
 - Codex attempts synced: **24** (11 promoted) from `codex_attempts_source.md`
 
 ## Next suggested sweep
 
-categoria mais antiga: **C_timing** (ultima vez: 2026-04-20T04:36:50+00:00) -> `python run_continuous_improvement.py --category C`
+categoria mais antiga: **E_regime_vol** (ultima vez: 2026-04-20T05:42:53+00:00) -> `python run_continuous_improvement.py --category E`
 
 ## Promotion timeline (chronological)
 
@@ -63,9 +63,9 @@ Genes tentados >= 2 vezes sem nenhuma promocao. Considere SKIP no proximo ciclo.
 | `signal_ema_span` | 12 | 0 | 0 | 0 |
 | `vote_threshold_long` | 11 | 0 | 0 | 0 |
 | `score_strength_scaling` | 11 | 0 | 0 | 0 |
+| `time_stop_bars` | 10 | 0 | 0 | 0 |
 | `min_signal_strength` | 10 | 0 | 0 | 0 |
 | `stop_atr_mult` | 9 | 0 | 0 | 0 |
-| `time_stop_bars` | 9 | 0 | 0 | 0 |
 | `entry_confirmation_days` | 9 | 0 | 0 | 0 |
 | `entry_discount_atr_frac` | 8 | 0 | 0 | 0 |
 | `volume_confirm_mode` | 8 | 0 | 1 | 0 |
@@ -81,7 +81,7 @@ Genes onde alguma combinacao funcionou. Vale revisitar com novos vizinhos.
 | Gene | Promotions | Attempts | Hit rate | (codex) Promotions |
 |---|---:|---:|---:|---:|
 | `regime_threshold` | 6 | 26 | 23% | 1 |
-| `consecutive_loss_cooldown` | 5 | 19 | 26% | 1 |
+| `consecutive_loss_cooldown` | 5 | 20 | 25% | 1 |
 | `partial_take_pct` | 3 | 12 | 25% | 0 |
 | `entry_score_threshold` | 3 | 21 | 14% | 0 |
 | `momentum_confirm_days` | 2 | 12 | 17% | 0 |
@@ -102,7 +102,7 @@ Genes onde alguma combinacao funcionou. Vale revisitar com novos vizinhos.
 |---|---|---:|---:|
 | A_risk_management | 2026-04-20T08:24:30+00:00 | 5 | 3 |
 | B_take_profit | 2026-04-20T11:36:36+00:00 | 7 | 2 |
-| C_timing | 2026-04-20T04:36:50+00:00 | 4 | 2 |
+| C_timing | 2026-04-20T14:16:03+00:00 | 5 | 2 |
 | D_entry_filter | 2026-04-20T10:29:24+00:00 | 6 | 2 |
 | E_regime_vol | 2026-04-20T05:42:53+00:00 | 4 | 3 |
 | F_trailing | 2026-04-20T07:43:17+00:00 | 4 | 0 |

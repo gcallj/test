@@ -699,3 +699,26 @@ tells future iterations which gene moves are dead ends.
 
 ---
 
+## 2026-04-20T14:16:03+00:00 - C_timing
+**Cycle**: #31  |  **Promoted**: NO  |  **Codex sync**: YES  |  **combo_budget**: 8
+**Genes swept**: `time_stop_bars, consecutive_loss_cooldown`
+**Sweep file**: `local_fullmetric_sweep_continuous_C_timing_20260420_141251.json`
+
+### Metrics
+
+| Source | fit | WR | WR_tgt | alpha_ann | MDD | trades |
+|---|---:|---:|---:|---:|---:|---:|
+| baseline (git:main) | 21.1487 | 69.70% | 69.44% | -8.26% | 10.99% | 32 |
+| incumbent (worktree) | 24.3907 | 70.51% | 70.00% | -8.10% | 10.96% | 33 |
+| **candidate** | 24.3907 | 70.51% | 70.00% | -8.10% | 10.96% | 33 |
+
+**Best candidate label**: `time_stop_bars:-3`
+
+**Moves applied to incumbent**:
+
+- `time_stop_bars`: `19` -> `16` (step 1.0)
+
+**Learning**: candidato `time_stop_bars: 19->16` parecia bom mas falhou nos gates: priority_better. Esses moves entram para o graveyard: nao tentar novamente sem mudar contexto.
+
+---
+
