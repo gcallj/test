@@ -963,6 +963,55 @@ Daily workbook + Telegram status after promotion:
 - helper confirmed `store_latest_day = 2026-04-17`, `target_day = 2026-04-17`, and `summary_latest.xlsx` already matched the latest local trading day, so no workbook refresh was needed before delivery
 - attempted exactly one Telegram document send for `summary_latest.xlsx` / trading day `2026-04-17`, but delivery failed in this environment with `WinError 10013`
 
+### Attempt 37: Refreshed-baseline entry vs A/E tail-repair sweep - NOT PROMOTED
+
+Timestamp: `2026-04-20T10:56:55+02:00` local (Europe/Berlin)
+
+Method:
+
+- refreshed incumbent/baseline under the current guardrails: `py run_local_ga_staged.py --eval-only --alpha-focus off`
+- baseline changed materially during this run: `git:main` re-evaluated from ref `7c65c190da0ece7697a6db9f747f2d9fd259dabd` to `fit 23.4326 / WR_med_all 70.00% / WR_target_med_all 70.15% / mean_alpha_ann -8.12% / MDD_med 10.99%`, while the current local incumbent stayed `fit 23.6358 / WR_med_all 70.75% / WR_target_med_all 70.00% / mean_alpha_ann -8.23% / MDD_med 11.03%`
+- ran a bounded full-metric comparison of the open `entry_score_threshold:+1` branch versus A/E-style repair helpers: `py run_local_fullmetric_sweep.py --alpha-focus off --genes "entry_score_threshold,ma_filter_mode,volatility_filter_percentile,stop_tighten_factor,regime_threshold" --combo-budget 18 --combo-anchor-labels "entry_score_threshold:+1" --seed 66 --out local_fullmetric_sweep_result_20260420_105512_entry_vs_ae_tailrepair.json`
+
+Genes touched: `[entry_score_threshold, ma_filter_mode, volatility_filter_percentile, stop_tighten_factor, regime_threshold]`
+
+Windows tested:
+
+- full-metric evaluation across all tickers (data range: `2005-01-04 -> 2026-04-17`, `36` walk-forward windows, `119` tickers)
+
+Closest guardrail-safe near-miss:
+
+- change: `regime_threshold: 0.25 -> 0.20`
+
+Candidate summary:
+| Metric | `git:main` baseline | Prior incumbent | Candidate | Delta vs prior incumbent |
+| --- | ---: | ---: | ---: | ---: |
+| `fit` | `23.4326` | `23.6358` | `23.3043` | `-0.3315` |
+| `WR_med_all` | `70.00%` | `70.75%` | `70.75%` | `+0.00pp` |
+| `WR_target_med_all` | `70.15%` | `70.00%` | `70.00%` | `+0.00pp` |
+| `mean_alpha_ann` | `-8.12%` | `-8.23%` | `-8.22%` | `+0.01pp` |
+| `MDD_med` | `10.99%` | `11.03%` | `11.03%` | `+0.00pp` |
+| `MDD_p75` | `15.70%` | `15.95%` | `15.99%` | `+0.04pp` |
+| `MDD_duration_med` | `212.0` | `224.0` | `225.0` | `+1.0` |
+| `trades_med` | `32.0` | `32.0` | `32.0` | `+0.0` |
+
+Outcome:
+
+- `promote = false`
+- rationale: the refreshed `git:main` invalidated the old frontier assumptions. The cleanest A/E repair, `regime_threshold: 0.25 -> 0.20`, fully preserved incumbent hit-rate guardrails and recovered a small amount of alpha versus the current local incumbent, but it still lost to the new `git:main` on the second and third promotion priorities: `WR_target_med_all` stayed at `70.00%` versus `git:main 70.15%`, and `mean_alpha_ann` stayed at `-8.22%` versus `git:main -8.12%`. That left `acceptance_vs_main.mean_alpha_ann_floor = false`, so no A/E-only repair in this sweep was promotable.
+- the best-fit D-side branch remained `entry_score_threshold: 0.20 -> 0.25`: `fit 23.8405` (`+0.2046` vs incumbent), `WR_med_all 70.31%` (`-0.44pp`), `WR_target_med_all 70.07%` (`+0.07pp`), `mean_alpha_ann -8.23%` (`+0.00pp`), `MDD_duration_med 202.0` (`-22.0`). It still cannot be promoted because the WR drop is now material against the current incumbent (`70.31% < 70.50%` floor).
+
+What was learned:
+
+- the main problem is no longer only local tail-risk repair. The refreshed `git:main` now beats the current local checkpoint on `WR_target_med_all` and `mean_alpha_ann`, while the local incumbent still wins on the first-priority `WR_med_all` breadth (`63` vs `60` tickers `>=70%` WR). That means small local A/E repairs around the current incumbent are structurally unlikely to promote unless they also recover at least about `0.11pp` annualized alpha and `0.15pp` `WR_target` versus the refreshed baseline.
+- the original open question was answered directly: after the `consecutive_loss_cooldown = 10` promotion, `entry_score_threshold:+1` is no longer guardrail-safe. It still improves fit and drawdown duration, but the extra `WR_med_all` headroom from Attempts 34-36 was not enough to absorb the latest local hit-rate drop once compared against the current incumbent.
+- future search should stop treating the old `20.7059`/`69.70%` baseline as authoritative. The next useful move is a branch that explicitly targets alpha and `WR_target` recovery against the refreshed `git:main`, likely through a different family than local A/E repair.
+
+Daily workbook + Telegram status after this run:
+
+- no promotion happened, so `py ensure_daily_telegram_file.py` was not run
+- no workbook was sent and no Telegram delivery was attempted on this run
+
 ### Attempt 36: Post-partial-take repair sweep - PROMOTED
 
 Timestamp: `2026-04-20T09:19:32+02:00` local (Europe/Berlin) (promotion applied at ~`09:25`)

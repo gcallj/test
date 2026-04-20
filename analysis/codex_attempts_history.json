@@ -1,10 +1,10 @@
 {
   "codex_sync_metadata": {
-    "source_file": "/home/user/test/analysis/codex_attempts_source.md",
-    "source_sha1": "dcc275919098d5588a2ef72d6d9db7e2cdd39e92",
-    "last_parsed": "2026-04-20T08:20:54+00:00",
+    "source_file": "C:/Users/gabri/OneDrive/Documentos/GitHub/test/analysis/codex_attempts_source.md",
+    "source_sha1": "ccb733dfd719ec8875ab682c131fd56cb374a68d",
+    "last_parsed": "2026-04-20T12:53:10+02:00",
     "parser_version": 1,
-    "n_attempts_parsed": 23,
+    "n_attempts_parsed": 24,
     "n_promoted": 11,
     "n_parse_errors": 0
   },
@@ -522,6 +522,50 @@
       },
       "promoted": true,
       "learning": "the B-side search space is not globally dead; it was only dead under the older frontiers. On the current `partial_take_level = 0.50 / consecutive_loss_cooldown = 9 / regime_threshold = 0.25` seed, a smaller first partial take restored additional `>=70%` breadth (`60 -> 63`) without sacrificing `WR_target`. the direction that failed repeatedly was broad take-profit reshaping, not every take-profit tweak. `partial_take_pct:+1` remained over-defensive and lost hit rate, while `partial_take_pct:-1` "
+    },
+    {
+      "attempt_id": "37",
+      "section_title": "Refreshed-baseline entry vs A/E tail-repair sweep - NOT PROMOTED",
+      "timestamp": "2026-04-20T10:56:55+02:00",
+      "sweep_file": "local_fullmetric_sweep_result_20260420_105512_entry_vs_ae_tailrepair.json",
+      "genes": [
+        "entry_score_threshold",
+        "ma_filter_mode",
+        "volatility_filter_percentile",
+        "stop_tighten_factor",
+        "regime_threshold"
+      ],
+      "moves": [
+        {
+          "gene": "regime_threshold",
+          "from": 0.25,
+          "to": 0.2
+        }
+      ],
+      "metrics": {
+        "incumbent": {
+          "fit": 23.6358,
+          "wr_med_all": 0.7075,
+          "wr_target_med_all": 0.7,
+          "mean_alpha_ann": -0.0823,
+          "mdd_med": 0.1103,
+          "mdd_p75": 0.1595,
+          "mdd_duration_med": 224.0,
+          "trades_med": 32.0
+        },
+        "candidate": {
+          "fit": 23.3043,
+          "wr_med_all": 0.7075,
+          "wr_target_med_all": 0.7,
+          "mean_alpha_ann": -0.08220000000000001,
+          "mdd_med": 0.1103,
+          "mdd_p75": 0.15990000000000001,
+          "mdd_duration_med": 225.0,
+          "trades_med": 32.0
+        }
+      },
+      "promoted": false,
+      "learning": "the main problem is no longer only local tail-risk repair. The refreshed `git:main` now beats the current local checkpoint on `WR_target_med_all` and `mean_alpha_ann`, while the local incumbent still wins on the first-priority `WR_med_all` breadth (`63` vs `60` tickers `>=70%` WR). That means small local A/E repairs around the current incumbent are structurally unlikely to promote unless they also recover at least about `0.11pp` annualized alpha and `0.15pp` `WR_target` versus the refreshed base"
     },
     {
       "attempt_id": "36",
