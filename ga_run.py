@@ -4303,14 +4303,23 @@ def run():
             _wr_pct = round(bt_win_rate * 100, 0)
             _wr_tgt_pct = round(bt_win_rate_target * 100, 0)  # % alvo hits
             _stage_short = f"{stage_label.replace('Stage ', 'S')} {timing_sub}"
+            # Close explicito em cada recomendacao (ported from codex):
+            # user sabe imediatamente de qual preco estamos partindo.
+            _close_info = f"Fechou @{close_val:.2f}"
 
             # Nivel de cancelamento da tese (mais conservador que o stop tactico)
             # - Stage 2 ideal/momentum: perder S1 do dia ou MA50 (o que for menor)
             # - Stage 2 pullback: perder MA200 (cancela pullback de tendencia)
             # - Stage 1: perder S1
             if stage_num == 2 and timing_sub == "pullback":
-                _cancel = float(min(_ma200_val if np.isfinite(_ma200_val) else s1, s1))
-                _cancel_label = "MA200"
+                _ma200_ok = np.isfinite(_ma200_val) and _ma200_val > 0
+                _s1_ok = np.isfinite(s1) and s1 > 0
+                if _ma200_ok and (_ma200_val <= s1 or not _s1_ok):
+                    _cancel = float(_ma200_val)
+                    _cancel_label = "MA200"
+                else:
+                    _cancel = float(s1)
+                    _cancel_label = "S1"
             elif stage_num == 2:
                 _cancel = float(min(s1, _ma50_val if np.isfinite(_ma50_val) else s1))
                 _cancel_label = "MA50/S1"
@@ -4319,22 +4328,32 @@ def run():
                 _cancel_label = "S1"
 
             if final_sig == "buy":
-                # Determinar modo de execucao
-                if close_val < pivot:
-                    # Precisa romper Pivot primeiro
-                    _modo = f"AGUARDAR ROMPER PIVOT @{pivot:.2f}"
-                    _detalhe = f"comprar @{best_buy:.2f} apos rompimento"
+                # Determinar modo de execucao (ported from codex — mais casos)
+                if timing_sub == "pullback":
+                    if close_val < pivot:
+                        _modo = f"RETOMADA APOS PULLBACK: esperar Pivot @{pivot:.2f}"
+                        _detalhe = "contexto bom, mas sem entrada abaixo dele; so comprar apos fechamento acima do Pivot"
+                    elif close_val > r1:
+                        _modo = f"PULLBACK ESTICADO: preferir recuo @{best_buy:.2f}"
+                        _detalhe = f"preco acima de R1 @{r1:.2f}"
+                    elif best_buy < close_val * 0.998:
+                        _modo = f"PULLBACK EM ALTA: ordem limite @{best_buy:.2f}"
+                        _detalhe = f"recuo controlado acima do Pivot @{pivot:.2f}"
+                    else:
+                        _modo = f"PULLBACK EM ALTA: entrada @{best_buy:.2f}"
+                        _detalhe = "gatilho ativo"
+                elif close_val < pivot:
+                    _modo = f"ABAIXO DO PIVOT: esperar confirmacao @{pivot:.2f}"
+                    _detalhe = "setup montado, mas sem entrada agora; so comprar apos fechamento acima do Pivot"
                 elif best_buy < close_val * 0.998:
-                    # Ordem limite (esperar pullback ate entrada)
                     _modo = f"ORDEM LIMITE @{best_buy:.2f}"
-                    _detalhe = f"close atual {close_val:.2f}, esperar recuo"
+                    _detalhe = f"esperar recuo a partir do fechamento"
                 else:
-                    # Comprar agora (close >= entrada)
-                    _modo = f"COMPRAR JA @{best_buy:.2f}"
-                    _detalhe = f"gatilho disparado"
+                    _modo = f"COMPRA ACIONADA @{best_buy:.2f}"
+                    _detalhe = "gatilho ativo"
 
                 recomendacao = (
-                    f"{_modo} * {_stage_short} * "
+                    f"{_close_info} * {_modo} * {_detalhe} * Contexto: {_stage_short} * "
                     f"+{_alvo_pct_num:.1f}% alvo @{take_profit:.2f} "
                     f"(WR {_wr_pct:.0f}% / alvo {_wr_tgt_pct:.0f}%) * "
                     f"Stop @{stop_loss:.2f} (-{_stop_pct_num:.1f}%) * "
@@ -4344,17 +4363,17 @@ def run():
             elif final_sig == "sell":
                 if stage_num == 4:
                     recomendacao = (
-                        f"VENDER * Stage 4 Queda * Abaixo MA200 (tendencia de baixa) * "
+                        f"{_close_info} * VENDER * Stage 4 Queda * Abaixo MA200 (tendencia de baixa) * "
                         f"Sair posicao. Recomprar apos formar nova base acima MA200"
                     )
                 elif stage_num == 3:
                     recomendacao = (
-                        f"VENDER * Stage 3 Topo + regime {_regime_str} * "
+                        f"{_close_info} * VENDER * Stage 3 Topo + regime {_regime_str} * "
                         f"Distribuicao em bear * Stop apertado @{pivot:.2f}"
                     )
                 else:
                     recomendacao = (
-                        f"VENDER * {stage_label} * regime {_regime_str} * "
+                        f"{_close_info} * VENDER * {stage_label} * regime {_regime_str} * "
                         f"Abaixo Pivot @{pivot:.2f}"
                     )
 
@@ -4362,70 +4381,77 @@ def run():
                 if stage_num == 2 and timing_sub in ("ideal", "momentum"):
                     if _above_r1:
                         recomendacao = (
-                            f"AGUARDAR PULLBACK (esticado acima R1 @{r1:.2f}) * {_stage_short} * "
+                            f"{_close_info} * AGUARDAR PULLBACK (esticado acima R1 @{r1:.2f}) * Contexto: {_stage_short} * "
                             f"Comprar @{pivot:.2f} ou @{s1:.2f} * "
                             f"Cancelar se < {_cancel_label} @{_cancel:.2f}"
                         )
                     elif _above_pivot:
+                        # Nivel de cancelamento do breakout = Pivot (mais rigido)
+                        _breakout_cancel = float(pivot) if np.isfinite(pivot) and pivot > 0 else float(_cancel)
+                        _breakout_cancel_label = "Pivot" if np.isfinite(pivot) and pivot > 0 else _cancel_label
+                        _cancel = _breakout_cancel
+                        _cancel_label = _breakout_cancel_label
                         recomendacao = (
-                            f"AGUARDAR ROMPER R1 @{r1:.2f} * {_stage_short} (entre Pivot e R1) * "
+                            f"{_close_info} * AGUARDAR ROMPER R1 @{r1:.2f} * Contexto: {_stage_short} (entre Pivot e R1) * "
                             f"+{_alvo_pct_num:.1f}% alvo apos breakout * "
-                            f"Cancelar se < Pivot @{pivot:.2f}"
+                            f"Cancelar se < {_breakout_cancel_label} @{_breakout_cancel:.2f}"
                         )
                     else:
                         recomendacao = (
-                            f"AGUARDAR ROMPER PIVOT @{pivot:.2f} * {_stage_short} (abaixo Pivot) * "
-                            f"Comprar se retomar Pivot * "
+                            f"{_close_info} * ABAIXO DO PIVOT: sem entrada agora * "
+                            f"Contexto: {_stage_short}; so considerar compra se fechar acima do Pivot @{pivot:.2f} * "
                             f"Cancelar se < {_cancel_label} @{_cancel:.2f}"
                         )
                 elif stage_num == 2 and timing_sub == "cedo":
                     recomendacao = (
-                        f"AGUARDAR CONFIRMACAO * {_stage_short} (cruzamento MA50/MA200 recente) * "
+                        f"{_close_info} * AGUARDAR CONFIRMACAO * Contexto: {_stage_short} (cruzamento MA50/MA200 recente) * "
                         f"Comprar apos 3+ fechamentos > R1 @{r1:.2f} * "
-                        f"Cancelar se MA50 voltar abaixo MA200"
+                        f"Cancelar se < {_cancel_label} @{_cancel:.2f} ou se MA50 voltar abaixo MA200"
                     )
                 elif stage_num == 2 and timing_sub == "pullback":
                     recomendacao = (
-                        f"AGUARDAR PULLBACK ATE S1 @{s1:.2f} * {_stage_short} (abaixo MA50 @{_ma50_val:.2f}) * "
-                        f"Comprar se segurar S1 e retomar MA50 * "
-                        f"Cancelar se < MA200 @{_ma200_val:.2f}"
+                        f"{_close_info} * AGUARDAR PULLBACK ATE S1 @{s1:.2f} * Contexto: {_stage_short} (abaixo MA50 @{_ma50_val:.2f}) * "
+                        f"Gatilho = segurar S1 e retomar MA50/Pivot * "
+                        f"Cancelar se < {_cancel_label} @{_cancel:.2f}"
                     )
                 elif stage_num == 2 and timing_sub == "atrasado":
                     recomendacao = (
-                        f"AGUARDAR PULLBACK * {_stage_short} (esticado +{dist_ma_disp(close_val, _ma50_val)}% MA50) * "
+                        f"{_close_info} * AGUARDAR PULLBACK * Contexto: {_stage_short} (esticado +{dist_ma_disp(close_val, _ma50_val)}% MA50) * "
                         f"Esperar correcao ate S1 @{s1:.2f} ou MA50 @{_ma50_val:.2f} * "
                         f"Cancelar se < {_cancel_label} @{_cancel:.2f}"
                     )
                 elif stage_num == 3:
                     recomendacao = (
-                        f"NAO ABRIR * Stage 3 Topo (MA50 caindo, distribuicao) * "
+                        f"{_close_info} * NAO ABRIR * Stage 3 Topo (MA50 caindo, distribuicao) * "
                         f"Vender posicoes se perder Pivot @{pivot:.2f}"
                     )
                 elif stage_num == 1:
                     recomendacao = (
-                        f"AGUARDAR BREAKOUT R1 @{r1:.2f} * Stage 1 Base lateral * "
+                        f"{_close_info} * AGUARDAR BREAKOUT R1 @{r1:.2f} * Stage 1 Base lateral * "
                         f"Comprar se romper com volume * "
                         f"Evitar se perder S1 @{s1:.2f}"
                     )
                 else:
                     recomendacao = (
-                        f"OBSERVAR * {stage_label} * regime {_regime_str} * "
+                        f"{_close_info} * OBSERVAR * {stage_label} * regime {_regime_str} * "
                         f"R1 @{r1:.2f} S1 @{s1:.2f}"
                     )
 
-            # Prefix "[BAIXA QUAL]" quando o gate de WR<60% foi acionado
-            # (BUY foi demovido para HOLD por qualidade insuficiente)
+            # Prefix quando BUY foi demovido para HOLD (ex: WR<60% ou potencial<5%)
             if _low_wr_reason:
-                recomendacao = f"[BAIXA QUAL {_low_wr_reason}] {recomendacao}"
+                recomendacao = f"{_low_wr_reason}\n{recomendacao}"
 
-            # Prefix universe tag para BUYs:
-            # PREMIUM = modelo tem edge real (alpha>+2pp)
-            # HIGH_QUAL = modelo bate B&H (alpha>=0)
-            # REGULAR = cuidado, tende a underperformar B&H
-            if sig == "buy" and _univ_tag != "REGULAR":
-                recomendacao = f"[{_univ_tag}] {recomendacao}"
-            elif sig == "buy" and _univ_tag == "REGULAR":
-                recomendacao = f"[REGULAR-cuidado] {recomendacao}"
+            # Prefix universe tag para BUYs (ported from codex — sem brackets,
+            # cabecalho em linha separada). Tiers agora sao dinamicos e
+            # operacionais, baseados no modelo atual (_classify_universe_tier).
+            if sig == "buy" and _univ_tag == "PREMIUM":
+                recomendacao = f"PREMIUM\n{recomendacao}"
+            elif sig == "buy" and _univ_tag == "HIGH_QUAL":
+                recomendacao = f"ALTA QUALIDADE\n{recomendacao}"
+
+            # Recommendation column is easier to scan with explicit newlines
+            # in Excel instead of long inline separators.
+            recomendacao = recomendacao.replace(" * ", "\n")
 
 
             # Formatar potencial_pct para exibicao

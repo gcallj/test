@@ -217,37 +217,88 @@ if buys:
     # coluna `recomendacao`, extraindo so o essencial (antes do 1o asterisco).
     # Limite Telegram caption = 1024 chars; cabe ~7 BUYs.
     def _rec_essence(rec: str) -> str:
-        """Extrai '[TAG] MODO_EXECUCAO' do texto completo de recomendacao.
-        Ex: '[PREMIUM] AGUARDAR ROMPER PIVOT @54.40 * S2 Alta momentum * ...' ->
-            '[PREMIUM] AGUARDAR ROMPER PIVOT @54.40 S2mom'
+        """Extrai '[TAG] Fechou@X | MODO | Contexto' compactado do recomendacao.
+
+        Formato atual (post-codex port): linhas separadas por \\n, comecando
+        opcionalmente com TAG (PREMIUM/ALTA QUALIDADE), depois 'Fechou @X.XX',
+        depois MODO (ex: 'ABAIXO DO PIVOT...'), depois _detalhe, depois
+        'Contexto: S2 ...'.
+
+        Estrategia: pega TAG + Fechou + MODO + stage compactado. Descarta
+        _detalhe (redundante) e segmentos finais (alvo/stop/cancelar) ja
+        visiveis no header do BUY (ticker @ent->alvo).
         """
         if not rec:
             return ""
-        rec = rec.replace("\n", " ").strip()
-        parts = [p.strip() for p in rec.split("*")]
+        rec = rec.strip()
+        # split por newline primeiro (formato atual), fallback para asterisks
+        if "\n" in rec:
+            parts = [p.strip() for p in rec.split("\n") if p.strip()]
+        else:
+            parts = [p.strip() for p in rec.split("*") if p.strip()]
         if not parts:
             return rec[:60]
-        # parts[0] = "[TAG] MODO @preco" | parts[1] = "Stage+timing"
-        mode = parts[0]
-        stage = parts[1] if len(parts) > 1 else ""
-        # Compacta stage: "S2 Alta ideal" -> "S2 ideal"; "S2 Alta momentum" -> "S2 mom"
-        stage_short = (stage
+
+        tag = ""
+        fechou = ""
+        modo = ""
+        contexto = ""
+        for p in parts:
+            p_lower = p.lower()
+            if p in ("PREMIUM", "ALTA QUALIDADE") and not tag:
+                tag = p
+            elif p_lower.startswith("fechou ") and not fechou:
+                fechou = p
+            elif p_lower.startswith("contexto:") and not contexto:
+                contexto = p
+            elif not modo and (
+                any(k in p_lower for k in (
+                    "pivot", "pullback", "esticado", "ordem limite",
+                    "compra acionada", "vender", "aguardar", "nao abrir",
+                    "breakout", "observar", "abaixo do pivot",
+                    "confirmacao", "retomada"))
+            ):
+                modo = p
+
+        # Compacta contexto: "Contexto: S2 Alta momentum ..." -> "S2 mom"
+        stage_short = contexto.replace("Contexto:", "").strip()
+        stage_short = (stage_short
                        .replace("S2 Alta ", "S2 ")
                        .replace("momentum", "mom")
                        .replace("pullback", "pull")
                        .replace("atrasado", "late")
-                       .replace("S1 Base", "S1")
+                       .replace("S1 Base lateral", "S1 base")
                        .replace("Stage 1", "S1")
                        .replace("Stage 2", "S2")
                        .replace("Stage 3", "S3")
                        .replace("Stage 4", "S4"))
-        out = f"{mode} | {stage_short}" if stage_short else mode
+        # primeiro '(' corta parenteses ("(entre Pivot e R1)" etc)
+        if "(" in stage_short:
+            stage_short = stage_short.split("(")[0].strip()
+
+        # Monta linha final compacta
+        segs = []
+        if tag: segs.append(tag)
+        if fechou: segs.append(fechou)
+        if modo:
+            # trunca modo se muito longo
+            if len(modo) > 48:
+                modo = modo[:45] + "..."
+            segs.append(modo)
+        if stage_short: segs.append(stage_short)
+        out = " | ".join(segs) if segs else rec[:60]
         return out[:115]
 
     lines = []
-    for b in buys[:7]:
-        header = f"  {b['ticker']} @{b['ent']:.2f}->{b['alvo']:.2f} ({b['pot']})"
+    for b in buys[:5]:
+        # header usa 'entrada' (preco sugerido de compra/ordem limite). O close
+        # real do dia esta no essence abaixo ('Fechou @X.XX'), parseado do
+        # texto completo da coluna recomendacao.
+        header = f"  {b['ticker']} entry@{b['ent']:.2f}->{b['alvo']:.2f} ({b['pot']})"
         essence = _rec_essence(b.get("rec", ""))
+        # caption limit Telegram = 1024 chars. Manter essence <= 90 chars.
+        if essence and len(essence) > 90:
+            essence = essence[:87] + "..."
         if essence:
             lines.append(f"{header}\n    {essence}")
         else:
