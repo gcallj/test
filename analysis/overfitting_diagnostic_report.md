@@ -1,11 +1,11 @@
 # Overfitting diagnostic report
 
-Generated: overfitting_diagnostic.py sobre 57 attempts (24 promoted) + 64 sweeps
+Generated: overfitting_diagnostic.py sobre 58 attempts (24 promoted) + 65 sweeps
 
 ## Executive summary
 
 - Incumbent atual: fit=22.71, WR=70.2%, alpha=-8.26%, trades=32
-- Historico: 57 attempts, 24 promoted (42.1%)
+- Historico: 58 attempts, 24 promoted (41.4%)
 
 ## 1. Wilson 95% CI para WR
 
@@ -16,10 +16,10 @@ Generated: overfitting_diagnostic.py sobre 57 attempts (24 promoted) + 64 sweeps
 
 ## 2. Multiple testing correction
 
-- **N attempts totais**: 57
-- **N promovidos**: 24 (taxa 42.1%)
-- **Bonferroni alpha=0.05/N**: p < 0.0008772 exigido por attempt individual
-- **Binomial vs null rate 10%**: z=8.08, one-sided p=3.331e-16
+- **N attempts totais**: 58
+- **N promovidos**: 24 (taxa 41.4%)
+- **Bonferroni alpha=0.05/N**: p < 0.0008621 exigido por attempt individual
+- **Binomial vs null rate 10%**: z=7.97, one-sided p=8.327e-16
 - **Interpretacao**: Taxa ALTA — forte evidencia contra null (mas pode ser skill OU overfit a mesma janela)
 
 ## 3. Trajetoria do alpha ao longo dos sweeps
@@ -35,8 +35,8 @@ Generated: overfitting_diagnostic.py sobre 57 attempts (24 promoted) + 64 sweeps
 |---:|---|---:|---:|
 | 0 | 2026-04-18T15:38:22 | -75.19 | -8.28% |
 | 21 | 2026-04-19T07:50:29 | 18.17 | -8.42% |
-| 42 | 2026-04-18T18:00:27 | 21.15 | -8.26% |
-| 63 | 2026-04-20T15:07:48 | 23.64 | -8.23% |
+| 43 | 2026-04-18T18:00:27 | 21.15 | -8.26% |
+| 64 | 2026-04-20T15:07:48 | 23.64 | -8.23% |
 
 ## 4. Gene drift detection (retrospective B4 preview)
 
@@ -54,8 +54,8 @@ Generated: overfitting_diagnostic.py sobre 57 attempts (24 promoted) + 64 sweeps
 
 ## 5. Signal-to-noise do ganho por attempt
 
-- **Ganho medio de fit por sweep**: +1.5687
-- **Desvio padrao dos deltas**: 47.0580
+- **Ganho medio de fit por sweep**: +1.5442
+- **Desvio padrao dos deltas**: 46.6861
 - **Signal-to-noise ratio**: 0.03
 - **Interpretacao**: SNR < 1 sugere que os ganhos sao indistinguiveis de ruido — overfit provavel
 
@@ -63,7 +63,7 @@ Generated: overfitting_diagnostic.py sobre 57 attempts (24 promoted) + 64 sweeps
 
 - 🔴 Alpha negativo atual (subperforma buy-and-hold)
 - 🔴 Poucos trades por ticker (< 40, amostra fraca)
-- 🟡 Taxa de promocao alta (42%) sem correcao multiple testing
+- 🟡 Taxa de promocao alta (41%) sem correcao multiple testing
 - 🟡 Genes com drift (>=3 promos consecutivas)
 
 **VEREDITO**: OVERFIT PROVAVEL. Recomenda-se:
