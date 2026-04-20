@@ -4492,6 +4492,13 @@ def run():
     df_sum = pd.DataFrame(results_summary)
     df_app = pd.DataFrame(results_apply)
 
+    # Tier counts para exibir no header comment da coluna 'universe' (ported from codex)
+    _universe_counts = (
+        df_app["universe"].value_counts().to_dict()
+        if (not df_app.empty and "universe" in df_app.columns)
+        else {}
+    )
+
     # Schema validation: ensure required columns exist before saving
     required_apply_cols = {"Date", "ticker", "recomendacao", "potencial_pct", "signal", "estagio", "confidence", "rank", "close", "entrada", "stop", "alvo", "RR"}
     required_summary_cols = {"ticker", "test_return", "test_mdd", "test_sharpe", "test_trades", "test_win_rate"}
@@ -4625,8 +4632,27 @@ def run():
                 hdr_fmt = wb.add_format({"bold": True, "bg_color": "#1F4E79", "font_color": "#FFFFFF", "border": 1})
                 num2 = wb.add_format({"num_format": "0.00"})
                 pct2 = wb.add_format({"num_format": "0.00%"})
-                sum_widths = {"ticker": 10, "test_return": 13, "test_mdd": 10, "test_sharpe": 12,
-                              "test_trades": 12, "test_win_rate": 13, "test_avg_trade": 13, "buy_hold_return": 15}
+                sum_widths = {
+                    "ticker": 10,
+                    "test_return": 13,
+                    "test_mdd": 10,
+                    "test_mdd_duration": 16,
+                    "test_sharpe": 12,
+                    "test_sortino": 12,
+                    "test_profit_factor": 16,
+                    "test_expectancy": 14,
+                    "test_payoff_ratio": 16,
+                    "test_cagr": 12,
+                    "test_avg_hold_bars": 16,
+                    "test_median_hold_bars": 18,
+                    "test_trades": 12,
+                    "test_win_rate": 13,
+                    "test_win_rate_target": 16,
+                    "test_avg_trade": 13,
+                    "buy_hold_return": 15,
+                    "buy_hold_cagr": 14,
+                    "test_alpha_ann": 14,
+                }
                 for col_idx, col_name in enumerate(df_sum.columns):
                     ws_sum.write(0, col_idx, col_name, hdr_fmt)
                     ws_sum.set_column(col_idx, col_idx, sum_widths.get(col_name, 12))
@@ -4654,7 +4680,15 @@ def run():
                         "queda_max": "Previsao de queda maxima (%) baseada no MDD historico",
                         "win_rate": "Win rate do backtest (% trades positivos, incl. trailing stops)",
                         "wr_alvo": "% de trades que atingiram o alvo de take-profit (estrito)",
-                        "universe": "Qualidade do universo:\nPREMIUM = alpha>+2pp & WR>68% (7 tickers)\nHIGH_QUAL = alpha>=0 & WR>=65% (15 tickers)\nREGULAR = demais (tende a nao bater B&H)",
+                        "universe": (
+                            "Tier operacional do modelo atual:\n"
+                            "PREMIUM = WR>=74%, WR alvo>=72%, alpha_ann>=-12pp, MDD<=13%, >=30 trades\n"
+                            "HIGH_QUAL = WR>=67%, WR alvo>=65%, alpha_ann>=-20pp, MDD<=16%, >=20 trades\n"
+                            "REGULAR = demais\n"
+                            f"Hoje: PREMIUM={_universe_counts.get('PREMIUM', 0)} | "
+                            f"HIGH_QUAL={_universe_counts.get('HIGH_QUAL', 0)} | "
+                            f"REGULAR={_universe_counts.get('REGULAR', 0)}"
+                        ),
                         "regime": "Regime de mercado: favoravel/neutro/desfavoravel",
                         "signal_ga": "Sinal bruto do GA antes do override por stage (auditoria)",
                     }
@@ -4668,7 +4702,7 @@ def run():
                     # Column widths
                     apply_widths = {
                         "Date": 12, "ticker": 12,
-                        "recomendacao": 95,          # wide for full text
+                        "recomendacao": 54,          # narrower + wrap for multiline text (codex style)
                         "potencial_pct": 13,
                         "signal": 8, "estagio": 26,
                         "close": 10, "entrada": 10, "stop": 10, "alvo": 10,
@@ -4681,15 +4715,18 @@ def run():
                     for col_idx, col_name in enumerate(df_app.columns):
                         ws_app.set_column(col_idx, col_idx, apply_widths.get(col_name, 11))
 
-                    # Row colors: buy = light green, hold = white
-                    buy_fmt  = wb.add_format({"bg_color": "#C6EFCE", "font_color": "#276221"})
-                    hold_fmt = wb.add_format({"bg_color": "#FFFFFF"})
-                    price_buy  = wb.add_format({"bg_color": "#C6EFCE", "font_color": "#276221", "num_format": "0.00"})
-                    price_hold = wb.add_format({"num_format": "0.00"})
-                    num1_buy   = wb.add_format({"bg_color": "#C6EFCE", "font_color": "#276221", "num_format": "0.0"})
-                    num1_hold  = wb.add_format({"num_format": "0.0"})
-                    int_buy    = wb.add_format({"bg_color": "#C6EFCE", "font_color": "#276221", "num_format": "0"})
-                    int_hold   = wb.add_format({"num_format": "0"})
+                    # Row colors: buy = light green, hold = white (codex style)
+                    # Formato extra para coluna 'recomendacao' com text_wrap + valign top.
+                    buy_fmt  = wb.add_format({"bg_color": "#C6EFCE", "font_color": "#276221", "valign": "vcenter"})
+                    hold_fmt = wb.add_format({"bg_color": "#FFFFFF", "valign": "vcenter"})
+                    text_buy = wb.add_format({"bg_color": "#C6EFCE", "font_color": "#276221", "text_wrap": True, "valign": "top"})
+                    text_hold = wb.add_format({"bg_color": "#FFFFFF", "text_wrap": True, "valign": "top"})
+                    price_buy  = wb.add_format({"bg_color": "#C6EFCE", "font_color": "#276221", "num_format": "0.00", "valign": "vcenter"})
+                    price_hold = wb.add_format({"num_format": "0.00", "valign": "vcenter"})
+                    num1_buy   = wb.add_format({"bg_color": "#C6EFCE", "font_color": "#276221", "num_format": "0.0", "valign": "vcenter"})
+                    num1_hold  = wb.add_format({"num_format": "0.0", "valign": "vcenter"})
+                    int_buy    = wb.add_format({"bg_color": "#C6EFCE", "font_color": "#276221", "num_format": "0", "valign": "vcenter"})
+                    int_hold   = wb.add_format({"num_format": "0", "valign": "vcenter"})
 
                     price_cols = {"close", "entrada", "stop", "alvo", "piso"}
                     # Note: venda_pct and trailing removed (always 100% and breakeven with current genome)
@@ -4698,9 +4735,18 @@ def run():
 
                     for row_idx, row in enumerate(df_app.itertuples(index=False), start=1):
                         is_buy = (row.signal == "buy")
+                        # Row height adaptive baseado no comprimento do texto em 'recomendacao'
+                        # (codex style): text_wrap + altura calculada ~19px por linha aproximada.
+                        rec_text = str(getattr(row, "recomendacao", "") or "")
+                        _segments = rec_text.splitlines() if rec_text else [""]
+                        _approx_lines = sum(max(1, int(math.ceil(len(seg) / 42.0))) for seg in _segments)
+                        _row_height = min(280, max(42, int(19 * (_approx_lines + 0.75))))
+                        ws_app.set_row(row_idx, _row_height)
                         for col_idx, col_name in enumerate(df_app.columns):
                             val = getattr(row, col_name)
-                            if col_name in price_cols:
+                            if col_name == "recomendacao":
+                                fmt = text_buy if is_buy else text_hold
+                            elif col_name in price_cols:
                                 fmt = price_buy if is_buy else price_hold
                             elif col_name in score_cols:
                                 fmt = num1_buy if is_buy else num1_hold
@@ -4735,6 +4781,23 @@ def run():
                     df_sum.to_excel(writer, sheet_name="Summary", index=False)
                     if not df_feat_imp.empty:
                         df_feat_imp.to_excel(writer, sheet_name="Feature_Importance", index=False)
+                    # Fallback formatting: recomendacao column width + row heights (codex style)
+                    if not df_app.empty:
+                        from openpyxl.styles import Alignment
+                        ws_app = writer.sheets["Apply"]
+                        ws_app.column_dimensions["C"].width = 54
+                        for row_idx in range(2, len(df_app) + 2):
+                            rec_text = str(ws_app[f"C{row_idx}"].value or "")
+                            _segments = rec_text.splitlines() if rec_text else [""]
+                            _approx_lines = sum(max(1, int(math.ceil(len(seg) / 42.0))) for seg in _segments)
+                            _row_height = min(280, max(42, int(19 * (_approx_lines + 0.75))))
+                            ws_app.row_dimensions[row_idx].height = _row_height
+                            for col_idx in range(1, len(df_app.columns) + 1):
+                                cell = ws_app.cell(row=row_idx, column=col_idx)
+                                if col_idx == 3:
+                                    cell.alignment = Alignment(wrap_text=True, vertical="top")
+                                else:
+                                    cell.alignment = Alignment(vertical="center")
             except Exception as e2:
                 print(f"[WARN] xlsx save failed (file open in Excel?): {e2} -- CSV already saved.")
 
