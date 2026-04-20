@@ -18,9 +18,9 @@
       "n_promotions": 2
     },
     "D_entry_filter": {
-      "last_swept": "2026-04-20T01:36:41+00:00",
-      "n_runs": 5,
-      "n_promotions": 1
+      "last_swept": "2026-04-20T10:29:24+00:00",
+      "n_runs": 6,
+      "n_promotions": 2
     },
     "E_regime_vol": {
       "last_swept": "2026-04-20T05:42:53+00:00",
@@ -33,7 +33,7 @@
       "n_promotions": 0
     }
   },
-  "total_cycles": 28,
-  "total_promotions": 10,
-  "last_updated": "2026-04-20T08:24:30+00:00"
+  "total_cycles": 29,
+  "total_promotions": 11,
+  "last_updated": "2026-04-20T10:29:24+00:00"
 }

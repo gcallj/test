@@ -653,3 +653,26 @@ tells future iterations which gene moves are dead ends.
 
 ---
 
+## 2026-04-20T10:29:24+00:00 - D_entry_filter
+**Cycle**: #29  |  **Promoted**: YES  |  **Codex sync**: YES  |  **combo_budget**: 8
+**Genes swept**: `vote_threshold_long, vote_threshold_short, z_threshold, signal_ema_span, entry_confirmation_days, entry_discount_atr_frac, score_strength_scaling, min_signal_strength, entry_score_threshold, score_percentile_trigger`
+**Sweep file**: `local_fullmetric_sweep_continuous_D_entry_filter_20260420_102407.json`
+
+### Metrics
+
+| Source | fit | WR | WR_tgt | alpha_ann | MDD | trades |
+|---|---:|---:|---:|---:|---:|---:|
+| baseline (git:main) | 19.7890 | 69.05% | 68.75% | -8.31% | 10.95% | 31 |
+| incumbent (worktree) | 24.3437 | 69.44% | 70.00% | -8.11% | 10.59% | 33 |
+| **candidate** | 23.8979 | 69.84% | 70.00% | -8.13% | 10.59% | 33 |
+
+**Best candidate label**: `score_percentile_trigger:-1`
+
+**Moves applied to incumbent**:
+
+- `score_percentile_trigger`: `0.6000000000000001` -> `0.55` (step 0.05)
+
+**Learning**: o move `score_percentile_trigger: 0.6000000000000001->0.55` foi promovido. Categoria/genes adjacentes podem render melhorias semelhantes; considerar sweep daquela categoria no proximo ciclo.
+
+---
+
