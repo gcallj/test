@@ -9,7 +9,12 @@ name: Build PayloadStore
 
 on:
   schedule:
-    - cron: '15 */4 * * *'   # 00:15, 04:15, 08:15, 12:15, 16:15, 20:15 UTC
+    # A cada 1h no minuto :15 (dessincroniza do cron top-of-hour do GitHub
+    # que tem alta contencao). 24x/dia.
+    # Limite pratico: 1 ciclo completo = ~60 min (build 35 + matrix 25).
+    # Concurrency group 'build-store' garante que runs proximos se enfileiram
+    # sem cancelar o anterior. Se previous nao terminou, proximo aguarda.
+    - cron: '15 * * * *'
   workflow_dispatch:
 
 concurrency:
