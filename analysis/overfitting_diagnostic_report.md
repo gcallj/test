@@ -1,25 +1,25 @@
 # Overfitting diagnostic report
 
-Generated: overfitting_diagnostic.py sobre 56 attempts (23 promoted) + 60 sweeps
+Generated: overfitting_diagnostic.py sobre 57 attempts (24 promoted) + 64 sweeps
 
 ## Executive summary
 
-- Incumbent atual: fit=24.17, WR=70.0%, alpha=-8.13%, trades=33
-- Historico: 56 attempts, 23 promoted (41.1%)
+- Incumbent atual: fit=22.71, WR=70.2%, alpha=-8.26%, trades=32
+- Historico: 57 attempts, 24 promoted (42.1%)
 
 ## 1. Wilson 95% CI para WR
 
-- **WR observado**: 0.7000 (70.00%), com n=33 trades
-- **Wilson 95% IC**: [0.5297, 0.8286] = [52.97%, 82.86%]
+- **WR observado**: 0.7018 (70.18%), com n=32 trades
+- **Wilson 95% IC**: [0.5288, 0.8315] = [52.88%, 83.15%]
 - **Veredito**: significativamente melhor que 50%
-- **Interpretacao**: com n=33 trades, o IC tem largura 29.89pp — amostra pequena, alta variancia
+- **Interpretacao**: com n=32 trades, o IC tem largura 30.27pp — amostra pequena, alta variancia
 
 ## 2. Multiple testing correction
 
-- **N attempts totais**: 56
-- **N promovidos**: 23 (taxa 41.1%)
-- **Bonferroni alpha=0.05/N**: p < 0.0008929 exigido por attempt individual
-- **Binomial vs null rate 10%**: z=7.75, one-sided p=4.552e-15
+- **N attempts totais**: 57
+- **N promovidos**: 24 (taxa 42.1%)
+- **Bonferroni alpha=0.05/N**: p < 0.0008772 exigido por attempt individual
+- **Binomial vs null rate 10%**: z=8.08, one-sided p=3.331e-16
 - **Interpretacao**: Taxa ALTA — forte evidencia contra null (mas pode ser skill OU overfit a mesma janela)
 
 ## 3. Trajetoria do alpha ao longo dos sweeps
@@ -34,9 +34,9 @@ Generated: overfitting_diagnostic.py sobre 56 attempts (23 promoted) + 60 sweeps
 | idx | timestamp | fit | alpha_ann |
 |---:|---|---:|---:|
 | 0 | 2026-04-18T15:38:22 | -75.19 | -8.28% |
-| 20 | 2026-04-19T01:36:39 | 19.63 | -8.30% |
-| 40 | 2026-04-18T17:52:20 | 21.02 | -8.24% |
-| 59 | 2026-04-20T10:56:55 | 23.64 | -8.23% |
+| 21 | 2026-04-19T07:50:29 | 18.17 | -8.42% |
+| 42 | 2026-04-18T18:00:27 | 21.15 | -8.26% |
+| 63 | 2026-04-20T15:07:48 | 23.64 | -8.23% |
 
 ## 4. Gene drift detection (retrospective B4 preview)
 
@@ -47,15 +47,15 @@ Generated: overfitting_diagnostic.py sobre 56 attempts (23 promoted) + 60 sweeps
 |---|---:|---|---|
 | `consecutive_loss_cooldown` | 4 | 7.000→8.000 → 9.000→10.000 → 8.000→9.000 | ALL UP 🚩 |
 | `regime_threshold` | 4 | 0.300→0.250 → 0.300→0.250 → 0.250→0.300 | mixed |
+| `momentum_confirm_days` | 3 | 5.000→4.000 → 4.000→3.000 → 5.000→4.000 | ALL DOWN 🚩 |
 | `partial_take_pct` | 3 | 0.200→0.100 → 0.300→0.200 → 0.200→0.100 | ALL DOWN 🚩 |
-| `momentum_confirm_days` | 2 | 5.000→4.000 → 5.000→4.000 | ALL DOWN |
 
-**2 gene(s) com drift suspeito** — veja Fase B4 do plano.
+**3 gene(s) com drift suspeito** — veja Fase B4 do plano.
 
 ## 5. Signal-to-noise do ganho por attempt
 
-- **Ganho medio de fit por sweep**: +1.6751
-- **Desvio padrao dos deltas**: 48.6512
+- **Ganho medio de fit por sweep**: +1.5687
+- **Desvio padrao dos deltas**: 47.0580
 - **Signal-to-noise ratio**: 0.03
 - **Interpretacao**: SNR < 1 sugere que os ganhos sao indistinguiveis de ruido — overfit provavel
 
@@ -63,7 +63,7 @@ Generated: overfitting_diagnostic.py sobre 56 attempts (23 promoted) + 60 sweeps
 
 - 🔴 Alpha negativo atual (subperforma buy-and-hold)
 - 🔴 Poucos trades por ticker (< 40, amostra fraca)
-- 🟡 Taxa de promocao alta (41%) sem correcao multiple testing
+- 🟡 Taxa de promocao alta (42%) sem correcao multiple testing
 - 🟡 Genes com drift (>=3 promos consecutivas)
 
 **VEREDITO**: OVERFIT PROVAVEL. Recomenda-se:

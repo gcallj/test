@@ -722,3 +722,26 @@ tells future iterations which gene moves are dead ends.
 
 ---
 
+## 2026-04-20T16:30:07+00:00 - E_regime_vol
+**Cycle**: #32  |  **Promoted**: YES  |  **Codex sync**: YES  |  **combo_budget**: 8
+**Genes swept**: `ma_filter_period, ma_filter_mode, vol_regime_mode, volatility_filter_percentile, regime_threshold, volume_confirm_mode, momentum_confirm_days`
+**Sweep file**: `local_fullmetric_sweep_continuous_E_regime_vol_20260420_162649.json`
+
+### Metrics
+
+| Source | fit | WR | WR_tgt | alpha_ann | MDD | trades |
+|---|---:|---:|---:|---:|---:|---:|
+| baseline (git:main) | 19.2910 | 69.64% | 69.05% | -8.33% | 10.49% | 31 |
+| incumbent (worktree) | 23.4761 | 70.00% | 70.00% | -8.18% | 10.93% | 33 |
+| **candidate** | 22.7149 | 70.18% | 69.70% | -8.26% | 10.62% | 32 |
+
+**Best candidate label**: `momentum_confirm_days:-1`
+
+**Moves applied to incumbent**:
+
+- `momentum_confirm_days`: `4` -> `3` (step 1.0)
+
+**Learning**: o move `momentum_confirm_days: 4->3` foi promovido. Categoria/genes adjacentes podem render melhorias semelhantes; considerar sweep daquela categoria no proximo ciclo.
+
+---
+
