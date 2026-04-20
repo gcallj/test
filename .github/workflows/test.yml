@@ -21,7 +21,13 @@ jobs:
           python-version: "3.11"
 
       - name: Install test dependencies
-        run: pip install pandas pyarrow numpy openpyxl xlsxwriter scipy scikit-learn
+        # Installs full requirements.txt: test modules import production code
+        # (ga_run, run_local_ga_staged, analysis/*) which transitively needs
+        # numba, catboost, etc. Listing deps individually kept breaking as
+        # new imports were added.
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
 
       - name: Baixar history_consolidated.csv (opcional)
         if: env.HISTORY_CSV_URL != ''
