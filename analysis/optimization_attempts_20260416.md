@@ -1,4 +1,4 @@
-# Optimization Attempts Through 2026-04-18
+# Optimization Attempts Through 2026-04-20
 
 This note documents the optimizer experiments added after the GA-first metric refactor, with the current acceptance logic aimed at swing trading:
 
@@ -863,3 +863,672 @@ What was learned:
 - The intended `momentum_confirm_days:-1` rescue still did not materialize in this budget. Even with multiple hot-zone WR restorers in the sweep, no momentum-including variant beat the incumbent guardrails, so the WR-restoration burden remains the binding constraint.
 - `partial_take_level:+1` remained guardrail-safe and improved alpha/MDD, but because it left `WR_target_med_all` flat at `69.44%`, it was dominated by the cooldown step in the hit-rate-first priority order.
 - Proxima direcao sugerida: after `D_entry_filter` clears the 4h exclusion window (`2026-04-19T19:25:06Z`), test `entry_score_threshold` as the WR stabilizer paired with `momentum_confirm_days:-1`; if staying outside `D`, try a narrower cross-category sweep around `momentum_confirm_days, partial_take_level, consecutive_loss_cooldown`.
+
+### Attempt 28: Anchored full-metric sweep (entry/momentum rescue path) - PROMOTED
+
+Timestamp: `2026-04-19T22:51:31+02:00` local (Europe/Berlin) (promotion applied at ~`23:07`)
+
+Method:
+
+- refreshed incumbent/baseline under the latest fitness: `py run_local_ga_staged.py --eval-only --alpha-focus off`
+- patched `run_local_fullmetric_sweep.py` to add `--combo-anchor-labels`, allowing flagged single-move labels to enter combo search even when they miss the incumbent WR guardrail on their own; this closes the rescue-pair blind spot exposed by Attempt 27.
+- `py run_local_fullmetric_sweep.py --alpha-focus off --genes "momentum_confirm_days,entry_score_threshold,score_percentile_trigger,signal_ema_span,partial_take_level,regime_threshold" --combo-budget 12 --combo-anchor-labels "momentum_confirm_days:-1" --seed 61 --out local_fullmetric_sweep_result_20260419_2248_entry_momentum_anchor.json`
+- `py apply_fullmetric_sweep_best.py --sweep local_fullmetric_sweep_result_20260419_2248_entry_momentum_anchor.json`
+- `py run_local_ga_staged.py --eval-only --alpha-focus off`
+- `py ensure_daily_telegram_file.py`
+
+Genes touched: `[momentum_confirm_days, entry_score_threshold, score_percentile_trigger, signal_ema_span, partial_take_level, regime_threshold]`
+
+Windows tested: full-metric across all tickers (data range: `2005-01-04 -> 2026-04-17`, `36` walk-forward windows, `119` tickers)
+
+Promoted candidate:
+
+- change: `momentum_confirm_days: 5 -> 4` (single-gene step)
+
+Candidate summary:
+| Metric | main baseline | Prior incumbent | Candidate | delta vs incumbent |
+|---|---:|---:|---:|---:|
+| fit | 20.9898 | 21.2051 | 23.5293 | +2.3242 |
+| WR_med_all | 69.70% | 69.70% | 70.00% | +0.30pp |
+| WR_target_med_all | 69.44% | 69.70% | 70.00% | +0.30pp |
+| mean_alpha_ann | -8.26% | -8.25% | -8.15% | +0.11pp |
+| MDD_med | 11.31% | 11.31% | 11.00% | -0.32pp |
+| MDD_duration_med | 226.5 | 228.5 | 209.0 | -19.5 |
+| trades_med | 31.5 | 31.0 | 33.0 | +2.0 |
+
+Outcome:
+
+- `promote = true`
+- rationale: `momentum_confirm_days: 5 -> 4` improved the first two promotion priorities (`WR_med_all`, then `WR_target_med_all`), recovered annualized alpha, and reduced both drawdown magnitude and drawdown duration while staying inside `acceptance_vs_main`, the incumbent WR guardrail, the incumbent safety guardrail, and the staged priority comparator.
+
+What was learned:
+
+- the prior momentum-rescue miss was partly workflow-driven: the old combo phase only combined WR-safe single moves, so it could not test true rescue pairs for a singleton that narrowly missed the WR floor. The new anchored-combo option removes that search hole for future cross-category rescue attempts.
+- after the Attempt 27 promotion shifted the local frontier, `momentum_confirm_days: 5 -> 4` no longer needed rescue; under the current incumbent it became directly promotable and materially improved both hit-rate priorities plus drawdown behavior.
+- this move raised the `>=70%` ticker count from `58` to `60`, so future searches should treat `momentum_confirm_days = 4` as the new operating point and avoid blindly replaying the old `5 -> 4` failure narrative.
+
+Daily workbook + Telegram status after promotion:
+
+- ran `py ensure_daily_telegram_file.py`
+- helper confirmed `store_latest_day=2026-04-17`, `target_day=2026-04-17`, and `summary_latest.xlsx` already matched the latest local trading day, so no workbook refresh was needed before delivery.
+- attempted exactly one Telegram document send for `summary_latest.xlsx` / trading day `2026-04-17`, but delivery failed in this environment with `WinError 10013`.
+
+### Attempt 39: Main-bridge anchored pattern grid + baseline-loader hardening - NOT PROMOTED
+
+Timestamp: `2026-04-20T15:53:41+02:00` local (Europe/Berlin)
+
+Method:
+
+- hardened [`run_local_ga_staged.py`](C:/Users/gabri/.codex/worktrees/0b30/test/run_local_ga_staged.py) so `_load_main()` now tries multiple repo/worktree safe-directory paths before falling back to the worktree checkpoint. This was needed because script-mode `py run_local_ga_staged.py --eval-only --alpha-focus off` had started silently using `worktree` instead of `git:main`.
+- verified the baseline loader after the patch with `py -c "import run_local_ga_staged as s; d=s._load_main(); print(d['_baseline_source'], d['_baseline_ref'])"`, which now resolves `git:main` ref `306985ee1edbd20a7de6d42e7ef70995a375df2b`.
+- used the refreshed bridge frontier from `local_fullmetric_sweep_result_20260420_1233_maxloss_takeprofit_bridge.json` as the seed map.
+- ran a bounded local/pattern search anchored on `max_loss_per_trade_pct = 0.09`, evaluating a `32`-case grid over:
+  - `partial_take_pct in {0.10, 0.20}`
+  - `partial_take_level in {0.50, 0.75}`
+  - `regime_threshold in {0.25, 0.20}`
+  - `consecutive_loss_cooldown in {10, 9}`
+  - `equity_drawdown_stop_pct in {0.18, 0.20}`
+- the first `28` candidates completed in one `py -` run before the tool hit its `30` minute timeout; the remaining `4` most main-like candidates were finished in a follow-up `py -` run using the same shared evaluator. No checkpoint write was attempted because no candidate cleared the shared guardrails.
+
+Genes touched: `[max_loss_per_trade_pct, partial_take_pct, partial_take_level, regime_threshold, consecutive_loss_cooldown, equity_drawdown_stop_pct]`
+
+Windows tested:
+
+- full-metric evaluation across all tickers (data range: `2005-01-04 -> 2026-04-17`, `36` walk-forward windows, `119` tickers)
+
+Best priority-safe candidate observed:
+
+- change: `max_loss_per_trade_pct: 0.08 -> 0.09`
+
+Candidate summary:
+| Metric | `git:main` baseline | Prior incumbent | Candidate | Delta vs prior incumbent |
+| --- | ---: | ---: | ---: | ---: |
+| `fit` | `24.1942` | `23.6358` | `24.3533` | `+0.7175` |
+| `WR_med_all` | `69.84%` | `70.75%` | `70.75%` | `+0.00pp` |
+| `WR_target_med_all` | `70.00%` | `70.00%` | `70.31%` | `+0.31pp` |
+| `mean_alpha_ann` | `-8.10%` | `-8.23%` | `-8.24%` | `-0.02pp` |
+| `MDD_med` | `11.03%` | `11.03%` | `11.03%` | `+0.00pp` |
+| `MDD_p75` | `16.57%` | `15.95%` | `15.95%` | `+0.00pp` |
+| `MDD_duration_med` | `207.0` | `224.0` | `224.0` | `+0.0` |
+| `trades_med` | `33.0` | `32.0` | `32.0` | `+0.0` |
+
+Outcome:
+
+- `promote = false`
+- rationale: the anchored `32`-candidate grid confirmed that the `max_loss` bridge still cannot cross the shared `git:main` alpha floor. The cleanest candidate (`max_loss_per_trade_pct:+1`) preserved the incumbent hit-rate lead and improved `WR_target_med_all` by `+0.31pp`, but `mean_alpha_ann` remained below `git:main` (`-8.24%` vs `-8.10%`), so `acceptance_vs_main.mean_alpha_ann_floor = false`.
+- the most alpha-recovering hybrids from the grid moved closer to `main` on alpha, but only by giving back the incumbent's first-priority breadth. The strongest example was `max_loss_per_trade_pct: 0.08 -> 0.09`, `partial_take_pct: 0.10 -> 0.20`, `partial_take_level: 0.50 -> 0.75`, `regime_threshold: 0.25 -> 0.20`, `consecutive_loss_cooldown: 10 -> 9`, which reached `fit 23.4699 / WR_med_all 70.00% / WR_target_med_all 70.31% / mean_alpha_ann -8.16% / MDD_med 11.00%`, but it still failed the incumbent WR comparator because the local checkpoint kept the stronger first-priority `WR_med_all` breadth (`70.75%`).
+
+What was learned:
+
+- the current local-vs-main bridge is now exhausted at the small-pattern level. Main-like take-profit/risk settings can recover some alpha and sometimes lift `WR_target_med_all`, but they do so only by eroding the incumbent's `WR_med_all` edge.
+- `equity_drawdown_stop_pct:+1` is not the missing rescue lever on this branch. It pushed fit above `25` in some combinations, but it repeatedly weakened `WR_med_all` to about `70.25%` or below and never closed the `git:main` alpha gap.
+- the local checkpoint's edge is still tied to the same operating point: `partial_take_pct = 0.10`, `partial_take_level = 0.50`, and `consecutive_loss_cooldown = 10` are what keep `63` names at or above `70%` WR. When the search moves those settings back toward `main`, alpha improves only partially while first-priority hit-rate breadth slips.
+- next direction: stop spending search budget on the main-bridge / take-profit neighborhood for now. The next cycle should switch to a different method and frontier, preferably a very small staged-GA Stage-1 or Optuna/TPE probe on non-graveyard genes outside the current main-diff set, because this bounded local grid already exhausted the plausible bridge combinations that preserve incumbent hit rate.
+
+Daily workbook + Telegram status after this run:
+
+- no promotion happened, so `py ensure_daily_telegram_file.py` was not run.
+- no workbook was sent and no Telegram delivery was attempted on this run.
+
+### Attempt 34: Anchored take-profit sweep (partial-take hit-rate recovery) - PROMOTED
+
+Timestamp: `2026-04-20T08:55:59+02:00` local (Europe/Berlin) (promotion applied at ~`09:04`)
+
+Method:
+
+- reviewed the current frontier before searching: the latest two runs had already exhausted the local `regime_threshold = 0.30` alpha-repair branch, so this cycle pivoted away from regime-only retries and back into the oldest unexplored family with a current-frontier context
+- `py run_local_fullmetric_sweep.py --genes "reward_risk_ratio,partial_take_pct,partial_take_level,consecutive_loss_cooldown,regime_threshold,entry_score_threshold,ma_filter_mode" --combo-budget 18 --combo-anchor-labels "partial_take_pct:+1,partial_take_pct:-1,reward_risk_ratio:+1,entry_score_threshold:+1" --out local_fullmetric_sweep_result_20260420_085552_takeprofit_anchor_recovery.json`
+- `py apply_fullmetric_sweep_best.py --sweep local_fullmetric_sweep_result_20260420_085552_takeprofit_anchor_recovery.json`
+- `py ensure_daily_telegram_file.py`
+
+Genes touched: `[reward_risk_ratio, partial_take_pct, partial_take_level, consecutive_loss_cooldown, regime_threshold, entry_score_threshold, ma_filter_mode]`
+
+Windows tested:
+
+- full-metric evaluation across all tickers (data range: `2005-01-04 -> 2026-04-17`, `36` walk-forward windows, `119` tickers)
+
+Promoted candidate:
+
+- change: `partial_take_pct: 0.20 -> 0.10`
+
+Candidate summary:
+| Metric | `git:main` baseline | Prior incumbent | Candidate | Delta vs prior incumbent |
+| --- | ---: | ---: | ---: | ---: |
+| `fit` | `20.7059` | `23.8167` | `23.5861` | `-0.2307` |
+| `WR_med_all` | `69.70%` | `70.00%` | `70.42%` | `+0.42pp` |
+| `WR_target_med_all` | `69.44%` | `70.00%` | `70.00%` | `+0.00pp` |
+| `mean_alpha_ann` | `-8.25%` | `-8.23%` | `-8.22%` | `+0.01pp` |
+| `MDD_med` | `11.31%` | `10.34%` | `11.03%` | `+0.69pp` |
+| `MDD_p75` | `17.06%` | `15.58%` | `15.74%` | `+0.16pp` |
+| `MDD_duration_med` | `228.5` | `203.0` | `203.0` | `+0.0` |
+| `trades_med` | `32.0` | `33.0` | `33.0` | `+0.0` |
+
+Outcome:
+
+- `promote = true`
+- rationale: this was the first candidate in the new branch that improved the highest-priority metric outright instead of only trading alpha against drawdown. `partial_take_pct: 0.20 -> 0.10` lifted `WR_med_all` from `70.00%` to `70.42%`, held `WR_target_med_all` flat at `70.00%`, recovered alpha slightly versus both `git:main` and the prior incumbent, and still passed the shared `git:main` acceptance gate plus the incumbent WR/safety guardrails. Median drawdown and `MDD_p75` both widened versus the prior incumbent, but the move stayed well inside the bounded-risk limits and the comparator correctly preferred the hit-rate gain first.
+
+What was learned:
+
+- the B-side search space is not globally dead; it was only dead under the older frontiers. On the current `partial_take_level = 0.50 / consecutive_loss_cooldown = 9 / regime_threshold = 0.25` seed, a smaller first partial take restored additional `>=70%` breadth (`60 -> 63`) without sacrificing `WR_target`.
+- the direction that failed repeatedly was broad take-profit reshaping, not every take-profit tweak. `partial_take_pct:+1` remained over-defensive and lost hit rate, while `partial_take_pct:-1` was the only move in this sweep that simultaneously improved `WR_med_all`, stayed alpha-positive versus `git:main`, and remained guardrail-safe.
+- the new incumbent is stronger on hit rate and slightly stronger on alpha, but it gave back some median/tail drawdown versus Attempt 31. The next search should therefore pivot back to A/E-style safety repair around `partial_take_pct = 0.10` instead of pressing further on take-profit aggressiveness.
+
+Daily workbook + Telegram status after promotion:
+
+- ran `py ensure_daily_telegram_file.py`
+- helper confirmed `store_latest_day = 2026-04-17`, `target_day = 2026-04-17`, and `summary_latest.xlsx` already matched the latest local trading day, so no workbook refresh was needed before delivery
+- attempted exactly one Telegram document send for `summary_latest.xlsx` / trading day `2026-04-17`, but delivery failed in this environment with `WinError 10013`
+
+### Attempt 37: Refreshed-baseline entry vs A/E tail-repair sweep - NOT PROMOTED
+
+Timestamp: `2026-04-20T10:56:55+02:00` local (Europe/Berlin)
+
+Method:
+
+- refreshed incumbent/baseline under the current guardrails: `py run_local_ga_staged.py --eval-only --alpha-focus off`
+- baseline changed materially during this run: `git:main` re-evaluated from ref `7c65c190da0ece7697a6db9f747f2d9fd259dabd` to `fit 23.4326 / WR_med_all 70.00% / WR_target_med_all 70.15% / mean_alpha_ann -8.12% / MDD_med 10.99%`, while the current local incumbent stayed `fit 23.6358 / WR_med_all 70.75% / WR_target_med_all 70.00% / mean_alpha_ann -8.23% / MDD_med 11.03%`
+- ran a bounded full-metric comparison of the open `entry_score_threshold:+1` branch versus A/E-style repair helpers: `py run_local_fullmetric_sweep.py --alpha-focus off --genes "entry_score_threshold,ma_filter_mode,volatility_filter_percentile,stop_tighten_factor,regime_threshold" --combo-budget 18 --combo-anchor-labels "entry_score_threshold:+1" --seed 66 --out local_fullmetric_sweep_result_20260420_105512_entry_vs_ae_tailrepair.json`
+
+Genes touched: `[entry_score_threshold, ma_filter_mode, volatility_filter_percentile, stop_tighten_factor, regime_threshold]`
+
+Windows tested:
+
+- full-metric evaluation across all tickers (data range: `2005-01-04 -> 2026-04-17`, `36` walk-forward windows, `119` tickers)
+
+Closest guardrail-safe near-miss:
+
+- change: `regime_threshold: 0.25 -> 0.20`
+
+Candidate summary:
+| Metric | `git:main` baseline | Prior incumbent | Candidate | Delta vs prior incumbent |
+| --- | ---: | ---: | ---: | ---: |
+| `fit` | `23.4326` | `23.6358` | `23.3043` | `-0.3315` |
+| `WR_med_all` | `70.00%` | `70.75%` | `70.75%` | `+0.00pp` |
+| `WR_target_med_all` | `70.15%` | `70.00%` | `70.00%` | `+0.00pp` |
+| `mean_alpha_ann` | `-8.12%` | `-8.23%` | `-8.22%` | `+0.01pp` |
+| `MDD_med` | `10.99%` | `11.03%` | `11.03%` | `+0.00pp` |
+| `MDD_p75` | `15.70%` | `15.95%` | `15.99%` | `+0.04pp` |
+| `MDD_duration_med` | `212.0` | `224.0` | `225.0` | `+1.0` |
+| `trades_med` | `32.0` | `32.0` | `32.0` | `+0.0` |
+
+Outcome:
+
+- `promote = false`
+- rationale: the refreshed `git:main` invalidated the old frontier assumptions. The cleanest A/E repair, `regime_threshold: 0.25 -> 0.20`, fully preserved incumbent hit-rate guardrails and recovered a small amount of alpha versus the current local incumbent, but it still lost to the new `git:main` on the second and third promotion priorities: `WR_target_med_all` stayed at `70.00%` versus `git:main 70.15%`, and `mean_alpha_ann` stayed at `-8.22%` versus `git:main -8.12%`. That left `acceptance_vs_main.mean_alpha_ann_floor = false`, so no A/E-only repair in this sweep was promotable.
+- the best-fit D-side branch remained `entry_score_threshold: 0.20 -> 0.25`: `fit 23.8405` (`+0.2046` vs incumbent), `WR_med_all 70.31%` (`-0.44pp`), `WR_target_med_all 70.07%` (`+0.07pp`), `mean_alpha_ann -8.23%` (`+0.00pp`), `MDD_duration_med 202.0` (`-22.0`). It still cannot be promoted because the WR drop is now material against the current incumbent (`70.31% < 70.50%` floor).
+
+What was learned:
+
+- the main problem is no longer only local tail-risk repair. The refreshed `git:main` now beats the current local checkpoint on `WR_target_med_all` and `mean_alpha_ann`, while the local incumbent still wins on the first-priority `WR_med_all` breadth (`63` vs `60` tickers `>=70%` WR). That means small local A/E repairs around the current incumbent are structurally unlikely to promote unless they also recover at least about `0.11pp` annualized alpha and `0.15pp` `WR_target` versus the refreshed baseline.
+- the original open question was answered directly: after the `consecutive_loss_cooldown = 10` promotion, `entry_score_threshold:+1` is no longer guardrail-safe. It still improves fit and drawdown duration, but the extra `WR_med_all` headroom from Attempts 34-36 was not enough to absorb the latest local hit-rate drop once compared against the current incumbent.
+- future search should stop treating the old `20.7059`/`69.70%` baseline as authoritative. The next useful move is a branch that explicitly targets alpha and `WR_target` recovery against the refreshed `git:main`, likely through a different family than local A/E repair.
+
+Daily workbook + Telegram status after this run:
+
+- no promotion happened, so `py ensure_daily_telegram_file.py` was not run
+- no workbook was sent and no Telegram delivery was attempted on this run
+
+### Attempt 39: Max-loss alpha-partner hybrid sweep - NOT PROMOTED
+
+Timestamp: `2026-04-20T15:07:48+02:00` local (Europe/Berlin)
+
+Method:
+
+- refreshed incumbent/baseline again under the current guardrails: `py run_local_ga_staged.py --eval-only --alpha-focus off`
+- kept the refreshed live baseline from `git:main` ref `306985ee1edbd20a7de6d42e7ef70995a375df2b`, which re-evaluated at `fit 24.1942 / WR_med_all 69.84% / WR_target_med_all 70.00% / mean_alpha_ann -8.10% / MDD_med 11.03%`, while the current local incumbent stayed `fit 23.6358 / WR_med_all 70.75% / WR_target_med_all 70.00% / mean_alpha_ann -8.23% / MDD_med 11.03%`
+- ran one bounded full-metric alpha-partner sweep anchored on the open `max_loss_per_trade_pct:+1` branch: `py run_local_fullmetric_sweep.py --alpha-focus off --genes "max_loss_per_trade_pct,momentum_confirm_days,stop_tighten_factor,ma_filter_mode,entry_score_threshold,volatility_filter_percentile" --combo-budget 18 --combo-anchor-labels "max_loss_per_trade_pct:+1,momentum_confirm_days:-1" --seed 66 --out local_fullmetric_sweep_result_20260420_150728_maxloss_alpha_partner.json`
+
+Genes touched: `[max_loss_per_trade_pct, momentum_confirm_days, stop_tighten_factor, ma_filter_mode, entry_score_threshold, volatility_filter_percentile]`
+
+Windows tested:
+
+- full-metric evaluation across all tickers (data range: `2005-01-04 -> 2026-04-17`, `36` walk-forward windows, `119` tickers)
+
+Best guardrail-safe candidate:
+
+- change: `max_loss_per_trade_pct: 0.08 -> 0.09`
+
+Candidate summary:
+| Metric | `git:main` baseline | Prior incumbent | Candidate | Delta vs prior incumbent |
+| --- | ---: | ---: | ---: | ---: |
+| `fit` | `24.1942` | `23.6358` | `24.3533` | `+0.7175` |
+| `WR_med_all` | `69.84%` | `70.75%` | `70.75%` | `+0.00pp` |
+| `WR_target_med_all` | `70.00%` | `70.00%` | `70.31%` | `+0.31pp` |
+| `mean_alpha_ann` | `-8.10%` | `-8.23%` | `-8.24%` | `-0.02pp` |
+| `MDD_med` | `11.03%` | `11.03%` | `11.03%` | `+0.00pp` |
+| `MDD_p75` | `16.57%` | `15.95%` | `15.95%` | `+0.00pp` |
+| `MDD_duration_med` | `207.0` | `224.0` | `224.0` | `+0.0` |
+| `trades_med` | `33.0` | `32.0` | `32.0` | `+0.0` |
+
+Outcome:
+
+- `promote = false`
+- rationale: the new alpha-partner family did not change the frontier ordering. The same single-step `max_loss_per_trade_pct:+1` move from Attempt 38 remained the best guardrail-safe candidate, and it still failed the refreshed `git:main` alpha floor (`mean_alpha_ann -8.24%` vs `git:main -8.10%`) despite clearing the incumbent WR and safety guardrails and remaining `priority_better = true`.
+- the best-fit combo in this sweep, `max_loss_per_trade_pct:+1` plus `ma_filter_mode:+1`, reached `fit 24.3673` with `WR_med_all 70.75%` and `WR_target_med_all 70.31%`, but it pushed alpha the wrong way (`mean_alpha_ann -8.26%`), so it reinforced the same failure mode instead of fixing it.
+- the alpha-friendliest move in the search, `stop_tighten_factor: 0.40 -> 0.45`, improved local alpha slightly (`-8.23% -> -8.22%`) and reduced `MDD_med` (`11.03% -> 10.89%`), but it dropped `WR_med_all` to `70.00%`, below the incumbent floor (`70.50%` required), so it was not promotable.
+
+What was learned:
+
+- the `max_loss_per_trade_pct:+1` anchor is now locally exhausted under the refreshed `git:main` comparator. Pairing it with the previously useful alpha-side helpers in this neighborhood did not recover the missing `~0.14pp` annualized-alpha gap.
+- `ma_filter_mode:+1` is guardrail-safe and `priority_better`, but it is only another form of the same result: it preserves `70.75%` WR breadth, lifts `WR_target_med_all` back to `70.00%`, and still misses the main alpha floor. Adding it on top of `max_loss_per_trade_pct:+1` increases fit only cosmetically.
+- the only direction in this search that improved alpha and drawdown together was `stop_tighten_factor:+1`, but it lost two `>=70%` names (`63 -> 61`). If this family is revisited, it needs a dedicated WR-restoring partner rather than another `max_loss`-anchored bridge.
+- next direction: stop spending budget on the current `max_loss` alpha-gap branch. The next useful move should pivot to a different frontier, most likely a bounded staged/Optuna-style refinement or a local partner search built around the WR-losing but alpha-friendlier `stop_tighten_factor:+1` path.
+
+Daily workbook + Telegram status after this run:
+
+- no promotion happened, so `py ensure_daily_telegram_file.py` was not run
+- no workbook was sent and no Telegram delivery was attempted on this run
+
+### Attempt 38: Main-bridge hybrid sweeps around the refreshed alpha gap - NOT PROMOTED
+
+Timestamp: `2026-04-20T12:59:59+02:00` local (Europe/Berlin)
+
+Method:
+
+- refreshed incumbent/baseline again under the current guardrails: `py run_local_ga_staged.py --eval-only --alpha-focus off`
+- live `git:main` moved again and now evaluated at ref `306985ee1edbd20a7de6d42e7ef70995a375df2b` with `fit 24.1942 / WR_med_all 69.84% / WR_target_med_all 70.00% / mean_alpha_ann -8.10% / MDD_med 11.03%`, while the current local incumbent stayed `fit 23.6358 / WR_med_all 70.75% / WR_target_med_all 70.00% / mean_alpha_ann -8.23% / MDD_med 11.03%`
+- ran a first bounded main-bridge sweep over the genes that differ directly between `git:main` and the local checkpoint: `py run_local_fullmetric_sweep.py --alpha-focus off --genes "score_percentile_trigger,max_loss_per_trade_pct,equity_drawdown_stop_pct,partial_take_level_2,regime_threshold" --combo-budget 12 --combo-anchor-labels "score_percentile_trigger:-1,regime_threshold:-1" --seed 67 --out local_fullmetric_sweep_result_20260420_1220_main_bridge_hybrid.json`
+- ran a second bounded hybrid refinement around the only priority-better branch from the first sweep: `py run_local_fullmetric_sweep.py --alpha-focus off --genes "max_loss_per_trade_pct,partial_take_pct,partial_take_level,consecutive_loss_cooldown,regime_threshold,score_percentile_trigger" --combo-budget 16 --combo-anchor-labels "max_loss_per_trade_pct:+1,partial_take_pct:+1,partial_take_level:+1" --seed 68 --out local_fullmetric_sweep_result_20260420_1233_maxloss_takeprofit_bridge.json`
+
+Genes touched: `[score_percentile_trigger, max_loss_per_trade_pct, equity_drawdown_stop_pct, partial_take_level_2, regime_threshold, partial_take_pct, partial_take_level, consecutive_loss_cooldown]`
+
+Windows tested:
+
+- full-metric evaluation across all tickers (data range: `2005-01-04 -> 2026-04-17`, `36` walk-forward windows, `119` tickers)
+
+Best guardrail-safe candidate across both sweeps:
+
+- change: `max_loss_per_trade_pct: 0.08 -> 0.09`
+
+Candidate summary:
+| Metric | `git:main` baseline | Prior incumbent | Candidate | Delta vs prior incumbent |
+| --- | ---: | ---: | ---: | ---: |
+| `fit` | `24.1942` | `23.6358` | `24.3533` | `+0.7175` |
+| `WR_med_all` | `69.84%` | `70.75%` | `70.75%` | `+0.00pp` |
+| `WR_target_med_all` | `70.00%` | `70.00%` | `70.31%` | `+0.31pp` |
+| `mean_alpha_ann` | `-8.10%` | `-8.23%` | `-8.24%` | `-0.02pp` |
+| `MDD_med` | `11.03%` | `11.03%` | `11.03%` | `+0.00pp` |
+| `MDD_p75` | `16.57%` | `15.95%` | `15.95%` | `+0.00pp` |
+| `MDD_duration_med` | `207.0` | `224.0` | `224.0` | `+0.0` |
+| `trades_med` | `33.0` | `32.0` | `32.0` | `+0.0` |
+
+Outcome:
+
+- `promote = false`
+- rationale: `max_loss_per_trade_pct:+1` was the first candidate on the refreshed frontier that became `priority_better = true` while fully preserving the incumbent WR and safety guardrails. It held `WR_med_all` flat at `70.75%`, lifted `WR_target_med_all` to `70.31%`, and improved fit above both the local incumbent and the freshly re-evaluated `git:main`. Promotion still failed because the new `git:main` alpha floor is materially tighter than the local checkpoint: the candidate landed at `mean_alpha_ann -8.24%` versus `git:main -8.10%`, so `acceptance_vs_main.mean_alpha_ann_floor = false`.
+- the follow-up max-loss/take-profit bridge sweep did not open a rescue path. Reverting toward the main-side take-profit settings (`partial_take_pct:+1` and `partial_take_level:+1`) preserved or improved drawdown shape in some cells, but every promising combo either stayed below the shared alpha floor or gave back too much incumbent WR breadth. No combination beat the simple `max_loss_per_trade_pct:+1` branch on the staged comparator.
+
+What was learned:
+
+- the refreshed frontier is now explicitly split: `git:main` is the alpha/fit leader and the local checkpoint is the WR leader. Single-step bridges from the local incumbent toward main are not enough to recover the `~0.14pp` annualized-alpha deficit while keeping the current `63` `>=70%` names.
+- `max_loss_per_trade_pct:+1` is the most actionable new local lever. It improves `WR_target_med_all` by `+0.31pp` and clears the lexicographic comparator without hurting `WR_med_all`, so future search should keep it as an anchor when exploring alpha-recovery branches.
+- the obvious direct bridges from main are mostly dead on this seed. `score_percentile_trigger:-1` and `regime_threshold:-1` preserved some safety properties but did not recover enough alpha, while `partial_take_pct:+1` / `partial_take_level:+1` could not restore the main-style alpha edge without losing the incumbent WR advantage. The next move should be a genuinely alpha-focused multi-gene search around the `max_loss_per_trade_pct:+1` anchor or a bounded staged/Optuna-style refinement, not another blind single-step bridge sweep.
+
+Daily workbook + Telegram status after this run:
+
+- no promotion happened, so `py ensure_daily_telegram_file.py` was not run
+- no workbook was sent and no Telegram delivery was attempted on this run
+
+### Attempt 36: Post-partial-take repair sweep - PROMOTED
+
+Timestamp: `2026-04-20T09:19:32+02:00` local (Europe/Berlin) (promotion applied at ~`09:25`)
+
+Method:
+
+- re-baselined after the fresh take-profit promotion with `py run_local_ga_staged.py --eval-only --alpha-focus off`
+- ran a bounded repair sweep around the new higher-WR seed: `py run_local_fullmetric_sweep.py --alpha-focus off --genes "entry_score_threshold,volatility_filter_percentile,consecutive_loss_cooldown,ma_filter_mode,regime_threshold,vol_regime_mode" --combo-budget 16 --combo-anchor-labels "entry_score_threshold:+1,volatility_filter_percentile:+1" --seed 66 --out local_fullmetric_sweep_result_20260420_0918_postpartialtake_repair.json`
+- applied the promoted candidate: `py apply_fullmetric_sweep_best.py --sweep local_fullmetric_sweep_result_20260420_0918_postpartialtake_repair.json`
+- revalidated the new checkpoint: `py run_local_ga_staged.py --eval-only --alpha-focus off`
+- daily delivery helper: `py ensure_daily_telegram_file.py`
+
+Genes touched: `[entry_score_threshold, volatility_filter_percentile, consecutive_loss_cooldown, ma_filter_mode, regime_threshold, vol_regime_mode]`
+
+Windows tested:
+
+- full-metric evaluation across all tickers (data range: `2005-01-04 -> 2026-04-17`, `36` walk-forward windows, `119` tickers)
+
+Promoted candidate:
+
+- change: `consecutive_loss_cooldown: 9 -> 10`
+
+Candidate summary:
+| Metric | `git:main` baseline | Prior incumbent | Candidate | Delta vs prior incumbent |
+| --- | ---: | ---: | ---: | ---: |
+| `fit` | `20.7059` | `23.5861` | `23.6358` | `+0.0497` |
+| `WR_med_all` | `69.70%` | `70.42%` | `70.75%` | `+0.33pp` |
+| `WR_target_med_all` | `69.44%` | `70.00%` | `70.00%` | `+0.00pp` |
+| `mean_alpha_ann` | `-8.25%` | `-8.22%` | `-8.23%` | `-0.01pp` |
+| `MDD_med` | `11.31%` | `11.03%` | `11.03%` | `+0.00pp` |
+| `MDD_p75` | `17.06%` | `15.74%` | `15.95%` | `+0.22pp` |
+| `MDD_duration_med` | `228.5` | `203.0` | `224.0` | `+21.0` |
+| `trades_med` | `32.0` | `33.0` | `32.0` | `-1.0` |
+
+Outcome:
+
+- `promote = true`
+- rationale: the new `partial_take_pct = 0.10` checkpoint created enough hit-rate headroom that several single moves became guardrail-safe again, including the long-blocked `entry_score_threshold:+1`. The staged comparator still preferred `consecutive_loss_cooldown:+1` because it improved the first-priority metric directly (`WR_med_all 70.42% -> 70.75%`) while keeping `WR_target_med_all` flat at `70.00%` and holding `MDD_med` flat. Alpha slipped by only `0.01pp`, and the drawdown-duration / trade-count givebacks stayed inside the incumbent safety guardrails, so the move remained promotable.
+- `entry_score_threshold:+1` was the strongest alternative branch: it improved `fit` more (`24.0133`), preserved the same `63` `>=70%` tickers, and shortened `MDD_duration_med` to `184.0`, but its `WR_med_all` settled slightly below the cooldown winner (`70.31%` vs `70.75%`), so it lost on the explicit promotion order.
+
+What was learned:
+
+- Attempt 34 materially changed the frontier. Once `partial_take_pct` moved to `0.10`, the system could absorb one more cooldown step without giving back `WR_target`, and the old D-side near-miss became guardrail-safe again.
+- the post-partial-take checkpoint now prefers slower re-entry after losses: `consecutive_loss_cooldown = 10` added another high-WR ticker (`63` `>=70%` names retained) and became the clean first-priority promotion, even though it modestly lengthened drawdown duration and reduced trades.
+- `entry_score_threshold:+1` is no longer blocked by the incumbent WR floor on this seed. That branch remains live for future work, but it now needs either a small WR edge or a cleaner alpha/duration win to beat the new cooldown-10 incumbent on the lexicographic comparator.
+
+Daily workbook + Telegram status after promotion:
+
+- ran `py ensure_daily_telegram_file.py`
+- helper confirmed `store_latest_day = 2026-04-17`, `target_day = 2026-04-17`, and `summary_latest.xlsx` already matched the latest local trading day, so no workbook refresh was needed before delivery
+- attempted exactly one Telegram document send for `summary_latest.xlsx` / trading day `2026-04-17`, but delivery failed in this environment with `WinError 10013`
+
+### Attempt 35: Bounded staged-GA refine pass (new window slice) - NOT PROMOTED
+
+Timestamp: `2026-04-20T09:09:41+02:00` local (Europe/Berlin)
+
+Method:
+
+- refreshed incumbent/baseline under the current guardrails: `py run_local_ga_staged.py --eval-only --alpha-focus off`
+- ran a bounded staged refine pass with a smaller budget than the timed-out Attempt 30 probe: `py run_local_ga_staged.py --reset --stage 2 --alpha-focus off --chunks 1 --ngen-per-chunk 2 --pop-size 16 --windows 4 --eval-topk 6 --apply-best`
+
+Genes touched:
+
+- staged GA over the full genome; the best all-ticker representative only nudged `vote_threshold_short`, `partial_take_pct_2`, and `partial_take_level_2`
+
+Windows tested:
+
+- staged search windows: `[1, 10, 19, 28]` (auto-rotated offset `1` out of `36` total walk-forward windows)
+- full-metric validation across all tickers after the chunk (data range: `2005-01-04 -> 2026-04-17`, `119` tickers)
+
+Best chunk representative:
+
+- changes:
+  - `vote_threshold_short: 0.15 -> 0.1550698474225143`
+  - `partial_take_pct_2: 0.30 -> 0.2982570491636789`
+  - `partial_take_level_2: 1.75 -> 1.749652013590458`
+
+Candidate summary:
+| Metric | `git:main` baseline | Prior incumbent | Candidate | Delta vs prior incumbent |
+| --- | ---: | ---: | ---: | ---: |
+| `fit` | `20.7059` | `23.8167` | `23.8167` | `+0.0000` |
+| `WR_med_all` | `69.70%` | `70.00%` | `70.00%` | `+0.00pp` |
+| `WR_target_med_all` | `69.44%` | `70.00%` | `70.00%` | `+0.00pp` |
+| `mean_alpha_ann` | `-8.25%` | `-8.23%` | `-8.23%` | `+0.00pp` |
+| `MDD_med` | `11.31%` | `10.34%` | `10.34%` | `+0.00pp` |
+| `MDD_p75` | `17.06%` | `15.58%` | `15.58%` | `+0.00pp` |
+| `MDD_duration_med` | `228.5` | `203.0` | `203.0` | `+0.0` |
+| `trades_med` | `32.0` | `33.0` | `33.0` | `+0.0` |
+
+Outcome:
+
+- `promote = false`
+- rationale: the smaller staged pass completed successfully and passed all shared `git:main` plus incumbent WR/safety guardrails, but it still failed the promotion comparator because the best full-metric representative was functionally the incumbent itself. The only chunk representative that survived the hit-rate-first ranking produced identical all-ticker metrics to the current checkpoint, so `priority_better = false`.
+- the distinct non-seed HOF variants were materially worse where it mattered: the best of them only reached `fit` about `22.33`, dropped `WR_med_all` to about `69.6%`, and pushed annualized alpha down to about `-8.4%`; the weakest validated variant fell to about `68.8% WR`. Those candidates never became eligible under the no-hit-rate-regression objective.
+
+What was learned:
+
+- the first post-Attempt-33 staged refine slice did not open a new frontier. On windows `[1, 10, 19, 28]`, stage 2 mostly converged to seed-equivalent micro-mutations rather than a discrete step change that improved the all-ticker metrics.
+- the surviving representative only perturbed off-grid values in `vote_threshold_short`, `partial_take_pct_2`, and `partial_take_level_2`, and those perturbations did not move `WR_med_all`, `WR_target_med_all`, alpha, drawdown, or trade count at all under the full validator. That is a signal to avoid spending more budget on unconstrained micro-noise in this neighborhood.
+- the useful negative result is that a bounded staged pass on a fresh window slice still preferred the incumbent plateau over lower-WR alternatives, so the current checkpoint remains robust. The next search should return to step-aligned, alpha-positive levers or an explicitly constrained rescue combo instead of another generic stage-2 pass with the same mutation behavior.
+
+Daily workbook + Telegram status after this run:
+
+- no promotion happened, so `py ensure_daily_telegram_file.py` was not run.
+- no workbook was sent and no Telegram delivery was attempted on this run.
+
+### Attempt 33: Regime-0.30 alpha-rescue pattern search - NOT PROMOTED
+
+Timestamp: `2026-04-20T07:08:00+02:00` local (Europe/Berlin)
+
+Method:
+
+- started from the Attempt 32 strict-regime near-miss and fixed `regime_threshold = 0.30`
+- ran a bounded local pattern search over `vol_regime_mode in {1,2}`, `ma_filter_mode in {0,1}`, and `consecutive_loss_cooldown in {9,10}` using the repo's full-metric evaluator
+- exported the refinement artifact with `--out local_pattern_search_result_20260420_0708_regime30_alpha_rescue.json`
+
+Genes touched: `[regime_threshold, vol_regime_mode, ma_filter_mode, consecutive_loss_cooldown]`
+
+Windows tested:
+
+- full-metric evaluation across all tickers (data range: `2005-01-04 -> 2026-04-17`, `36` walk-forward windows, `119` tickers)
+
+Closest near-miss:
+
+- change: `regime_threshold: 0.25 -> 0.30` (control cell carried forward from Attempt 32)
+
+Candidate summary:
+| Metric | `git:main` baseline | Prior incumbent | Candidate | Delta vs prior incumbent |
+| --- | ---: | ---: | ---: | ---: |
+| `fit` | `20.7059` | `23.8167` | `23.9901` | `+0.1734` |
+| `WR_med_all` | `69.70%` | `70.00%` | `70.00%` | `+0.00pp` |
+| `WR_target_med_all` | `69.44%` | `70.00%` | `70.00%` | `+0.00pp` |
+| `mean_alpha_ann` | `-8.25%` | `-8.23%` | `-8.25%` | `-0.02pp` |
+| `MDD_med` | `11.31%` | `10.34%` | `10.34%` | `+0.00pp` |
+| `MDD_p75` | `17.06%` | `15.58%` | `15.36%` | `-0.22pp` |
+| `MDD_duration_med` | `228.5` | `203.0` | `197.0` | `-6.0` |
+| `trades_med` | `32.0` | `33.0` | `33.0` | `+0.0` |
+
+Outcome:
+
+- `promote = false`
+- rationale: the refinement disproved the last rescue neighborhood around the strict-regime near-miss. Every `vol_regime_mode = 2` variant that preserved `WR_med_all = 70.00%` and `WR_target_med_all = 70.00%` still failed the shared `git:main` alpha guardrail (`mean_alpha_ann` stayed between `-8.2548%` and `-8.2649%`), so `acceptance_vs_main.mean_alpha_ann_floor = false` throughout. Every `vol_regime_mode = 1` variant collapsed to roughly `68.18%` `WR_med_all`, `68.75%-68.92%` `WR_target_med_all`, and materially worse drawdown, so that rescue axis is off the frontier.
+
+What was learned:
+
+- the strict-regime branch is now locally exhausted: `regime_threshold: 0.25 -> 0.30` remains the best tail-risk shape on the promoted checkpoint, but the missing alpha does not come back through `vol_regime_mode`, `ma_filter_mode`, or another cooldown step.
+- `vol_regime_mode: 2 -> 1` is decisively incompatible with the post-Attempt-31 seed. On this frontier it drops both hit-rate priorities by about `1.8pp` and worsens drawdown metrics at the same time, so it should be treated as a local dead end rather than a rescue helper.
+- the next productive search should pivot away from regime/tail-risk helpers and back toward genuinely alpha-positive levers. If `entry_score_threshold:+1` is revisited again, it now needs a new WR-restoring partner because `consecutive_loss_cooldown:+1`, `regime_threshold:+/-1`, and this `vol_regime_mode` branch did not restore the lost `>=70%` ticker.
+
+Daily workbook + Telegram status after this run:
+
+- no promotion happened, so `py ensure_daily_telegram_file.py` was not run.
+- no workbook was sent and no Telegram delivery was attempted on this run.
+
+### Attempt 32: Tail-risk alpha-repair full-metric sweep - NOT PROMOTED
+
+Timestamp: `2026-04-20T06:54:31+02:00` local (Europe/Berlin)
+
+Method:
+
+- refreshed incumbent/baseline under the current guardrails: `py run_local_ga_staged.py --eval-only --alpha-focus off`
+- ran a tail-risk repair sweep from the post-Attempt-31 checkpoint: `py run_local_fullmetric_sweep.py --alpha-focus off --genes "entry_score_threshold,stop_tighten_factor,ma_filter_mode,volatility_filter_percentile,consecutive_loss_cooldown,regime_threshold" --combo-budget 16 --combo-anchor-labels "entry_score_threshold:+1,stop_tighten_factor:-1" --seed 65 --out local_fullmetric_sweep_result_20260420_0753_tailrisk_alpha_repair.json`
+
+Genes touched: `[entry_score_threshold, stop_tighten_factor, ma_filter_mode, volatility_filter_percentile, consecutive_loss_cooldown, regime_threshold]`
+
+Windows tested:
+
+- full-metric evaluation across all tickers (data range: `2005-01-04 -> 2026-04-17`, `36` walk-forward windows, `119` tickers)
+
+Closest near-miss:
+
+- change: `regime_threshold: 0.25 -> 0.30`
+
+Candidate summary:
+| Metric | `git:main` baseline | Prior incumbent | Candidate | Delta vs prior incumbent |
+| --- | ---: | ---: | ---: | ---: |
+| `fit` | `20.7059` | `23.8167` | `23.9901` | `+0.1734` |
+| `WR_med_all` | `69.70%` | `70.00%` | `70.00%` | `+0.00pp` |
+| `WR_target_med_all` | `69.44%` | `70.00%` | `70.00%` | `+0.00pp` |
+| `mean_alpha_ann` | `-8.25%` | `-8.23%` | `-8.25%` | `-0.02pp` |
+| `MDD_med` | `11.31%` | `10.34%` | `10.34%` | `+0.00pp` |
+| `MDD_p75` | `17.06%` | `15.58%` | `15.36%` | `-0.22pp` |
+| `MDD_duration_med` | `228.5` | `203.0` | `197.0` | `-6.0` |
+| `trades_med` | `32.0` | `33.0` | `33.0` | `+0.0` |
+
+Outcome:
+
+- `promote = false`
+- rationale: the strict-regime candidate was the cleanest tail-risk repair found on this frontier. It preserved both hit-rate priorities at `70.00%`, improved `MDD_p75` and shortened drawdown duration, and it was already `priority_better = true` while passing the incumbent WR and safety guardrails. Promotion still failed because the candidate slipped just under the shared `git:main` alpha floor: `mean_alpha_ann` moved from `-8.2468%` on `git:main` to `-8.2548%` on the candidate, so `acceptance_vs_main.mean_alpha_ann_floor = false`.
+- the best fully guarded candidate was the opposite regime move, `regime_threshold: 0.25 -> 0.20`, which improved alpha versus both `git:main` and the incumbent and shortened duration by `8` bars, but it widened `MDD_p75` (`15.58% -> 15.72%`) and did not beat the incumbent on the priority comparator, so it was not promotable either.
+
+What was learned:
+
+- the current frontier now has two clear but incomplete branches: `regime_threshold: 0.25 -> 0.30` repairs tail risk (`MDD_p75 -0.22pp`, duration `-6`) but misses the shared alpha floor by a hair, while `regime_threshold: 0.25 -> 0.20` clears alpha but gives back tail risk and loses on priority.
+- the anchored helper set in this run did not rescue the strict-regime near-miss. Pairing `regime_threshold:+1` with `ma_filter_mode:+1` or `consecutive_loss_cooldown:+1` kept `WR_med_all` and `WR_target_med_all` flat, but both variants pushed alpha even lower than the single strict-regime move, so they remained blocked by `acceptance_vs_main`.
+- `entry_score_threshold:+1` is still structurally the strongest fit/duration lever (`fit +0.4236`, duration `-19.0`), but on the current seed it continues to cost one `>=70%` ticker (`WR_med_all 70.00% -> 69.70%`), so it still cannot be promoted under the no-hit-rate-regression rule.
+- next direction: if another run is available, target a very small local/pattern refinement around the strict-regime near-miss and only use helpers that can add alpha without sacrificing the repaired `MDD_p75`/duration profile. If no such alpha helper appears quickly, stop revisiting this branch and switch search budget to a different frontier.
+
+Daily workbook + Telegram status after this run:
+
+- no promotion happened, so `py ensure_daily_telegram_file.py` was not run.
+- no workbook was sent and no Telegram delivery was attempted on this run.
+
+### Attempt 31: Anchored risk-rescue sweep + local pattern search - PROMOTED
+
+Timestamp: `2026-04-20T04:20:00+02:00` local (Europe/Berlin) (promotion applied at ~`05:17`)
+
+Method:
+
+- refreshed incumbent/baseline under the current guardrails: `py run_local_ga_staged.py --eval-only --alpha-focus off`
+- anchored full-metric sweep around the new risk-rescue frontier: `py run_local_fullmetric_sweep.py --alpha-focus off --genes "partial_take_level,consecutive_loss_cooldown,regime_threshold,ma_filter_mode,momentum_confirm_days,vol_regime_mode" --combo-budget 16 --combo-anchor-labels "partial_take_level:-1,momentum_confirm_days:-1" --seed 64`
+- anchored sweep artifact: `local_fullmetric_sweep_result_20260420_0446_risk_rescue_anchor.json`
+- targeted local pattern search on the anchored near-miss: fixed `partial_take_level=0.50` and evaluated a `16`-case grid over `consecutive_loss_cooldown in {8,9}`, `regime_threshold in {0.25,0.30}`, `ma_filter_mode in {0,1}`, and `entry_score_threshold in {0.20,0.25}`
+- exported the promotable rescue candidate to a standard apply artifact (`--out local_pattern_search_result_20260420_0612_partialtake_cooldown_regime.json`)
+- `py apply_fullmetric_sweep_best.py --sweep local_pattern_search_result_20260420_0612_partialtake_cooldown_regime.json`
+- revalidated the promoted checkpoint: `py run_local_ga_staged.py --eval-only --alpha-focus off`
+- daily delivery helper: `py ensure_daily_telegram_file.py`
+
+Genes touched:
+
+- anchored sweep: `[partial_take_level, consecutive_loss_cooldown, regime_threshold, ma_filter_mode, momentum_confirm_days, vol_regime_mode]`
+- local pattern search refinement: `[partial_take_level, consecutive_loss_cooldown, regime_threshold, ma_filter_mode, entry_score_threshold]`
+
+Windows tested:
+
+- full-metric evaluation across all tickers (data range: `2005-01-04 -> 2026-04-17`, `36` walk-forward windows, `119` tickers)
+
+Anchored sweep outcome before promotion:
+
+- best guarded near-miss: `partial_take_level: 0.75 -> 0.50` plus `consecutive_loss_cooldown: 8 -> 9`
+- near-miss metrics vs prior incumbent: `fit 23.9901` (`+0.0663`), `WR_med_all 70.00%` (`+0.00pp`), `WR_target_med_all 70.00%` (`+0.00pp`), `mean_alpha_ann -8.25%` (`-0.08pp`), `MDD_med 10.34%` (`-0.65pp`), `MDD_p75 15.36%` (`+0.11pp`), `MDD_duration_med 197.0` (`-3.0`)
+- why it failed: it was already `priority_better = true` and passed incumbent WR/safety guardrails, but it missed the shared `git:main` alpha floor by a hair, so `acceptance_vs_main.mean_alpha_ann_floor = false`
+
+Promoted candidate:
+
+- changes:
+  - `partial_take_level: 0.75 -> 0.50`
+  - `consecutive_loss_cooldown: 8 -> 9`
+  - `regime_threshold: 0.30 -> 0.25`
+
+Candidate summary:
+| Metric | `git:main` baseline | Prior incumbent | Candidate | Delta vs prior incumbent |
+| --- | ---: | ---: | ---: | ---: |
+| `fit` | `20.7059` | `23.9238` | `23.8167` | `-0.1070` |
+| `WR_med_all` | `69.70%` | `70.00%` | `70.00%` | `+0.00pp` |
+| `WR_target_med_all` | `69.44%` | `70.00%` | `70.00%` | `+0.00pp` |
+| `mean_alpha_ann` | `-8.25%` | `-8.17%` | `-8.23%` | `-0.06pp` |
+| `MDD_med` | `11.31%` | `11.00%` | `10.34%` | `-0.65pp` |
+| `MDD_p75` | `17.06%` | `15.25%` | `15.58%` | `+0.32pp` |
+| `MDD_duration_med` | `228.5` | `200.0` | `203.0` | `+3.0` |
+| `trades_med` | `32.0` | `33.0` | `33.0` | `+0.0` |
+
+Outcome:
+
+- `promote = true`
+- rationale: the local pattern search found the missing alpha-floor recovery for the anchored drawdown-improvement path. Adding `regime_threshold: 0.30 -> 0.25` to the near-miss kept both hit-rate priorities flat at `70.00%`, lifted `mean_alpha_ann` enough to pass `acceptance_vs_main`, and preserved all incumbent WR/safety guardrails. Under the staged comparator the small alpha giveback versus the prior incumbent (`-0.06pp`) stayed inside the tolerance band, while `MDD_med` improved materially (`11.00% -> 10.34%`), so the candidate became priority-better and promotable.
+
+What was learned:
+
+- the current frontier has a real rescue path for `partial_take_level: 0.75 -> 0.50`: by itself it improves median drawdown strongly but misses both the incumbent WR floor and the shared alpha floor; pairing it with `consecutive_loss_cooldown: 8 -> 9` restores the incumbent hit-rate profile, and adding `regime_threshold: 0.30 -> 0.25` recovers just enough alpha to clear `git:main`.
+- this is a useful counterexample to the latest D-side miss: the closest promotable improvement was not another entry-side fit/duration tweak, but a risk-shape combo that held `WR_med_all` and `WR_target_med_all` flat while reducing `MDD_med` by `0.65pp`.
+- tail-risk metrics are still the trade-off to watch on this branch of the frontier: the promotion improved `MDD_med`, but `MDD_p75` widened slightly (`+0.32pp`) and `MDD_duration_med` lengthened marginally (`+3.0`). The shared guardrails still passed, so future searches should treat this as the new bounded-risk operating point rather than an excuse to relax tail-risk discipline further.
+- next direction: use the new incumbent (`partial_take_level = 0.50`, `consecutive_loss_cooldown = 9`, `regime_threshold = 0.25`) as the seed and probe whether any tail-risk helper can recover the small `MDD_p75`/duration giveback without sacrificing the restored `MDD_med` improvement.
+
+Daily workbook + Telegram status after promotion:
+
+- ran `py ensure_daily_telegram_file.py`
+- helper confirmed `store_latest_day=2026-04-17`, `target_day=2026-04-17`, and `summary_latest.xlsx` already matched the latest local trading day, so no workbook refresh was needed before delivery.
+- attempted exactly one Telegram document send for `summary_latest.xlsx` / trading day `2026-04-17`, but delivery failed in this environment with `WinError 10013`.
+
+### Attempt 30: Anchored full-metric sweep (entry WR rescue at regime 0.30) - NOT PROMOTED
+
+Timestamp: `2026-04-20T02:52:41+02:00` local (Europe/Berlin)
+
+Method:
+
+- refreshed incumbent/baseline under the current guardrails: `py run_local_ga_staged.py --eval-only --alpha-focus off`
+- `py run_local_fullmetric_sweep.py --alpha-focus off --genes "entry_score_threshold,consecutive_loss_cooldown,regime_threshold,partial_take_level,stop_tighten_factor,ma_filter_mode" --combo-budget 10 --combo-anchor-labels "entry_score_threshold:+1" --seed 63 --out local_fullmetric_sweep_result_20260420_025231_entry_wrrescue.json`
+
+Genes touched: `[entry_score_threshold, consecutive_loss_cooldown, regime_threshold, partial_take_level, stop_tighten_factor, ma_filter_mode]`
+
+Windows tested: full-metric across all tickers (data range: `2005-01-04 -> 2026-04-17`, `36` walk-forward windows, `119` tickers)
+
+Best-fit candidate observed:
+
+- change: `entry_score_threshold: 0.20 -> 0.25` plus `ma_filter_mode: 1 -> 2`
+
+Candidate summary:
+| Metric | `git:main` baseline | Prior incumbent | Candidate | delta vs prior incumbent |
+|---|---:|---:|---:|---:|
+| fit | 20.7059 | 23.9238 | 24.2903 | +0.3666 |
+| WR_med_all | 69.70% | 70.00% | 69.70% | -0.30pp |
+| WR_target_med_all | 69.44% | 70.00% | 70.00% | +0.00pp |
+| mean_alpha_ann | -8.25% | -8.17% | -8.19% | -0.02pp |
+| MDD_med | 11.31% | 11.00% | 11.00% | +0.00pp |
+| MDD_p75 | 17.06% | 15.25% | 15.25% | +0.00pp |
+| MDD_duration_med | 228.5 | 200.0 | 181.0 | -19.0 |
+| trades_med | 32.0 | 33.0 | 33.0 | +0.0 |
+
+Outcome:
+
+- `promote = false`
+- rationale: the highest-fit variants still gave back one `>=70%` ticker and failed the incumbent WR floor (`69.70%` vs required `69.75%`), so none of them were promotable despite fit and drawdown-duration gains.
+- the cleanest rescue pair was `entry_score_threshold: 0.20 -> 0.25` plus `consecutive_loss_cooldown: 8 -> 9`: it passed `git:main`, incumbent WR, and incumbent safety guardrails with `fit 23.7324 / WR_med_all 70.00% / WR_target_med_all 70.07% / mean_alpha_ann -8.18% / MDD_med 11.00% / MDD_p75 14.95% / MDD_duration_med 186.0`, but its `WR_target_med_all` gain was only `+0.07pp` vs the incumbent, below the staged comparator's `0.5pp` tie band, so `priority_better = false`.
+
+What was learned:
+
+- `entry_score_threshold:+1` remains the strongest D-side fit/drawdown-duration lever at this frontier, but it still costs one `>=70%` ticker unless paired with a WR restorer.
+- `consecutive_loss_cooldown:+1` is the best currently known rescue partner: it recovers the lost WR ticker, lifts `WR_target_med_all` slightly, and improves tail risk (`MDD_p75 -0.30pp`, `MDD_duration_med -14.0`) without violating any shared guardrails, but the gain is still too small to clear the comparator tolerance bands.
+- `regime_threshold:+1` now behaves like the same pattern as D-side tightening: it reaches `fit 23.9613` and `WR_target_med_all 70.07%`, but still loses one `>=70%` ticker and fails the incumbent WR floor.
+- follow-on staged-GA probe for broader search diversification was started with `py run_local_ga_staged.py --reset --stage 2 --alpha-focus off --chunks 1 --ngen-per-chunk 3 --pop-size 24 --windows 6 --window-offset 28 --eval-topk 8 --apply-best`, but it timed out after 30 minutes before chunk 1 completed. No candidate finished full-metric evaluation there, so the checkpoint remained unchanged. If staged search is revisited, use a much smaller budget or a longer-running environment.
+
+### Attempt 29: Full-metric sweep (hot-zone rebalance after momentum promotion) - PROMOTED
+
+Timestamp: `2026-04-20T00:50:13+02:00` local (Europe/Berlin) (promotion applied at ~`01:01`)
+
+Method:
+
+- refreshed incumbent/baseline under the current guardrails: `py run_local_ga_staged.py --eval-only --alpha-focus off`
+- `py run_local_fullmetric_sweep.py --alpha-focus off --genes "partial_take_level,entry_score_threshold,regime_threshold,consecutive_loss_cooldown,stop_tighten_factor,volatility_filter_percentile" --combo-budget 14 --combo-anchor-labels "partial_take_level:+1,regime_threshold:-1" --seed 62 --out local_fullmetric_sweep_result_20260420_001_hotzone_rebalance.json`
+- `py apply_fullmetric_sweep_best.py --sweep local_fullmetric_sweep_result_20260420_001_hotzone_rebalance.json`
+- `py run_local_ga_staged.py --eval-only --alpha-focus off`
+- `py ensure_daily_telegram_file.py`
+
+Genes touched: `[partial_take_level, entry_score_threshold, regime_threshold, consecutive_loss_cooldown, stop_tighten_factor, volatility_filter_percentile]`
+
+Windows tested: full-metric across all tickers (data range: `2005-01-04 -> 2026-04-17`, `36` walk-forward windows, `119` tickers)
+
+Promoted candidate:
+
+- change: `regime_threshold: 0.25 -> 0.30` (single-gene step)
+
+Candidate summary:
+| Metric | `git:main` baseline | Prior incumbent | Candidate | delta vs prior incumbent |
+|---|---:|---:|---:|---:|
+| fit | 20.7059 | 23.5293 | 23.9238 | +0.3944 |
+| WR_med_all | 69.70% | 70.00% | 70.00% | +0.00pp |
+| WR_target_med_all | 69.44% | 70.00% | 70.00% | +0.00pp |
+| mean_alpha_ann | -8.25% | -8.15% | -8.17% | -0.02pp |
+| MDD_med | 11.31% | 11.00% | 11.00% | +0.00pp |
+| MDD_p75 | 17.06% | 15.45% | 15.25% | -0.20pp |
+| MDD_duration_med | 228.5 | 209.0 | 200.0 | -9.0 |
+| trades_med | 32.0 | 33.0 | 33.0 | +0.0 |
+
+Outcome:
+
+- `promote = true`
+- rationale: after Attempt 28 moved the incumbent to `momentum_confirm_days = 4`, the local regime frontier shifted. `regime_threshold: 0.25 -> 0.30` preserved both hit-rate priorities at `70.00%`, stayed inside all `git:main` and incumbent guardrails, and improved drawdown tail behavior (`MDD_p75` and drawdown duration) enough to clear the staged priority comparator. The small alpha giveback (`-0.02pp`) stayed inside the comparator tie band, so it did not count as a material regression.
+
+What was learned:
+
+- the post-momentum incumbent prefers a slightly stricter regime gate again: the earlier `0.25 -> 0.20` loosening remained guardrail-safe but was still not priority-better, while `0.25 -> 0.30` now preserves hit rate and trims tail risk.
+- `entry_score_threshold: 0.20 -> 0.25` improved fit and shortened drawdowns, but it still missed the incumbent WR floor (`69.70%` vs required `69.75%`), so D-side tightening remains just below the no-regression bar at this frontier.
+- `partial_take_level` remains a useful risk-shape lever, not a clean promotion lever: `0.75 -> 0.50` improved `MDD_med` and duration, but it lost one `>=70%` ticker and failed the incumbent WR guardrail; `0.75 -> 1.00` had the same problem.
+- `volatility_filter_percentile: 0.05 -> 0.10` continues to over-defend the system: tail risk improved, but alpha fell below the `git:main` alpha floor and both WR guardrails weakened.
+- next direction: use the new incumbent (`momentum_confirm_days = 4`, `regime_threshold = 0.30`) as the operating point and probe multi-gene rescue pairs only where the single move is now close to the WR floor, especially `entry_score_threshold:+1` plus a tail-risk helper or a broader staged-GA refine pass.
+
+Daily workbook + Telegram status after promotion:
+
+- ran `py ensure_daily_telegram_file.py`
+- helper confirmed `store_latest_day=2026-04-17`, `target_day=2026-04-17`, and `summary_latest.xlsx` already matched the latest local trading day, so no workbook refresh was needed before delivery.
+- attempted exactly one Telegram document send for `summary_latest.xlsx` / trading day `2026-04-17`, but delivery failed in this environment with `WinError 10013`.

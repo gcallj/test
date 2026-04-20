@@ -89,6 +89,12 @@ def main() -> None:
     parser.add_argument("--alpha-focus", choices=("on", "off"), default="off")
     parser.add_argument("--genes", type=str, default=",".join(DEFAULT_FOCUS_GENES))
     parser.add_argument("--combo-budget", type=int, default=12, help="How many 2-move combos to evaluate.")
+    parser.add_argument(
+        "--combo-anchor-labels",
+        type=str,
+        default="",
+        help="Comma-separated single-move labels that should be force-paired in combo search even if they fail WR guardrails.",
+    )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--out", type=str, default="local_fullmetric_sweep_result.json")
     args = parser.parse_args()
@@ -108,6 +114,8 @@ def main() -> None:
     seed_metrics = staged_runner.evaluate_genome_full(seed_genome, cache, gr)
 
     gene_names = [g.strip() for g in str(args.genes).split(",") if g.strip()]
+    anchor_labels = [x.strip() for x in str(args.combo_anchor_labels).split(",") if x.strip()]
+    anchor_label_set = set(anchor_labels)
     focus = []
     for name in gene_names:
         idx = _spec_index_by_name(name)
@@ -197,12 +205,31 @@ def main() -> None:
             reverse=True,
         )
         top_for_combo = guarded_sorted[: min(8, len(guarded_sorted))]
-        combo_pairs = []
+        anchor_sorted = sorted(
+            [r for r in single_results if r["label"] in anchor_label_set],
+            key=lambda r: _rank_key(r["metrics"]),
+            reverse=True,
+        )
+        anchored_pairs = []
+        regular_pairs = []
+        seen_pairs = set()
+
+        def _append_pair(target: list[tuple[dict, dict]], left: dict, right: dict) -> None:
+            pair_key = tuple(sorted((str(left["label"]), str(right["label"]))))
+            if left["label"] == right["label"] or pair_key in seen_pairs:
+                return
+            seen_pairs.add(pair_key)
+            target.append((left, right))
+
+        for anchor in anchor_sorted:
+            for partner in top_for_combo:
+                _append_pair(anchored_pairs, anchor, partner)
+
         for i in range(len(top_for_combo)):
             for j in range(i + 1, len(top_for_combo)):
-                combo_pairs.append((top_for_combo[i], top_for_combo[j]))
-        rng.shuffle(combo_pairs)
-        combo_pairs = combo_pairs[: int(args.combo_budget)]
+                _append_pair(regular_pairs, top_for_combo[i], top_for_combo[j])
+        rng.shuffle(regular_pairs)
+        combo_pairs = (anchored_pairs + regular_pairs)[: int(args.combo_budget)]
 
         for k, (a, b) in enumerate(combo_pairs, start=1):
             cand = list(seed_sanitized)
@@ -250,6 +277,7 @@ def main() -> None:
         "focus_genes": gene_names,
         "single_count": int(len(single_results)),
         "combo_count": int(len(combo_results)),
+        "combo_anchor_labels": anchor_labels,
         "base_metrics": base_metrics,
         "seed_metrics": seed_metrics,
         "single_results": single_results,

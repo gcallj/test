@@ -1,19 +1,19 @@
 # Sweep Learnings Summary
 
-_Generated: 2026-04-19T20:57:24+02:00_
+_Generated: 2026-04-20T15:57:13+02:00_
 
 Aggregates all `local_fullmetric_sweep_result*.json` files plus the
 continuous-improvement state. Use this file to plan the next cycle.
 
 ## Current snapshot
 
-- Checkpoint fitness: `21.20513393040993`
-- Total sweeps seen: **37**
-- Total promotions: **14** (including 0 from codex log)
-- Promotion rate: **27.5%** (over 51 total attempts)
+- Checkpoint fitness: `23.63581384973892`
+- Total sweeps seen: **49**
+- Total promotions: **19** (including 1 from codex log)
+- Promotion rate: **25.0%** (over 76 total attempts)
 - Continuous cycles run: 17
 - Continuous promotions: 4
-- Codex attempts synced: **14** (6 promoted) from `optimization_attempts_20260416.md`
+- Codex attempts synced: **27** (11 promoted) from `optimization_attempts_20260416.md`
 
 ## Next suggested sweep
 
@@ -37,6 +37,11 @@ categoria mais antiga: **B_take_profit** (ultima vez: 2026-04-19T08:12:23+00:00)
 | 2026-04-19 | local | `local_fullmetric_sweep_continuous_A_risk_management_20260419_122638.json` | `stop_tighten_factor 0.45->0.4` | fit=21.014 WR=69.7% alpha=-8.29% MDD=10.4% |
 | 2026-04-19 | local | `local_fullmetric_sweep_continuous_D_entry_filter_20260419_151906.json` | `entry_score_threshold 0.15000000000000002->0.2` | fit=19.694 WR=69.7% alpha=-8.33% MDD=11.2% |
 | 2026-04-19 | local | `local_fullmetric_sweep_result_20260419_2047_momentum_wrrestore.json` | `consecutive_loss_cooldown 7->8` | fit=21.205 WR=69.7% alpha=-8.25% MDD=11.3% |
+| 2026-04-19 | local | `local_fullmetric_sweep_result_20260419_2248_entry_momentum_anchor.json` | `momentum_confirm_days 5->4` | fit=23.529 WR=70.0% alpha=-8.15% MDD=11.0% |
+| 2026-04-20 | local | `local_fullmetric_sweep_result_20260420_001_hotzone_rebalance.json` | `regime_threshold 0.25->0.30000000000000004` | fit=23.924 WR=70.0% alpha=-8.17% MDD=11.0% |
+| 2026-04-20 | codex | `local_pattern_search_result_20260420_0612_partialtake_cooldown_regime.json` | `partial_take_level 0.75->0.5; consecutive_loss_cooldown 8.0->9.0; regime_threshold 0.3->0.25` | fit=23.817 WR=70.0% alpha=-8.23% MDD=10.3% |
+| 2026-04-20 | local | `local_fullmetric_sweep_result_20260420_085552_takeprofit_anchor_recovery.json` | `partial_take_pct 0.2->0.1` | fit=23.586 WR=70.4% alpha=-8.22% MDD=11.0% |
+| 2026-04-20 | local | `local_fullmetric_sweep_result_20260420_0918_postpartialtake_repair.json` | `consecutive_loss_cooldown 9->10` | fit=23.636 WR=70.7% alpha=-8.23% MDD=11.0% |
 
 ## Graveyard (genes que falharam multiplas vezes)
 
@@ -45,25 +50,24 @@ Genes tentados >= 2 vezes sem nenhuma promocao. Considere SKIP no proximo ciclo.
 
 | Gene | Attempts | Promotions | (codex) Attempts | (codex) Promotions |
 |---|---:|---:|---:|---:|
-| `partial_take_level_2` | 10 | 0 | 0 | 0 |
-| `reward_risk_ratio` | 9 | 0 | 0 | 0 |
+| `partial_take_level_2` | 12 | 0 | 2 | 0 |
+| `score_percentile_trigger` | 11 | 0 | 1 | 0 |
+| `reward_risk_ratio` | 10 | 0 | 0 | 0 |
+| `max_loss_per_trade_pct` | 10 | 0 | 3 | 0 |
+| `signal_ema_span` | 10 | 0 | 0 | 0 |
+| `partial_take_pct_2` | 9 | 0 | 1 | 0 |
 | `vote_threshold_long` | 9 | 0 | 0 | 0 |
-| `signal_ema_span` | 9 | 0 | 0 | 0 |
 | `score_strength_scaling` | 9 | 0 | 0 | 0 |
-| `partial_take_pct_2` | 8 | 0 | 0 | 0 |
-| `score_percentile_trigger` | 8 | 0 | 0 | 0 |
 | `min_signal_strength` | 8 | 0 | 0 | 0 |
 | `stop_atr_mult` | 7 | 0 | 0 | 0 |
 | `time_stop_bars` | 7 | 0 | 0 | 0 |
-| `momentum_confirm_days` | 7 | 0 | 1 | 0 |
 | `entry_confirmation_days` | 7 | 0 | 0 | 0 |
-| `max_loss_per_trade_pct` | 6 | 0 | 0 | 0 |
+| `equity_drawdown_stop_pct` | 6 | 0 | 1 | 0 |
 | `entry_discount_atr_frac` | 6 | 0 | 0 | 0 |
 | `volume_confirm_mode` | 6 | 0 | 1 | 0 |
+| `vote_threshold_short` | 6 | 0 | 1 | 0 |
 | `ma_filter_period` | 6 | 0 | 1 | 0 |
 | `stop_tighten_after_bars` | 5 | 0 | 0 | 0 |
-| `equity_drawdown_stop_pct` | 5 | 0 | 0 | 0 |
-| `vote_threshold_short` | 5 | 0 | 0 | 0 |
 | `z_threshold` | 5 | 0 | 0 | 0 |
 
 ## Hot zones (genes que ja promoveram)
@@ -72,16 +76,17 @@ Genes onde alguma combinacao funcionou. Vale revisitar com novos vizinhos.
 
 | Gene | Promotions | Attempts | Hit rate | (codex) Promotions |
 |---|---:|---:|---:|---:|
-| `entry_score_threshold` | 3 | 11 | 27% | 0 |
-| `regime_threshold` | 3 | 13 | 23% | 0 |
-| `consecutive_loss_cooldown` | 2 | 9 | 22% | 0 |
-| `vol_regime_mode` | 1 | 5 | 20% | 0 |
-| `stop_tighten_factor` | 1 | 6 | 17% | 0 |
+| `regime_threshold` | 5 | 26 | 19% | 1 |
+| `consecutive_loss_cooldown` | 4 | 18 | 22% | 1 |
+| `entry_score_threshold` | 3 | 20 | 15% | 0 |
+| `partial_take_pct` | 2 | 10 | 20% | 0 |
+| `partial_take_level` | 2 | 17 | 12% | 1 |
 | `trailing_stop_mode` | 1 | 7 | 14% | 0 |
-| `ma_filter_mode` | 1 | 7 | 14% | 0 |
-| `partial_take_pct` | 1 | 8 | 12% | 0 |
-| `partial_take_level` | 1 | 10 | 10% | 0 |
-| `volatility_filter_percentile` | 1 | 10 | 10% | 0 |
+| `vol_regime_mode` | 1 | 8 | 12% | 0 |
+| `momentum_confirm_days` | 1 | 11 | 9% | 0 |
+| `stop_tighten_factor` | 1 | 12 | 8% | 0 |
+| `volatility_filter_percentile` | 1 | 16 | 6% | 0 |
+| `ma_filter_mode` | 1 | 16 | 6% | 0 |
 
 ## Category rotation status
 
@@ -96,15 +101,15 @@ Genes onde alguma combinacao funcionou. Vale revisitar com novos vizinhos.
 
 ## Codex sync history (latest attempts)
 
-Parsed `optimization_attempts_20260416.md` at 2026-04-19T20:57:24+02:00. Total attempts: **14**, promoted: **6**. Updates via `python analysis/codex_attempts_sync.py` at the start of every continuous cycle (auto) or on demand.
+Parsed `optimization_attempts_20260416.md` at 2026-04-20T15:57:12+02:00. Total attempts: **27**, promoted: **11**. Updates via `python analysis/codex_attempts_sync.py` at the start of every continuous cycle (auto) or on demand.
 
 | Attempt | Timestamp | Promoted | Move(s) | Learning (snippet) |
 |---|---|:-:|---|---|
-| #27 | 2026-04-19T18:54:45Z | YES | `(no moves)` | `consecutive_loss_cooldown` still has one more safe step beyond the prior `6 -> 7` promotion: `7 -> 8` adds one more `>=... |
-| #26 | 2026-04-19T16:54:22Z | no | `(no moves)` | `momentum_confirm_days: 5 -> 4` is the strongest uncovered E-category direction: it improves `WR_target`, alpha, and dra... |
-| #11 | 2026-04-18T11:50 | YES | `volatility_filter_percentile 0.0->0.05` | `volatility_filter_percentile` appears to be another high-leverage operational safety knob: a tiny filter (`+0.05`) impr... |
-| #10 | 2026-04-18T09:50 | YES | `vol_regime_mode 1.0->2.0` | `vol_regime_mode` is a high-leverage operational safety knob: skipping high-vol regimes can simultaneously reduce drawdo... |
-| #9 | 2026-04-18T07:50 | YES | `regime_threshold 0.3->0.25` | the regime-gating threshold still has a clean local improvement left: a slightly looser regime threshold reduced false p... |
+| #39 | 2026-04-20T15:53:41+02:00 | no | `max_loss_per_trade_pct 0.08->0.09` | the current local-vs-main bridge is now exhausted at the small-pattern level. Main-like take-profit/risk settings can re... |
+| #39 | 2026-04-20T15:07:48+02:00 | no | `max_loss_per_trade_pct 0.08->0.09` | the `max_loss_per_trade_pct:+1` anchor is now locally exhausted under the refreshed `git:main` comparator. Pairing it wi... |
+| #38 | 2026-04-20T12:59:59+02:00 | no | `max_loss_per_trade_pct 0.08->0.09` | the refreshed frontier is now explicitly split: `git:main` is the alpha/fit leader and the local checkpoint is the WR le... |
+| #37 | 2026-04-20T10:56:55+02:00 | no | `regime_threshold 0.25->0.2` | the main problem is no longer only local tail-risk repair. The refreshed `git:main` now beats the current local checkpoi... |
+| #36 | 2026-04-20T09:19:32+02:00 | YES | `consecutive_loss_cooldown 9.0->10.0` | Attempt 34 materially changed the frontier. Once `partial_take_pct` moved to `0.10`, the system could absorb one more co... |
 
 ---
 

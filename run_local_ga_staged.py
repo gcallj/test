@@ -419,34 +419,127 @@ def _load_main():
     Load the baseline checkpoint from git branch `main` when available.
     Falls back to the current worktree file if git/main cannot be read.
     """
+    def _iter_repo_dirs():
+        seen = set()
+
+        def _add(path_like):
+            if not path_like:
+                return
+            try:
+                path = Path(path_like)
+            except Exception:
+                return
+            variants = [path, path.resolve()]
+            for variant in variants:
+                try:
+                    key = str(variant)
+                except Exception:
+                    continue
+                if key in seen:
+                    continue
+                seen.add(key)
+                yield variant
+
+        for candidate in _add(os.getcwd()):
+            yield candidate
+        for candidate in _add(Path(__file__).resolve().parent):
+            yield candidate
+        for candidate in _add(Path(MAIN_CHECKPOINT).resolve().parent):
+            yield candidate
+
+        git_file = Path(".git")
+        try:
+            if git_file.is_file():
+                line = git_file.read_text(encoding="utf-8").strip()
+                if line.lower().startswith("gitdir:"):
+                    gitdir = Path(line.split(":", 1)[1].strip())
+                    if not gitdir.is_absolute():
+                        gitdir = (git_file.parent / gitdir).resolve()
+                    for candidate in _add(gitdir.parent.parent.parent):
+                        yield candidate
+                    gitdir_pointer = gitdir / "gitdir"
+                    if gitdir_pointer.exists():
+                        worktree_git = Path(gitdir_pointer.read_text(encoding="utf-8").strip())
+                        for candidate in _add(worktree_git.parent):
+                            yield candidate
+        except Exception:
+            pass
+
+    def _safe_directory_args(repo_dir: Path) -> list[str]:
+        safe_values = []
+
+        def _append(path_like):
+            if not path_like:
+                return
+            try:
+                path = Path(path_like)
+            except Exception:
+                return
+            for variant in (path, path.resolve()):
+                try:
+                    text = str(variant)
+                except Exception:
+                    continue
+                if text not in safe_values:
+                    safe_values.append(text)
+                posix = variant.as_posix()
+                if posix not in safe_values:
+                    safe_values.append(posix)
+
+        _append(repo_dir)
+        git_file = repo_dir / ".git"
+        try:
+            if git_file.is_file():
+                line = git_file.read_text(encoding="utf-8").strip()
+                if line.lower().startswith("gitdir:"):
+                    gitdir = Path(line.split(":", 1)[1].strip())
+                    if not gitdir.is_absolute():
+                        gitdir = (git_file.parent / gitdir).resolve()
+                    gitdir_pointer = gitdir / "gitdir"
+                    if gitdir_pointer.exists():
+                        worktree_git = Path(gitdir_pointer.read_text(encoding="utf-8").strip())
+                        _append(worktree_git.parent)
+        except Exception:
+            pass
+        args = []
+        for value in safe_values:
+            args.extend(["-c", f"safe.directory={value}"])
+        return args
+
     try:
-        repo_dir = os.path.abspath(os.getcwd())
-        repo_dir_posix = Path(repo_dir).as_posix()
+        for repo_dir in _iter_repo_dirs():
+            repo_dir_str = str(repo_dir)
+            safe_args = _safe_directory_args(repo_dir)
 
-        def _git(args):
-            # Mark this worktree as safe for this invocation (avoids dubious ownership errors).
-            return subprocess.run(
-                ["git", "-c", f"safe.directory={repo_dir}", "-c", f"safe.directory={repo_dir_posix}", *args],
-                check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                cwd=repo_dir,
-            )
+            def _git(args):
+                # Mark this worktree as safe for this invocation (avoids dubious ownership errors).
+                return subprocess.run(
+                    ["git", *safe_args, *args],
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    cwd=repo_dir_str,
+                )
 
-        _git(["rev-parse", "--verify", "main"])
-        blob = _git(["show", f"main:{MAIN_CHECKPOINT}"])
-        ref_sha = _git(["rev-parse", "main"]).stdout.strip()
-        data = json.loads(blob.stdout)
-        data["_baseline_source"] = "git:main"
-        data["_baseline_ref"] = ref_sha
-        return data
+            try:
+                _git(["rev-parse", "--verify", "main"])
+                blob = _git(["show", f"main:{MAIN_CHECKPOINT}"])
+                ref_sha = _git(["rev-parse", "main"]).stdout.strip()
+                data = json.loads(blob.stdout)
+                data["_baseline_source"] = "git:main"
+                data["_baseline_ref"] = ref_sha
+                return data
+            except Exception:
+                continue
     except Exception:
-        with open(MAIN_CHECKPOINT, "r", encoding="utf-8-sig") as f:
-            data = json.load(f)
-        data["_baseline_source"] = "worktree"
-        data["_baseline_ref"] = os.path.abspath(MAIN_CHECKPOINT)
-        return data
+        pass
+
+    with open(MAIN_CHECKPOINT, "r", encoding="utf-8-sig") as f:
+        data = json.load(f)
+    data["_baseline_source"] = "worktree"
+    data["_baseline_ref"] = os.path.abspath(MAIN_CHECKPOINT)
+    return data
 
 
 def _load_seed_checkpoint():
