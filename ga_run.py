@@ -411,13 +411,25 @@ GLOBAL_PARAM_SPECS = [
     # 1.0 = lenient (block apenas se close < pivot - ATR — current behavior ~eq)
     # Default 1.0 para migracoes de checkpoints antigos (preserva comportamento).
     ("entry_aggressiveness", 0.0, 1.0, 0.1, False),
+    # -- NEW v7 genes: Woodie pivot R1/S1 gates (Fase 2 resistance/support) --
+    # resistance_overext_gate: bloqueia buy se close[i-1] > R1_prev * (1 + gene)
+    #   (evita comprar quando ja ultrapassou resistencia — sobre-extendido)
+    # support_broken_gate: bloqueia buy se close[i-1] < S1_prev * (1 - gene)
+    #   (evita comprar em suporte rompido — tendencia baixista)
+    # Ambos default=0.0 (off) para preservar comportamento pre-v7.
+    # R1 = 2*P - L_prev, S1 = 2*P - H_prev, P = (H+L+C)/3 do bar anterior.
+    ("resistance_overext_gate", 0.0, 0.20, 0.02, False),
+    ("support_broken_gate", 0.0, 0.20, 0.02, False),
 ]
 
 # Backward-compat default para genomas antigos (30 genes, sem entry_aggressiveness).
 # entry_aggressiveness=1.0 desativa o pivot gate (= comportamento pre-v5).
-# Sem esse dict, checkpoints legados seriam defaulted ao `lo` do spec (0.0 = strict).
+# resistance_overext_gate=0.0 e support_broken_gate=0.0 desativam os gates v7.
+# Sem esse dict, checkpoints legados seriam defaulted ao `lo` do spec.
 _LEGACY_GENE_DEFAULTS: Dict[str, float] = {
     "entry_aggressiveness": 1.0,
+    "resistance_overext_gate": 0.0,
+    "support_broken_gate": 0.0,
 }
 
 
@@ -457,6 +469,9 @@ class GlobalParams:
     regime_threshold: float  # min regime_score to allow long entries
     # -- NEW v5 gene (entrega deferida do PR #134) --
     entry_aggressiveness: float  # 0.0=strict pivot gate, 1.0=lenient (default current)
+    # -- NEW v7 genes (Fase 2: Woodie R1/S1 gates) --
+    resistance_overext_gate: float  # 0.0=off, 0.20=bloqueia se close>R1*1.20
+    support_broken_gate: float      # 0.0=off, 0.20=bloqueia se close<S1*0.80
 
 
 def sanitize_global_genome(genome: List[float]) -> List[float]:
@@ -2952,8 +2967,14 @@ def vectorized_signals(payload: Dict[str, Any], gp: GlobalParams, apply_mode: bo
     # Daily pivot do bar anterior para entry_aggressiveness gate (gene v5).
     # pivot_prev[i] = (h[i-1] + l[i-1] + c[i-1]) / 3.0
     pivot_prev = np.full(n, np.nan, dtype=np.float64)
+    # Woodie R1/S1 do bar anterior para gates v7 (resistance_overext/support_broken).
+    # R1 = 2*P - L_prev, S1 = 2*P - H_prev. Alinhados a pivot_prev[i].
+    r1_prev = np.full(n, np.nan, dtype=np.float64)
+    s1_prev = np.full(n, np.nan, dtype=np.float64)
     if n >= 2:
         pivot_prev[1:] = (h[:-1] + lw[:-1] + c[:-1]) / 3.0
+        r1_prev[1:] = 2.0 * pivot_prev[1:] - lw[:-1]
+        s1_prev[1:] = 2.0 * pivot_prev[1:] - h[:-1]
 
     feat_n = max(1, x.shape[1])
     votes_long, votes_short = compute_weighted_votes(x, gp.z_threshold, feat_n)
@@ -3068,9 +3089,29 @@ def vectorized_signals(payload: Dict[str, Any], gp: GlobalParams, apply_mode: bo
         # progresso previo: checkpoints legados migrados com gene=1.0 nao
         # mudam comportamento (tolerance = ATR ~ 2% de close — raramente
         # disparam em mercado normal).
-        if long_ok and gp.entry_aggressiveness < 1.0 - 1e-9 and np.isfinite(pivot_prev[i - 1]):
-            tolerance = float(gp.entry_aggressiveness) * float(atr[i - 1])
+        # getattr defensivo p/ compat com mocks (SimpleNamespace) em testes legados.
+        _ea = float(getattr(gp, "entry_aggressiveness", 1.0))
+        if long_ok and _ea < 1.0 - 1e-9 and np.isfinite(pivot_prev[i - 1]):
+            tolerance = _ea * float(atr[i - 1])
             if c[i - 1] < pivot_prev[i - 1] - tolerance:
+                long_ok = False
+
+        # NEW v7 gates: Woodie R1/S1 resistance/support
+        # resistance_overext_gate: bloqueia buy quando preco ja ultrapassou R1
+        # significativamente (sobre-extendido, risco de mean reversion).
+        #   close[i-1] > R1_prev * (1 + gene) => long_ok = False
+        # gene=0.0 desliga; gene=0.20 bloqueia quando close esta >20% acima de R1.
+        _rog = float(getattr(gp, "resistance_overext_gate", 0.0))
+        if long_ok and _rog > 1e-9 and np.isfinite(r1_prev[i - 1]):
+            if c[i - 1] > r1_prev[i - 1] * (1.0 + _rog):
+                long_ok = False
+        # support_broken_gate: bloqueia buy quando close rompeu S1 pra baixo
+        # significativamente (suporte quebrado, tendencia baixista confirmada).
+        #   close[i-1] < S1_prev * (1 - gene) => long_ok = False
+        # gene=0.0 desliga; gene=0.20 bloqueia quando close esta >20% abaixo de S1.
+        _sbg = float(getattr(gp, "support_broken_gate", 0.0))
+        if long_ok and _sbg > 1e-9 and np.isfinite(s1_prev[i - 1]):
+            if c[i - 1] < s1_prev[i - 1] * (1.0 - _sbg):
                 long_ok = False
 
         if long_ok:

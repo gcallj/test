@@ -94,7 +94,20 @@ GLOBAL_PARAM_SPECS = [
     ("momentum_confirm_days", 0.0, 5.0, 1.0, True),
     ("entry_score_threshold", 0.0, 0.50, 0.05, False),
     ("regime_threshold", 0.20, 0.70, 0.05, False),
+    # -- NEW v5 gene: pivot-vs-pullback tradeoff (PR #134 deferred) --
+    ("entry_aggressiveness", 0.0, 1.0, 0.1, False),
+    # -- NEW v7 genes: Woodie R1/S1 gates (Fase 2 resistance/support) --
+    ("resistance_overext_gate", 0.0, 0.20, 0.02, False),
+    ("support_broken_gate", 0.0, 0.20, 0.02, False),
 ]
+
+# Backward-compat default para genomas antigos (mirror de ga_run.py).
+# entry_aggressiveness=1.0 desativa pivot gate. v7 genes=0.0 desativam R1/S1 gates.
+_LEGACY_GENE_DEFAULTS = {
+    "entry_aggressiveness": 1.0,
+    "resistance_overext_gate": 0.0,
+    "support_broken_gate": 0.0,
+}
 
 
 # ---------------------------------------------------------------------------
@@ -134,11 +147,22 @@ class GlobalParams:
     momentum_confirm_days: int  # 0=off, 1-5=require positive return over N days
     entry_score_threshold: float  # min score_ev/score95 to enter
     regime_threshold: float  # min regime_score to allow long entries
+    # -- NEW v5 gene (PR #134 deferred) --
+    entry_aggressiveness: float  # 0.0=strict pivot gate, 1.0=lenient
+    # -- NEW v7 genes (Fase 2: Woodie R1/S1 gates) --
+    resistance_overext_gate: float  # 0.0=off, 0.20=bloqueia se close>R1*1.20
+    support_broken_gate: float      # 0.0=off, 0.20=bloqueia se close<S1*0.80
 
 
 def sanitize_global_genome(genome: List[float]) -> List[float]:
+    """Sanitiza genome; aceita genomas curtos (pre-v5/v7) com defaults."""
     out = []
-    for g, (_, lo, hi, step, is_int) in zip(genome, GLOBAL_PARAM_SPECS):
+    for i, spec in enumerate(GLOBAL_PARAM_SPECS):
+        name, lo, hi, step, is_int = spec
+        if i < len(genome):
+            g = genome[i]
+        else:
+            g = _LEGACY_GENE_DEFAULTS.get(name, lo)
         v = float(np.clip(float(g), lo, hi))
         v = round(v / step) * step
         if is_int:
@@ -554,6 +578,18 @@ def _backtest_stats_global_intraday(
     if mom_days > 0:
         mom_ret[mom_days:] = (c[mom_days:] / np.maximum(c[:-mom_days], 1e-8)) - 1.0
 
+    # v5/v7 gates: precompute daily pivot + Woodie R1/S1 do bar anterior
+    # pivot_prev[i] = (H[i-1] + L[i-1] + C[i-1]) / 3
+    # R1_prev[i]    = 2*pivot_prev[i] - L[i-1]
+    # S1_prev[i]    = 2*pivot_prev[i] - H[i-1]
+    pivot_prev = np.full(n, np.nan, dtype=np.float64)
+    r1_prev = np.full(n, np.nan, dtype=np.float64)
+    s1_prev = np.full(n, np.nan, dtype=np.float64)
+    if n >= 2:
+        pivot_prev[1:] = (h[:-1] + l[:-1] + c[:-1]) / 3.0
+        r1_prev[1:] = 2.0 * pivot_prev[1:] - l[:-1]
+        s1_prev[1:] = 2.0 * pivot_prev[1:] - h[:-1]
+
     equity = 1.0
     peak = 1.0
     mdd = 0.0
@@ -760,6 +796,25 @@ def _backtest_stats_global_intraday(
                     long_ok = False
                 if c[i - 1] > ma[i - 1]:
                     short_ok = False
+
+            # v5 pivot gate: bloqueia buy se close abaixo do pivot_prev (strict)
+            # gene=1.0 desliga (tolerance=ATR ~2% — raramente aciona em mercado normal).
+            # getattr p/ defensivo com SimpleNamespace de testes legados.
+            _ea = float(getattr(gp, "entry_aggressiveness", 1.0))
+            if long_ok and _ea < 1.0 - 1e-9 and np.isfinite(pivot_prev[i - 1]):
+                tolerance = _ea * float(atr[i - 1])
+                if c[i - 1] < pivot_prev[i - 1] - tolerance:
+                    long_ok = False
+            # v7 resistance gate: bloqueia buy se close > R1 * (1+gene) (sobre-extensao)
+            _rog = float(getattr(gp, "resistance_overext_gate", 0.0))
+            if long_ok and _rog > 1e-9 and np.isfinite(r1_prev[i - 1]):
+                if c[i - 1] > r1_prev[i - 1] * (1.0 + _rog):
+                    long_ok = False
+            # v7 support gate: bloqueia buy se close < S1 * (1-gene) (suporte rompido)
+            _sbg = float(getattr(gp, "support_broken_gate", 0.0))
+            if long_ok and _sbg > 1e-9 and np.isfinite(s1_prev[i - 1]):
+                if c[i - 1] < s1_prev[i - 1] * (1.0 - _sbg):
+                    long_ok = False
 
             side = 1 if long_ok else (-1 if (short_ok and not LONG_ONLY) else 0)
             if side != 0 and np.isfinite(o[i]) and np.isfinite(atr[i]):

@@ -147,8 +147,29 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add global_ga_checkpoint.json apply_last_5d__H5.csv summary_latest.xlsx 2>/dev/null || true
           FITNESS=$(python3 -c "import json; print(f'{json.load(open(\"global_ga_checkpoint.json\"))[\"fitness\"]:.4f}')")
-          git commit -m "Retrain GA-only: fitness=${FITNESS}" || echo "No changes"
-          git push || echo "Push failed"
+          # --allow-empty nao — so comita se houver mudanca real
+          if ! git diff --cached --quiet; then
+            git commit -m "Retrain GA-only: fitness=${FITNESS}"
+            # Retry loop para race condition com sweep_matrix / daily_pipeline
+            # que tambem escrevem em main. Rebase+push ate 5x com backoff.
+            PUSH_OK=0
+            for i in 1 2 3 4 5; do
+              if git pull --rebase origin main && git push origin main; then
+                echo "::notice::Push succeeded on attempt $i"
+                PUSH_OK=1
+                break
+              fi
+              SLEEP_S=$(( (RANDOM % 15) + 5 ))
+              echo "::warning::Push attempt $i failed, sleeping ${SLEEP_S}s before retry"
+              sleep $SLEEP_S
+            done
+            if [ $PUSH_OK -eq 0 ]; then
+              echo "::error::Push failed after 5 retries. Checkpoint preserved as artifact."
+              exit 1
+            fi
+          else
+            echo "::notice::No changes to commit"
+          fi
 
       - name: Upload artifacts
         if: always()

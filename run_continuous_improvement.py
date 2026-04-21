@@ -104,6 +104,8 @@ GENE_CATEGORIES = {
         "regime_threshold",
         "volume_confirm_mode",
         "momentum_confirm_days",
+        "resistance_overext_gate",  # v7: Woodie R1 overextension block
+        "support_broken_gate",      # v7: Woodie S1 broken-support block
     ],
     "F_trailing": [
         "trailing_stop_mode",
