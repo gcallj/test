@@ -361,8 +361,12 @@ print("=== CAPTION ===")
 print(caption)
 print()
 print(f"=== SENDING {xlsx} ({os.path.getsize(xlsx)} bytes) ===")
-ok = _send_telegram(xlsx, caption)
-if not ok:
+# _send_telegram retorna None em sucesso, raises Exception em falha de rede.
+# Wrap em try/except: se lancar, sai com 2 (erro real); se nao, segue.
+try:
+    _send_telegram(xlsx, caption)
+except Exception as _e:
+    print(f"[TELEGRAM] ERROR: send failed: {_e}")
     raise SystemExit(2)
 
 # Registra envio bem-sucedido no tracker para dedup futuro
