@@ -3677,6 +3677,30 @@ def run():
         n_years = max(n / 252.0, 0.1)
         trades_per_year = bt_n_trades / n_years
 
+        # -- v6 STATISTICAL RIGOR: Wilson 95% CI para WR --
+        # Planilha mais cuidadosa: so recomenda BUY se:
+        #   (a) n_trades >= 20 (amostra minima para CI nao colapsar)
+        #   (b) CI_lo > 0.55 (confianca que WR real > 55%)
+        # Evita recomendar tickers com WR=100% em n=2 trades (CI 34-100%).
+        def _wilson_ci(p: float, nn: int, z: float = 1.96) -> tuple:
+            if nn <= 0:
+                return (0.0, 1.0)
+            denom = 1.0 + (z * z) / nn
+            center = (p + (z * z) / (2.0 * nn)) / denom
+            half = (z / denom) * math.sqrt(p * (1 - p) / nn + (z * z) / (4 * nn * nn))
+            return (max(0.0, center - half), min(1.0, center + half))
+
+        bt_ci_lo, bt_ci_hi = _wilson_ci(bt_win_rate, int(bt_n_trades))
+        # Significancia estatistica: True se CI_lo > 55% E n >= 20
+        _wr_stat_significant = (bt_ci_lo > 0.55) and (int(bt_n_trades) >= 20)
+        # Confidence label textual
+        if int(bt_n_trades) < 10:
+            _stat_label = "insuf. n<10"
+        elif not _wr_stat_significant:
+            _stat_label = f"low CI [{bt_ci_lo*100:.0f}-{bt_ci_hi*100:.0f}%]"
+        else:
+            _stat_label = f"CI [{bt_ci_lo*100:.0f}-{bt_ci_hi*100:.0f}%]"
+
         # -- Win rate tier (v5): per-ticker quality classification --
         # Tiers based on win rate + minimum trades for statistical significance
         min_trades_for_tier = 20  # need at least 20 trades for reliable win rate
@@ -3992,6 +4016,23 @@ def run():
             if sig == "buy" and bt_n_trades >= min_trades_for_tier and bt_win_rate < 0.60:
                 sig = "hold"
                 _low_wr_reason = f"WR {bt_win_rate*100:.0f}% < 60% (nao operar)"
+
+            # v6 STATISTICAL RIGOR GATE: demove BUY -> HOLD se metricas per-ticker
+            # nao sao estatisticamente significantes (CI95% abaixo lower bound 55%
+            # OU n_trades < 20). Evita recomendacao de tickers com amostra fraca
+            # tipo WR=100% em n=2 (CI [34%, 100%] — nao confiavel).
+            if sig == "buy" and not _wr_stat_significant:
+                sig = "hold"
+                if int(bt_n_trades) < 20:
+                    _low_wr_reason = (
+                        f"STATS n={int(bt_n_trades)} < 20 trades "
+                        f"(amostra insuficiente; CI WR {bt_ci_lo*100:.0f}-{bt_ci_hi*100:.0f}%)"
+                    )
+                else:
+                    _low_wr_reason = (
+                        f"STATS CI95% {bt_ci_lo*100:.0f}-{bt_ci_hi*100:.0f}% "
+                        f"(lower bound < 55% - low confidence)"
+                    )
 
             # (gate de potencial minimo movido para APOS pivot override + coerce)
 
@@ -4540,6 +4581,11 @@ def run():
                 "confidence": round(confidence, 1),
                 "win_rate": round(bt_win_rate * 100, 2),
                 "wr_alvo": round(bt_win_rate_target * 100, 2),  # v8: % alvo hits (2 decimais)
+                # -- v6 STATISTICAL RIGOR: metricas de confianca per-ticker --
+                "n_trades": int(bt_n_trades),                    # tamanho da amostra historica
+                "wr_ci_lo": round(bt_ci_lo * 100, 1),            # lower bound Wilson 95%
+                "wr_ci_hi": round(bt_ci_hi * 100, 1),            # upper bound Wilson 95%
+                "stat_conf": _stat_label,                          # 'CI [X-Y%]' ou 'low CI [..]' ou 'insuf. n<10'
                 "universe": _univ_tag,  # PREMIUM/HIGH_QUAL/REGULAR (dynamic from current metrics)
                 "queda_max": round(queda_max_esperada * 100, 1),
                 "regime": _regime_str,
@@ -4757,6 +4803,10 @@ def run():
                         "queda_max": "Previsao de queda maxima (%) baseada no MDD historico",
                         "win_rate": "Win rate do backtest (% trades positivos, incl. trailing stops)",
                         "wr_alvo": "% de trades que atingiram o alvo de take-profit (estrito)",
+                        "n_trades": "Tamanho da amostra historica (num trades backtest).\nSe < 20: amostra insuficiente (BUY demovido para HOLD).",
+                        "wr_ci_lo": "Wilson 95% CI lower bound para win_rate.\nSe < 55%: ticker nao e estatisticamente significativo (BUY demovido).",
+                        "wr_ci_hi": "Wilson 95% CI upper bound para win_rate.\nBandwidth = wr_ci_hi - wr_ci_lo indica precisao do estimador.",
+                        "stat_conf": "Label de confianca estatistica:\n- 'CI [X-Y%]': significante (ci_lo >= 55%, n >= 20)\n- 'low CI [X-Y%]': nao significante (ci_lo < 55%)\n- 'insuf. n<10': amostra muito pequena\nBUYs apenas para tickers significantes (gate v6).",
                         "universe": (
                             "Tier operacional do modelo atual:\n"
                             "PREMIUM = WR>=74%, WR alvo>=72%, alpha_ann>=-12pp, MDD<=13%, >=30 trades\n"
@@ -4786,6 +4836,7 @@ def run():
                         "saida": 10, "RR": 6,
                         "pivot": 10, "r1": 10, "s1": 10,
                         "rank": 8, "confidence": 11, "win_rate": 10, "wr_alvo": 10,
+                        "n_trades": 9, "wr_ci_lo": 10, "wr_ci_hi": 10, "stat_conf": 20,
                         "universe": 11,
                         "queda_max": 10, "regime": 13, "signal_ga": 10,
                     }
