@@ -1,5 +1,5 @@
 {
-  "fitness": 25.744777920530908,
+  "fitness": 25.82968739468344,
   "genome": [
     0.15000000000000002,
     0.15000000000000002,
@@ -10,7 +10,7 @@
     1.0,
     3,
     0.4,
-    0.1,
+    0.09,
     1.0,
     0.1,
     1.0,
@@ -38,8 +38,8 @@
   "accepted_from_staged_chunk": -1,
   "accepted_on": "2026-04-21",
   "accepted_reason": "fullmetric_sweep:momentum_confirm_days:+1 (from local_fullmetric_sweep_continuous_E_regime_vol_20260420_221713.json)",
-  "baseline_main_ref": "c7681f9fa637037beb1970a4dce2ab1794ec881a",
-  "previous_checkpoint_fitness": 25.744777920530908,
+  "baseline_main_ref": "5daa176a925b1eb80d9970b678b627a5b5f8d3e5",
+  "previous_checkpoint_fitness": 25.82968739468344,
   "previous_checkpoint_fit_current_formula": 23.703530610082275,
   "metrics_snapshot": {
     "main": {
@@ -73,18 +73,18 @@
       "n_ge_70": 58
     },
     "candidate": {
-      "fit": 25.744777920530908,
-      "wr_med_all": 0.6948051948051948,
+      "fit": 25.82968739468344,
+      "wr_med_all": 0.695364238410596,
       "wr_target_med_all": 0.7,
-      "mean_alpha_ann": -0.07941340969564468,
-      "alpha_ann_pos_rate": 0.20168067226890757,
-      "mdd_med": 0.10910754709288106,
-      "mdd_p75": 0.176809318996869,
-      "mdd_duration_med": 193.5,
-      "avg_hold_bars_med": 1.963860544217687,
+      "mean_alpha_ann": -0.07911307418012446,
+      "alpha_ann_pos_rate": 0.21008403361344538,
+      "mdd_med": 0.10947483712765599,
+      "mdd_p75": 0.1745376925966247,
+      "mdd_duration_med": 207.5,
+      "avg_hold_bars_med": 1.9590301003344481,
       "median_hold_bars_med": 2.0,
       "max_hold_bars_p75": 6.0,
-      "trades_med": 33.5,
+      "trades_med": 33.0,
       "n_ge_70": 57
     }
   },
@@ -98,7 +98,7 @@
     "mdd_duration_not_worse": true,
     "mean_alpha_ann_up": true,
     "mean_alpha_ann_floor": true,
-    "alpha_ann_pos_rate_up": false,
+    "alpha_ann_pos_rate_up": true,
     "alpha_ann_pos_rate_floor": true,
     "trades_med_floor": true,
     "swing_hold_ok": true,
@@ -106,10 +106,10 @@
     "wr_target_med_all_floor_target": 0.691969696969697,
     "alpha_ann_pos_rate_target": 0.20968067226890758,
     "alpha_ann_pos_rate_floor_target": 0.19668067226890756,
-    "mdd_med_limit": 0.15228369570543068,
-    "mdd_p75_limit": 0.22871361229338044,
+    "mdd_med_limit": 0.15328369570543068,
+    "mdd_p75_limit": 0.22971361229338044,
     "mdd_duration_limit": 278.75,
-    "mdd_relaxation_bonus": 0.002,
+    "mdd_relaxation_bonus": 0.003,
     "strong_alpha_wr_relax": false,
     "all_pass": true
   },
