@@ -1,16 +1,16 @@
 # Sweep Learnings Summary
 
-_Generated: 2026-04-21T06:45:32+00:00_
+_Generated: 2026-04-21T08:44:53+00:00_
 
 Aggregates all `local_fullmetric_sweep_result*.json` files plus the
 continuous-improvement state. Use this file to plan the next cycle.
 
 ## Current snapshot
 
-- Checkpoint fitness: `27.089887310193`
-- Total sweeps seen: **108**
+- Checkpoint fitness: `26.60940159460521`
+- Total sweeps seen: **114**
 - Total promotions: **52** (including 1 from codex log)
-- Promotion rate: **39.4%** (over 132 total attempts)
+- Promotion rate: **37.7%** (over 138 total attempts)
 - Continuous cycles run: 34
 - Continuous promotions: 14
 - Codex attempts synced: **24** (11 promoted) from `codex_attempts_source.md`
@@ -83,19 +83,19 @@ Genes tentados >= 2 vezes sem nenhuma promocao. Considere SKIP no proximo ciclo.
 
 | Gene | Attempts | Promotions | (codex) Attempts | (codex) Promotions |
 |---|---:|---:|---:|---:|
-| `reward_risk_ratio` | 20 | 0 | 0 | 0 |
-| `vote_threshold_long` | 18 | 0 | 0 | 0 |
-| `score_strength_scaling` | 18 | 0 | 0 | 0 |
-| `stop_atr_mult` | 17 | 0 | 0 | 0 |
-| `time_stop_bars` | 17 | 0 | 0 | 0 |
-| `min_signal_strength` | 17 | 0 | 0 | 0 |
-| `entry_confirmation_days` | 16 | 0 | 0 | 0 |
-| `volume_confirm_mode` | 16 | 0 | 1 | 0 |
-| `ma_filter_period` | 16 | 0 | 1 | 0 |
-| `entry_discount_atr_frac` | 15 | 0 | 0 | 0 |
-| `vote_threshold_short` | 15 | 0 | 1 | 0 |
-| `stop_tighten_after_bars` | 15 | 0 | 0 | 0 |
-| `z_threshold` | 14 | 0 | 0 | 0 |
+| `reward_risk_ratio` | 21 | 0 | 0 | 0 |
+| `score_strength_scaling` | 19 | 0 | 0 | 0 |
+| `vote_threshold_long` | 19 | 0 | 0 | 0 |
+| `stop_atr_mult` | 18 | 0 | 0 | 0 |
+| `time_stop_bars` | 18 | 0 | 0 | 0 |
+| `min_signal_strength` | 18 | 0 | 0 | 0 |
+| `volume_confirm_mode` | 17 | 0 | 1 | 0 |
+| `entry_confirmation_days` | 17 | 0 | 0 | 0 |
+| `ma_filter_period` | 17 | 0 | 1 | 0 |
+| `stop_tighten_after_bars` | 16 | 0 | 0 | 0 |
+| `entry_discount_atr_frac` | 16 | 0 | 0 | 0 |
+| `vote_threshold_short` | 16 | 0 | 1 | 0 |
+| `z_threshold` | 15 | 0 | 0 | 0 |
 
 ## Hot zones (genes que ja promoveram)
 
@@ -103,23 +103,23 @@ Genes onde alguma combinacao funcionou. Vale revisitar com novos vizinhos.
 
 | Gene | Promotions | Attempts | Hit rate | (codex) Promotions |
 |---|---:|---:|---:|---:|
-| `momentum_confirm_days` | 8 | 21 | 38% | 0 |
-| `consecutive_loss_cooldown` | 6 | 28 | 21% | 1 |
-| `regime_threshold` | 6 | 36 | 17% | 1 |
-| `equity_drawdown_stop_pct` | 5 | 16 | 31% | 0 |
-| `score_percentile_trigger` | 5 | 20 | 25% | 0 |
-| `partial_take_level` | 4 | 27 | 15% | 1 |
-| `entry_score_threshold` | 4 | 29 | 14% | 0 |
-| `max_loss_per_trade_pct` | 3 | 19 | 16% | 0 |
-| `partial_take_pct` | 3 | 20 | 15% | 0 |
-| `ma_filter_mode` | 3 | 26 | 12% | 0 |
-| `signal_ema_span` | 2 | 19 | 11% | 0 |
-| `partial_take_pct_2` | 2 | 19 | 11% | 0 |
-| `trailing_stop_mode` | 1 | 17 | 6% | 0 |
-| `vol_regime_mode` | 1 | 18 | 6% | 0 |
-| `stop_tighten_factor` | 1 | 22 | 5% | 0 |
-| `partial_take_level_2` | 1 | 22 | 5% | 0 |
-| `volatility_filter_percentile` | 1 | 26 | 4% | 0 |
+| `momentum_confirm_days` | 8 | 22 | 36% | 0 |
+| `consecutive_loss_cooldown` | 6 | 29 | 21% | 1 |
+| `regime_threshold` | 6 | 37 | 16% | 1 |
+| `equity_drawdown_stop_pct` | 5 | 17 | 29% | 0 |
+| `score_percentile_trigger` | 5 | 21 | 24% | 0 |
+| `partial_take_level` | 4 | 28 | 14% | 1 |
+| `entry_score_threshold` | 4 | 30 | 13% | 0 |
+| `max_loss_per_trade_pct` | 3 | 20 | 15% | 0 |
+| `partial_take_pct` | 3 | 21 | 14% | 0 |
+| `ma_filter_mode` | 3 | 27 | 11% | 0 |
+| `partial_take_pct_2` | 2 | 20 | 10% | 0 |
+| `signal_ema_span` | 2 | 20 | 10% | 0 |
+| `trailing_stop_mode` | 1 | 18 | 6% | 0 |
+| `vol_regime_mode` | 1 | 19 | 5% | 0 |
+| `stop_tighten_factor` | 1 | 23 | 4% | 0 |
+| `partial_take_level_2` | 1 | 23 | 4% | 0 |
+| `volatility_filter_percentile` | 1 | 27 | 4% | 0 |
 
 ## Category rotation status
 
@@ -134,7 +134,7 @@ Genes onde alguma combinacao funcionou. Vale revisitar com novos vizinhos.
 
 ## Codex sync history (latest attempts)
 
-Parsed `codex_attempts_source.md` at 2026-04-21T06:45:32+00:00. Total attempts: **24**, promoted: **11**. Updates via `python analysis/codex_attempts_sync.py` at the start of every continuous cycle (auto) or on demand.
+Parsed `codex_attempts_source.md` at 2026-04-21T08:44:53+00:00. Total attempts: **24**, promoted: **11**. Updates via `python analysis/codex_attempts_sync.py` at the start of every continuous cycle (auto) or on demand.
 
 | Attempt | Timestamp | Promoted | Move(s) | Learning (snippet) |
 |---|---|:-:|---|---|

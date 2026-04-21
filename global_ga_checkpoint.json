@@ -1,5 +1,5 @@
 {
-  "fitness": 27.089887310193,
+  "fitness": 26.60940159460521,
   "genome": [
     0.15000000000000002,
     0.15000000000000002,
@@ -35,8 +35,8 @@
   "accepted_from_staged_chunk": -1,
   "accepted_on": "2026-04-21",
   "accepted_reason": "fullmetric_sweep:ma_filter_mode:-1 (from local_fullmetric_sweep_continuous_E_regime_vol_20260421_062701.json)",
-  "baseline_main_ref": "ef1651f985c6f7fd037835f2519ebc794c35f1a6",
-  "previous_checkpoint_fitness": 26.575887453113637,
+  "baseline_main_ref": "49de1003ffe03c61435ad80ca01d93957deb616e",
+  "previous_checkpoint_fitness": 26.39612160372796,
   "previous_checkpoint_fit_current_formula": 24.716560328346812,
   "metrics_snapshot": {
     "main": {
@@ -70,15 +70,15 @@
       "n_ge_70": 61
     },
     "candidate": {
-      "fit": 27.089887310193,
+      "fit": 26.60940159460521,
       "wr_med_all": 0.7,
       "wr_target_med_all": 0.7,
-      "mean_alpha_ann": -0.07894809951119675,
+      "mean_alpha_ann": -0.07938481215401332,
       "alpha_ann_pos_rate": 0.21008403361344538,
-      "mdd_med": 0.11107674294041786,
-      "mdd_p75": 0.17208920755240034,
-      "mdd_duration_med": 209.0,
-      "avg_hold_bars_med": 1.964375,
+      "mdd_med": 0.11107682211393988,
+      "mdd_p75": 0.17873779895619493,
+      "mdd_duration_med": 201.5,
+      "avg_hold_bars_med": 1.9473684210526316,
       "median_hold_bars_med": 2.0,
       "max_hold_bars_p75": 6.0,
       "trades_med": 33.5,
