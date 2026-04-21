@@ -123,11 +123,19 @@ def main() -> None:
         focus.append((name, idx, float(spec[3]), bool(spec[4])))
 
     # Step multipliers: allow slightly larger jumps for stop/time controls.
+    # Genes em boundary (v5 entry_aggressiveness=1.0 max, v7 *_gate=0.0 min)
+    # precisam de mais pontos "para dentro" do range — default (-1,+1) gera
+    # apenas 1 movimento util (o outro eh clipado pelo sanitize).
     multipliers_by_gene = {
         "stop_atr_mult": (-2, -1, 1, 2),
         "time_stop_bars": (-3, -2, -1, 1, 2, 3),
         "stop_tighten_after_bars": (-2, -1, 1, 2),
         "reward_risk_ratio": (-1, 1, 2),
+        # v5: current=1.0 (lenient), range 0.0-1.0 step 0.1 — so moves sao negativos
+        "entry_aggressiveness": (-1, -2, -3, -5, -10),
+        # v7: current=0.0 (off), range 0.0-0.20 step 0.02 — so moves positivos
+        "resistance_overext_gate": (1, 2, 3, 5, 10),
+        "support_broken_gate": (1, 2, 3, 5, 10),
     }
 
     candidates: list[dict] = []

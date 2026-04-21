@@ -93,11 +93,16 @@ jobs:
         # Usamos run_continuous_improvement.py diretamente — ele ja gerencia
         # gene list por categoria, combo_budget adaptivo, plateau detection.
         # --no-codex-sync: consolidate job fara esse sync uma vez, nao N vezes.
+        # --combo-budget 24: 3x o default=8. Explora ~3x mais combinacoes
+        # multi-gene por ciclo (12 singles + 24 combos = ~36 candidates).
+        # Timeout 60min permite ate ~40 evals/shard (cada ~1.5min).
+        # Repo publico = minutos ilimitados, otimizamos cobertura vs custo.
         run: |
           python -u run_continuous_improvement.py \
             --max-cycles 1 \
             --category ${{ matrix.category }} \
             --alpha-focus off \
+            --combo-budget 24 \
             --no-codex-sync
 
       - name: Stage result files for this category
