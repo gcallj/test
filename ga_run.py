@@ -406,7 +406,19 @@ GLOBAL_PARAM_SPECS = [
     ("momentum_confirm_days", 0.0, 5.0, 1.0, True),
     ("entry_score_threshold", 0.0, 0.50, 0.05, False),
     ("regime_threshold", 0.20, 0.70, 0.05, False),
+    # -- NEW v5 gene: pivot-vs-pullback tradeoff (PR #134 deferred) --
+    # 0.0 = strict pivot gate (block buy se close < pivot do bar anterior)
+    # 1.0 = lenient (block apenas se close < pivot - ATR — current behavior ~eq)
+    # Default 1.0 para migracoes de checkpoints antigos (preserva comportamento).
+    ("entry_aggressiveness", 0.0, 1.0, 0.1, False),
 ]
+
+# Backward-compat default para genomas antigos (30 genes, sem entry_aggressiveness).
+# entry_aggressiveness=1.0 desativa o pivot gate (= comportamento pre-v5).
+# Sem esse dict, checkpoints legados seriam defaulted ao `lo` do spec (0.0 = strict).
+_LEGACY_GENE_DEFAULTS: Dict[str, float] = {
+    "entry_aggressiveness": 1.0,
+}
 
 
 @dataclass
@@ -443,11 +455,26 @@ class GlobalParams:
     momentum_confirm_days: int  # 0=off, 1-5=require positive return over N days
     entry_score_threshold: float  # min score_ev/score95 to enter
     regime_threshold: float  # min regime_score to allow long entries
+    # -- NEW v5 gene (entrega deferida do PR #134) --
+    entry_aggressiveness: float  # 0.0=strict pivot gate, 1.0=lenient (default current)
 
 
 def sanitize_global_genome(genome: List[float]) -> List[float]:
+    """Sanitiza genome: clipa ao range, snap ao step, cast int se necessario.
+
+    Backward-compat: aceita genomas mais curtos que GLOBAL_PARAM_SPECS (legado
+    pre-v5). Genes ausentes usam _LEGACY_GENE_DEFAULTS OU `lo` do spec se nao
+    mapeado. Importante: entry_aggressiveness default=1.0 (neutro), garantindo
+    que checkpoints pre-v5 migrados mantenham comportamento atual e nao
+    percam fit/metrics.
+    """
     out = []
-    for g, (_, lo, hi, step, is_int) in zip(genome, GLOBAL_PARAM_SPECS):
+    for i, spec in enumerate(GLOBAL_PARAM_SPECS):
+        name, lo, hi, step, is_int = spec
+        if i < len(genome):
+            g = genome[i]
+        else:
+            g = _LEGACY_GENE_DEFAULTS.get(name, lo)
         v = float(np.clip(float(g), lo, hi))
         v = round(v / step) * step
         if is_int:
@@ -2914,10 +2941,19 @@ def vectorized_signals(payload: Dict[str, Any], gp: GlobalParams, apply_mode: bo
     x = np.asarray(payload["score_matrix"], dtype=np.float64)
     c = np.asarray(payload["close"], dtype=np.float64)
     atr = np.asarray(payload["atr"], dtype=np.float64)
+    # high/low para pivot gate (gene entry_aggressiveness)
+    h = np.asarray(payload.get("high", c), dtype=np.float64)
+    lw = np.asarray(payload.get("low", c), dtype=np.float64)
     n = len(c)
     signals = np.array(["hold"] * n, dtype=object)
     if n < 2 or x.ndim != 2:
         return signals
+
+    # Daily pivot do bar anterior para entry_aggressiveness gate (gene v5).
+    # pivot_prev[i] = (h[i-1] + l[i-1] + c[i-1]) / 3.0
+    pivot_prev = np.full(n, np.nan, dtype=np.float64)
+    if n >= 2:
+        pivot_prev[1:] = (h[:-1] + lw[:-1] + c[:-1]) / 3.0
 
     feat_n = max(1, x.shape[1])
     votes_long, votes_short = compute_weighted_votes(x, gp.z_threshold, feat_n)
@@ -3021,6 +3057,21 @@ def vectorized_signals(payload: Dict[str, Any], gp: GlobalParams, apply_mode: bo
                 long_ok = False
             if c[i - 1] > ma[i - 1]:
                 short_ok = False
+
+        # NEW v5 gate: entry_aggressiveness
+        # Controla o tradeoff pivot-breakout vs pullback:
+        #   gene=0.0 => strict: bloqueia buy se close[i-1] < pivot_prev[i-1]
+        #   gene=1.0 => lenient: bloqueia apenas se close < pivot - ATR
+        #                       (~equivalente a desligar o gate no regime normal)
+        #   valores intermediarios => interpolacao linear sobre ATR
+        # Aplicado a buys em TODOS os modos (backtest + apply). Preserva
+        # progresso previo: checkpoints legados migrados com gene=1.0 nao
+        # mudam comportamento (tolerance = ATR ~ 2% de close — raramente
+        # disparam em mercado normal).
+        if long_ok and gp.entry_aggressiveness < 1.0 - 1e-9 and np.isfinite(pivot_prev[i - 1]):
+            tolerance = float(gp.entry_aggressiveness) * float(atr[i - 1])
+            if c[i - 1] < pivot_prev[i - 1] - tolerance:
+                long_ok = False
 
         if long_ok:
             signals[i] = "buy"

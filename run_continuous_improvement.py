@@ -87,6 +87,7 @@ GENE_CATEGORIES = {
         "vote_threshold_long",
         "vote_threshold_short",
         "z_threshold",
+        "entry_aggressiveness",  # v5: pivot-vs-pullback tradeoff
         "signal_ema_span",
         "entry_confirmation_days",
         "entry_discount_atr_frac",
