@@ -9,12 +9,20 @@ name: Build PayloadStore
 
 on:
   schedule:
-    # A cada 1h no minuto :15 (dessincroniza do cron top-of-hour do GitHub
-    # que tem alta contencao). 24x/dia.
-    # Limite pratico: 1 ciclo completo = ~60 min (build 35 + matrix 25).
-    # Concurrency group 'build-store' garante que runs proximos se enfileiram
-    # sem cancelar o anterior. Se previous nao terminou, proximo aguarda.
-    - cron: '15 * * * *'
+    # A cada 15 min (4 triggers/h) para maximizar throughput e resiliencia
+    # a skipped runs do GitHub (plataforma silenciosamente pula crons sob
+    # alta carga — observado gaps de 1.5-2.6h com cadencia :15 hourly).
+    #
+    # Concurrency group 'build-store' + cancel-in-progress:false:
+    #   - max 1 rodando, max 1 pending na fila
+    #   - trigger extra enquanto 1 pending = substitui o pending
+    #   - Efetivamente: roda na maior taxa possivel limitada por build_time
+    #     (~35 min). Sob GitHub estavel = ~1.7 runs/h (+70% vs hourly fixo).
+    #     Sob carga GitHub = maior probabilidade de pegar uma janela valida.
+    #
+    # Repositorio publico = Actions minutes ilimitadas, entao otimizamos
+    # thoughput em vez de economia.
+    - cron: '*/15 * * * *'
   workflow_dispatch:
 
 concurrency:
