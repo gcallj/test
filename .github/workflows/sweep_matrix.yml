@@ -157,12 +157,18 @@ jobs:
           pip install -r requirements.txt
 
       - name: Download PayloadStore artifact (reuse build_store's)
+        # Mesmo fix do sweep job: path: output/ pra reconstruir estrutura.
         uses: actions/download-artifact@v4
         with:
           name: payload-store
-          path: ./
+          path: output/
           github-token: ${{ secrets.GITHUB_TOKEN }}
           run-id: ${{ github.event.workflow_run.id || github.run_id }}
+
+      - name: Verify store ready (consolidate)
+        run: |
+          test -f output/ga_memmap/meta.json || (echo "ERROR: meta.json missing in consolidate" && exit 1)
+          ls -la output/ga_memmap/meta.json
 
       - name: Download all sweep artifacts
         uses: actions/download-artifact@v4
@@ -180,24 +186,29 @@ jobs:
       - name: Consolidate + apply in sequence
         run: |
           set -euo pipefail
-          # Copy sweep JSONs to root so apply script can find them
-          find sweep_artifacts -name "local_fullmetric_sweep_continuous_*.json" -exec cp {} . \;
 
-          # Re-aplica cada sweep em sequencia. Cada apply:
-          #   - Re-avalia contra o INCUMBENT ATUAL (depois de possivel apply anterior)
-          #   - Respeita B2 alpha floor + B4 drift guard
-          # Ordem de aplicacao: ordem alfabetica dos arquivos (por timestamp).
-          # Promocoes iterativas: se cycle #28 promove equity_drawdown_stop_pct,
-          # cycle #29 re-avalia contra esse novo incumbent.
+          # CRITICAL: processa APENAS sweeps novos do matrix run, NAO todos
+          # os sweep JSONs historicos ja em git (main acumulou centenas).
+          # Historicos sao stale e apply reject por gate mismatch; unica acao
+          # valida e tentar aplicar os 6 do matrix cycle atual.
 
           applied_count=0
           rejected_count=0
-          for sweep_json in $(ls -1 local_fullmetric_sweep_continuous_*.json 2>/dev/null | sort); do
+          # Glob direto em sweep_artifacts — cada subpasta sweep-{category}/
+          # tem exatamente 1 sweep JSON com timestamp recente.
+          for sweep_json in sweep_artifacts/sweep-*/local_fullmetric_sweep_continuous_*.json; do
+            if [ ! -f "$sweep_json" ]; then
+              echo "[consolidate] no new sweep JSONs from matrix — skip"
+              break
+            fi
+            # Copia para raiz pra apply encontrar (apply usa path relativo)
+            cp -f "$sweep_json" .
+            local_name=$(basename "$sweep_json")
             echo ""
-            echo "==== Applying: $sweep_json ===="
-            # apply_fullmetric_sweep_best retorna exit != 0 se gates falham — nao
-            # queremos abortar todo o workflow, so seguir para o proximo.
-            if python -u apply_fullmetric_sweep_best.py --sweep "$sweep_json" 2>&1; then
+            echo "==== Applying: $local_name (from $(dirname $sweep_json)) ===="
+            # apply_fullmetric_sweep_best retorna exit != 0 se gates falham —
+            # nao queremos abortar todo o workflow, so seguir pro proximo.
+            if python -u apply_fullmetric_sweep_best.py --sweep "$local_name" 2>&1; then
               applied_count=$((applied_count + 1))
               echo "-> APPLIED"
             else
