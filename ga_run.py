@@ -412,14 +412,16 @@ GLOBAL_PARAM_SPECS = [
     # Default 1.0 para migracoes de checkpoints antigos (preserva comportamento).
     ("entry_aggressiveness", 0.0, 1.0, 0.1, False),
     # -- NEW v7 genes: Woodie pivot R1/S1 gates (Fase 2 resistance/support) --
-    # resistance_overext_gate: bloqueia buy se close[i-1] > R1_prev * (1 + gene)
-    #   (evita comprar quando ja ultrapassou resistencia — sobre-extendido)
-    # support_broken_gate: bloqueia buy se close[i-1] < S1_prev * (1 - gene)
-    #   (evita comprar em suporte rompido — tendencia baixista)
-    # Ambos default=0.0 (off) para preservar comportamento pre-v7.
-    # R1 = 2*P - L_prev, S1 = 2*P - H_prev, P = (H+L+C)/3 do bar anterior.
-    ("resistance_overext_gate", 0.0, 0.20, 0.02, False),
-    ("support_broken_gate", 0.0, 0.20, 0.02, False),
+    # ATR-based (coerente com v5 entry_aggressiveness). gene = multiplo de ATR.
+    # resistance_overext_gate: bloqueia buy se close[i-1] > R1_prev + gene*ATR[i-1]
+    #   (evita comprar quando ja ultrapassou resistencia por >gene*ATR)
+    # support_broken_gate: bloqueia buy se close[i-1] < S1_prev - gene*ATR[i-1]
+    #   (evita comprar em suporte rompido por >gene*ATR)
+    # Range [0.0, 2.0] step 0.25. Ambos default=0.0 (off via > 1e-9 check).
+    # Com ATR~2% de close: gene=0.5 bloqueia ~1% acima de R1 (realista).
+    # Valor anterior [0.0, 0.20] era percentual de R1 — nunca acionava.
+    ("resistance_overext_gate", 0.0, 2.0, 0.25, False),
+    ("support_broken_gate", 0.0, 2.0, 0.25, False),
 ]
 
 # Backward-compat default para genomas antigos (30 genes, sem entry_aggressiveness).
@@ -1208,6 +1210,16 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
     if mom_days > 0:
         mom_ret[mom_days:] = (c[mom_days:] / np.maximum(c[:-mom_days], 1e-8)) - 1.0
 
+    # v5/v7 gates: precompute Woodie daily pivot + R1/S1 do bar anterior.
+    # Usado tanto em evaluate_genome_full (fitness GA) quanto em apply.
+    pivot_prev = np.full(n, np.nan, dtype=np.float64)
+    r1_prev = np.full(n, np.nan, dtype=np.float64)
+    s1_prev = np.full(n, np.nan, dtype=np.float64)
+    if n >= 2:
+        pivot_prev[1:] = (h[:-1] + l[:-1] + c[:-1]) / 3.0
+        r1_prev[1:] = 2.0 * pivot_prev[1:] - l[:-1]
+        s1_prev[1:] = 2.0 * pivot_prev[1:] - h[:-1]
+
     equity = 1.0
     peak = 1.0
     mdd = 0.0
@@ -1414,6 +1426,25 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
                     long_ok = False
                 if c[i - 1] > ma[i - 1]:
                     short_ok = False
+
+            # v5 pivot gate (ATR-based): bloqueia buy se close abaixo do pivot_prev
+            # por mais de gene*ATR. gene=1.0 desliga. Aplicado no backtest do GA
+            # (antes so estava em vectorized_signals => GA nao otimizava este gene).
+            _ea = float(getattr(gp, "entry_aggressiveness", 1.0))
+            if long_ok and _ea < 1.0 - 1e-9 and np.isfinite(pivot_prev[i - 1]):
+                tolerance = _ea * float(atr[i - 1])
+                if c[i - 1] < pivot_prev[i - 1] - tolerance:
+                    long_ok = False
+            # v7 resistance gate (ATR-based): bloqueia buy se close > R1 + gene*ATR
+            _rog = float(getattr(gp, "resistance_overext_gate", 0.0))
+            if long_ok and _rog > 1e-9 and np.isfinite(r1_prev[i - 1]):
+                if c[i - 1] > r1_prev[i - 1] + _rog * float(atr[i - 1]):
+                    long_ok = False
+            # v7 support gate (ATR-based): bloqueia buy se close < S1 - gene*ATR
+            _sbg = float(getattr(gp, "support_broken_gate", 0.0))
+            if long_ok and _sbg > 1e-9 and np.isfinite(s1_prev[i - 1]):
+                if c[i - 1] < s1_prev[i - 1] - _sbg * float(atr[i - 1]):
+                    long_ok = False
 
             side = 1 if long_ok else (-1 if (short_ok and not LONG_ONLY) else 0)
             if side != 0 and np.isfinite(o[i]) and np.isfinite(atr[i]):
@@ -3096,22 +3127,22 @@ def vectorized_signals(payload: Dict[str, Any], gp: GlobalParams, apply_mode: bo
             if c[i - 1] < pivot_prev[i - 1] - tolerance:
                 long_ok = False
 
-        # NEW v7 gates: Woodie R1/S1 resistance/support
-        # resistance_overext_gate: bloqueia buy quando preco ja ultrapassou R1
-        # significativamente (sobre-extendido, risco de mean reversion).
-        #   close[i-1] > R1_prev * (1 + gene) => long_ok = False
-        # gene=0.0 desliga; gene=0.20 bloqueia quando close esta >20% acima de R1.
+        # NEW v7 gates: Woodie R1/S1 resistance/support (ATR-based, v5-style)
+        # resistance_overext_gate: bloqueia buy se close ja ultrapassou R1 por
+        # mais de gene*ATR (sobre-extendido, risco de mean reversion).
+        #   close[i-1] > R1_prev + gene*ATR[i-1] => long_ok = False
+        # gene=0.0 desliga; gene=0.5 bloqueia ~1% acima de R1 (realista).
         _rog = float(getattr(gp, "resistance_overext_gate", 0.0))
         if long_ok and _rog > 1e-9 and np.isfinite(r1_prev[i - 1]):
-            if c[i - 1] > r1_prev[i - 1] * (1.0 + _rog):
+            if c[i - 1] > r1_prev[i - 1] + _rog * float(atr[i - 1]):
                 long_ok = False
-        # support_broken_gate: bloqueia buy quando close rompeu S1 pra baixo
-        # significativamente (suporte quebrado, tendencia baixista confirmada).
-        #   close[i-1] < S1_prev * (1 - gene) => long_ok = False
-        # gene=0.0 desliga; gene=0.20 bloqueia quando close esta >20% abaixo de S1.
+        # support_broken_gate: bloqueia buy se close rompeu S1 por mais de
+        # gene*ATR (suporte quebrado, tendencia baixista confirmada).
+        #   close[i-1] < S1_prev - gene*ATR[i-1] => long_ok = False
+        # gene=0.0 desliga; gene=0.5 bloqueia ~1% abaixo de S1 (realista).
         _sbg = float(getattr(gp, "support_broken_gate", 0.0))
         if long_ok and _sbg > 1e-9 and np.isfinite(s1_prev[i - 1]):
-            if c[i - 1] < s1_prev[i - 1] * (1.0 - _sbg):
+            if c[i - 1] < s1_prev[i - 1] - _sbg * float(atr[i - 1]):
                 long_ok = False
 
         if long_ok:

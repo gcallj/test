@@ -1,0 +1,165 @@
+name: Gene Effect Monitor
+
+# Detecta genes com zero variance em sweeps recentes (gates/logica sem efeito
+# no backtest). Roda independente do build/sweep cycle.
+#
+# Auto-correcao rule-based:
+#   - Se um gene mostra zero variance em >=3 ciclos consecutivos, marca
+#     para nao mais ser iterado nos sweeps (salva em analysis/gene_quarantine.json)
+#   - Append warning em optimization_log.md
+#   - Abre issue no GitHub se nao existe aberta com mesmo gene
+#
+# Nao faz fix complexo (threshold/range) — so isolar + alertar.
+# Fixes de implementacao requerem desenvolvedor humano revisar.
+
+on:
+  schedule:
+    # A cada 2h — balanceia freshness vs custo (cron top-of-2h tem menos
+    # concorrencia que cron horaria). 12x/dia.
+    - cron: '7 */2 * * *'
+  workflow_dispatch:
+  # Dispara tambem apos sweep_matrix pra capturar genes novos rapidamente
+  workflow_run:
+    workflows: ["Parallel Sweep Matrix"]
+    types: [completed]
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: gene-monitor
+  cancel-in-progress: false
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ hashFiles('requirements.txt') }}
+
+      - name: Install dependencies (minimal)
+        # Diagnostic so usa stdlib + numpy — nao precisa de ga_run full stack
+        run: pip install numpy
+
+      - name: Run gene effect diagnostic
+        id: diag
+        run: |
+          python analysis/gene_effect_diagnostic.py --tail 15 --output analysis/gene_effect_report.json
+          # Exit code 0 mesmo com critical — queremos commit+alerta, nao falha
+
+      - name: Auto-quarantine genes com zero variance persistente
+        id: quarantine
+        run: |
+          python - <<'PYEOF'
+          import json, os
+          from pathlib import Path
+          from datetime import datetime
+
+          report_path = Path('analysis/gene_effect_report.json')
+          quar_path = Path('analysis/gene_quarantine.json')
+          if not report_path.exists():
+              print('no report — skip'); raise SystemExit(0)
+          report = json.loads(report_path.read_text())
+          crit = report.get('critical_flags', [])
+
+          quarantine = {}
+          if quar_path.exists():
+              quarantine = json.loads(quar_path.read_text())
+
+          changed = False
+          for r in crit:
+              gene = r['gene']
+              entry = quarantine.setdefault(gene, {
+                  'flagged_count': 0,
+                  'first_flagged': report['generated_at'],
+                  'last_flagged': report['generated_at'],
+                  'quarantined': False,
+              })
+              entry['flagged_count'] += 1
+              entry['last_flagged'] = report['generated_at']
+              entry['last_details'] = {
+                  'n_distinct': r['n_distinct'],
+                  'fit_std': r['fit_std'],
+                  'values_tested': r.get('distinct_values', []),
+              }
+              # Quarantena apos 3 deteccoes consecutivas
+              if entry['flagged_count'] >= 3 and not entry['quarantined']:
+                  entry['quarantined'] = True
+                  entry['quarantined_at'] = report['generated_at']
+                  changed = True
+                  print(f'QUARANTINE: {gene} (detected {entry["flagged_count"]}x)')
+
+          # Limpa entries nao vistos (gene voltou ao normal)
+          critical_genes = {r['gene'] for r in crit}
+          for gene in list(quarantine.keys()):
+              if gene not in critical_genes:
+                  if quarantine[gene].get('quarantined'):
+                      print(f'UNQUARANTINE: {gene} (no longer showing zero variance)')
+                      changed = True
+                  del quarantine[gene]
+
+          if changed or crit:
+              quar_path.write_text(json.dumps(quarantine, indent=2), encoding='utf-8')
+              print(f'Quarantine state: {len(quarantine)} genes tracked, '
+                    f'{sum(1 for e in quarantine.values() if e["quarantined"])} quarantined')
+          PYEOF
+
+      - name: Run auto-fix (quarantine actions + open issues + remove dead genes)
+        # Gene autofix aplica remediacoes rule-based sem supervisao:
+        #   FIX-3: Remove gene quarantenado por 7+ dias de GENE_CATEGORIES
+        #   FIX-4: Abre GitHub issue ao quarantenar pela primeira vez
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python analysis/gene_autofix.py || echo "[WARN] autofix failed — continue"
+
+      - name: Commit auto-fix artifacts (if changed)
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add analysis/gene_effect_report.json analysis/gene_quarantine.json analysis/optimization_log.md run_continuous_improvement.py 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "::notice::No gene monitor changes to commit"
+            exit 0
+          fi
+          git commit -m "[gene-monitor] $(date -u +%Y-%m-%dT%H:%M:%SZ) auto-diagnosis"
+          # Retry push com rebase (race com sweep-matrix)
+          for i in 1 2 3 4 5; do
+            if git pull --rebase origin main && git push origin main; then
+              echo "Pushed on attempt $i"; exit 0
+            fi
+            sleep $(( (RANDOM % 10) + 5 ))
+          done
+          echo "::error::Push falhou apos 5 retries"
+          exit 1
+
+      - name: Report summary
+        if: always()
+        run: |
+          if [ -f analysis/gene_effect_report.json ]; then
+            python - <<'PYEOF'
+          import json
+          r = json.loads(open('analysis/gene_effect_report.json').read())
+          crit = len(r.get('critical_flags', []))
+          warn = len(r.get('warning_flags', []))
+          heal = len(r.get('healthy', []))
+          print(f'::notice::Gene Monitor: critical={crit} warning={warn} healthy={heal} (sweeps={r.get("sweeps_analyzed",0)})')
+          for f in r.get('critical_flags', []):
+              print(f'::warning gene={f["gene"]}::ZERO VARIANCE: {f["n_distinct"]} valores testados, fit_std={f["fit_std"]}')
+          PYEOF
+          fi

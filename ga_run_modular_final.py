@@ -97,8 +97,9 @@ GLOBAL_PARAM_SPECS = [
     # -- NEW v5 gene: pivot-vs-pullback tradeoff (PR #134 deferred) --
     ("entry_aggressiveness", 0.0, 1.0, 0.1, False),
     # -- NEW v7 genes: Woodie R1/S1 gates (Fase 2 resistance/support) --
-    ("resistance_overext_gate", 0.0, 0.20, 0.02, False),
-    ("support_broken_gate", 0.0, 0.20, 0.02, False),
+    # ATR-based (coerente com v5). Range [0.0, 2.0] step 0.25.
+    ("resistance_overext_gate", 0.0, 2.0, 0.25, False),
+    ("support_broken_gate", 0.0, 2.0, 0.25, False),
 ]
 
 # Backward-compat default para genomas antigos (mirror de ga_run.py).
@@ -805,15 +806,15 @@ def _backtest_stats_global_intraday(
                 tolerance = _ea * float(atr[i - 1])
                 if c[i - 1] < pivot_prev[i - 1] - tolerance:
                     long_ok = False
-            # v7 resistance gate: bloqueia buy se close > R1 * (1+gene) (sobre-extensao)
+            # v7 resistance gate (ATR-based): bloqueia buy se close > R1 + gene*ATR
             _rog = float(getattr(gp, "resistance_overext_gate", 0.0))
             if long_ok and _rog > 1e-9 and np.isfinite(r1_prev[i - 1]):
-                if c[i - 1] > r1_prev[i - 1] * (1.0 + _rog):
+                if c[i - 1] > r1_prev[i - 1] + _rog * float(atr[i - 1]):
                     long_ok = False
-            # v7 support gate: bloqueia buy se close < S1 * (1-gene) (suporte rompido)
+            # v7 support gate (ATR-based): bloqueia buy se close < S1 - gene*ATR
             _sbg = float(getattr(gp, "support_broken_gate", 0.0))
             if long_ok and _sbg > 1e-9 and np.isfinite(s1_prev[i - 1]):
-                if c[i - 1] < s1_prev[i - 1] * (1.0 - _sbg):
+                if c[i - 1] < s1_prev[i - 1] - _sbg * float(atr[i - 1]):
                     long_ok = False
 
             side = 1 if long_ok else (-1 if (short_ok and not LONG_ONLY) else 0)

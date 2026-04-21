@@ -133,9 +133,11 @@ def main() -> None:
         "reward_risk_ratio": (-1, 1, 2),
         # v5: current=1.0 (lenient), range 0.0-1.0 step 0.1 — so moves sao negativos
         "entry_aggressiveness": (-1, -2, -3, -5, -10),
-        # v7: current=0.0 (off), range 0.0-0.20 step 0.02 — so moves positivos
-        "resistance_overext_gate": (1, 2, 3, 5, 10),
-        "support_broken_gate": (1, 2, 3, 5, 10),
+        # v7: current=0.0 (off), range 0.0-2.0 step 0.25 — so moves positivos.
+        # Multipliers (1,2,4,6,8) geram 0.25, 0.50, 1.00, 1.50, 2.00 (max).
+        # Com ATR-based, esses valores realmente acionam o gate.
+        "resistance_overext_gate": (1, 2, 4, 6, 8),
+        "support_broken_gate": (1, 2, 4, 6, 8),
     }
 
     candidates: list[dict] = []

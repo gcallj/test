@@ -344,6 +344,24 @@ def _pick_combo_budget(default: int = 8, plateau_budget: int = 16,
     return default, n_rej
 
 
+def _load_quarantine() -> set[str]:
+    """Carrega lista de genes em quarantena (zero variance detectado 3+ vezes).
+
+    Genes quarentenados sao excluidos dos sweeps ate saírem da quarentena
+    (isso acontece automaticamente pelo gene_monitor.yml quando detecta
+    variance normal de novo). Economia: nao desperdica evaluate em gene morto.
+    """
+    quar_path = ROOT / "analysis" / "gene_quarantine.json"
+    if not quar_path.exists():
+        return set()
+    try:
+        data = json.loads(quar_path.read_text(encoding="utf-8"))
+        return {gene for gene, info in data.items() if info.get("quarantined")}
+    except Exception as exc:
+        print(f"[CONTINUOUS] Warn: erro lendo gene_quarantine.json: {exc}")
+        return set()
+
+
 def _run_sweep(category: str, alpha_focus: str = "off",
                combo_budget: int = 8) -> tuple[Path, dict]:
     """Run run_local_fullmetric_sweep.py for the given category.
@@ -354,7 +372,29 @@ def _run_sweep(category: str, alpha_focus: str = "off",
 
     Returns (sweep_file_path, parsed_sweep_dict).
     """
-    genes = GENE_CATEGORIES[category]
+    # Auto-filtro: remove genes em quarantena da lista a ser iterada no sweep.
+    # Sem isso, GA desperdicaria compute em genes sabidamente inefetivos.
+    quarantined = _load_quarantine()
+    all_genes = GENE_CATEGORIES[category]
+    genes = [g for g in all_genes if g not in quarantined]
+    if quarantined & set(all_genes):
+        skipped = sorted(quarantined & set(all_genes))
+        print(f"[CONTINUOUS] Skipping quarantined genes em {category}: {skipped}")
+    if not genes:
+        print(f"[CONTINUOUS] Todos os genes de {category} estao em quarentena — skip")
+        # Retorna sweep vazio para nao abortar ciclo inteiro
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        out_name = f"local_fullmetric_sweep_continuous_{category}_{timestamp}.json"
+        out_path = ROOT / out_name
+        out_path.write_text(json.dumps({
+            "started_at": _now_iso(),
+            "method": "skipped_all_quarantined",
+            "skipped_genes": sorted(all_genes),
+            "single_results": [],
+            "combo_results": [],
+            "best_promoted": None,
+        }, indent=2), encoding="utf-8")
+        return out_path, json.loads(out_path.read_text(encoding="utf-8"))
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     out_name = f"local_fullmetric_sweep_continuous_{category}_{timestamp}.json"
     out_path = ROOT / out_name
@@ -488,7 +528,30 @@ def _do_one_cycle(category_override: str | None, alpha_focus: str,
     }
     _append_log_entry(entry)
     _save_state(state)
+
+    # Auto-diagnostic: detecta genes sem efeito depois do sweep.
+    # Nao falha o ciclo se detector crashar — melhor continuar.
+    try:
+        _run_gene_effect_diagnostic()
+    except Exception as exc:
+        print(f"[CONTINUOUS] gene_effect_diagnostic falhou: {exc}")
+
     return entry
+
+
+def _run_gene_effect_diagnostic() -> None:
+    """Roda o detector de zero-variance genes; flagga em optimization_log.md."""
+    script = ROOT / "analysis" / "gene_effect_diagnostic.py"
+    if not script.exists():
+        return
+    subprocess.run(
+        [sys.executable, "-u", str(script),
+         "--tail", "10",
+         "--output", "analysis/gene_effect_report.json"],
+        cwd=str(ROOT),
+        check=False,
+        timeout=120,
+    )
 
 
 def _print_status() -> None:
