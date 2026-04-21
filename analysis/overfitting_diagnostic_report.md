@@ -1,10 +1,10 @@
 # Overfitting diagnostic report
 
-Generated: overfitting_diagnostic.py sobre 59 attempts (25 promoted) + 102 sweeps
+Generated: overfitting_diagnostic.py sobre 59 attempts (25 promoted) + 108 sweeps
 
 ## Executive summary
 
-- Incumbent atual: fit=24.18, WR=70.0%, alpha=-7.99%, trades=33
+- Incumbent atual: fit=27.09, WR=70.0%, alpha=-7.89%, trades=33
 - Historico: 59 attempts, 25 promoted (42.4%)
 
 ## 1. Wilson 95% CI para WR
@@ -34,9 +34,9 @@ Generated: overfitting_diagnostic.py sobre 59 attempts (25 promoted) + 102 sweep
 | idx | timestamp | fit | alpha_ann |
 |---:|---|---:|---:|
 | 0 | 2026-04-18T15:38:22 | -75.19 | -8.28% |
-| 34 | 2026-04-20T23:19:18 | 24.59 | -8.17% |
-| 68 | 2026-04-20T23:18:58 | 24.59 | -8.17% |
-| 101 | 2026-04-20T15:07:48 | 23.64 | -8.23% |
+| 36 | 2026-04-20T23:19:18 | 24.59 | -8.17% |
+| 72 | 2026-04-20T22:17:30 | 23.70 | -8.17% |
+| 107 | 2026-04-20T15:07:48 | 23.64 | -8.23% |
 
 ## 4. Gene drift detection (retrospective B4 preview)
 
@@ -55,8 +55,8 @@ Generated: overfitting_diagnostic.py sobre 59 attempts (25 promoted) + 102 sweep
 
 ## 5. Signal-to-noise do ganho por attempt
 
-- **Ganho medio de fit por sweep**: +0.9785
-- **Desvio padrao dos deltas**: 36.8559
+- **Ganho medio de fit por sweep**: +0.9237
+- **Desvio padrao dos deltas**: 36.0502
 - **Signal-to-noise ratio**: 0.03
 - **Interpretacao**: SNR < 1 sugere que os ganhos sao indistinguiveis de ruido — overfit provavel
 
