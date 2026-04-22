@@ -140,12 +140,56 @@ jobs:
           python3 -c "import json; d=json.load(open('global_ga_checkpoint.json')); print(f'  fitness={d[\"fitness\"]:.4f}')"
           ls -lh summary_latest.xlsx apply_last_*.csv 2>/dev/null || true
 
+      - name: Check retrained vs best_ever guard
+        if: success()
+        # Impede commit de retrain pior que best_ever. Se guard rejeitar,
+        # restaura checkpoint backup e sai sem commit.
+        # Retrain bom -> passa guard -> commita -> update_best_ever automatico.
+        # Retrain ruim -> guard rejeita -> main preservado.
+        run: |
+          python3 -c "
+          import json, sys, shutil
+          ck = json.load(open('global_ga_checkpoint.json'))
+          c = ck.get('metrics_snapshot', {}).get('candidate', {})
+          # Se metrics_snapshot nao existe (retrain old-path), computa via evaluate
+          if not c.get('fit'):
+              # Eval em runtime contra best_ever
+              try:
+                  import run_local_ga_staged as staged
+                  import ga_run as gr
+                  store, _w, _sg, _sf, _bg, _bf, _bi = staged.open_existing_store()
+                  cache = staged.build_ticker_arrays_cache(store)
+                  c = staged.evaluate_genome_full(ck['genome'], cache, gr)
+              except Exception as e:
+                  print(f'[WARN] eval falhou: {e}; seguindo sem guard')
+                  sys.exit(0)
+          cand_m = {
+              'fit': float(c.get('fit', ck['fitness']) or 0.0),
+              'wr_med_all': float(c.get('wr_med_all', 0.0) or 0.0),
+              'mean_alpha_ann': float(c.get('mean_alpha_ann', 0.0) or 0.0),
+              'n_ge_70': int(c.get('n_ge_70', 0) or 0),
+          }
+          from analysis.best_ever_guard import check_regression_vs_best, format_best_ever_summary
+          print('[GUARD]', format_best_ever_summary())
+          ok, reason = check_regression_vs_best(cand_m)
+          if not ok:
+              print(f'[GUARD] REJEITA retrain: {reason}')
+              # Restaura backup pre-retrain
+              shutil.copy('global_ga_checkpoint_pre_retrain.json.bak', 'global_ga_checkpoint.json')
+              print('[GUARD] Main preservado em pre-retrain state')
+              sys.exit(2)
+          print(f'[GUARD] Retrain PASSOU: {reason}')
+          # Atualiza best_ever
+          from analysis.best_ever_guard import update_best_ever
+          update_best_ever(cand_m, ck['genome'], reason='retrain_ga_only')
+          "
+
       - name: Commit retrained checkpoint
         if: success()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add global_ga_checkpoint.json apply_last_5d__H5.csv summary_latest.xlsx 2>/dev/null || true
+          git add global_ga_checkpoint.json apply_last_5d__H5.csv summary_latest.xlsx analysis/best_ever_tracker.json 2>/dev/null || true
           FITNESS=$(python3 -c "import json; print(f'{json.load(open(\"global_ga_checkpoint.json\"))[\"fitness\"]:.4f}')")
           # --allow-empty nao — so comita se houver mudanca real
           if ! git diff --cached --quiet; then

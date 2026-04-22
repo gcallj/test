@@ -65,6 +65,10 @@ jobs:
           python -u run_pipeline.py --steps 1
           python -u run_pipeline.py --steps 4
 
+      - name: Backup pre-retrain checkpoint (rollback se guard rejeitar)
+        run: |
+          cp global_ga_checkpoint.json global_ga_checkpoint_pre_retrain.json.bak
+
       - name: Retrain GA (staged)
         run: |
           python3 -u -c "
@@ -98,15 +102,66 @@ jobs:
           python3 -c "import json; d=json.load(open('global_ga_checkpoint.json')); print(f'  fitness={d[\"fitness\"]:.4f}')"
           ls -lh summary_latest.xlsx apply_last_*d__H*.csv 2>/dev/null
 
+      - name: Check retrained vs best_ever guard (rollback se pior)
+        if: success()
+        # Impede retrain pior que best_ever de sobrescrever main.
+        # Se guard rejeitar, restaura backup e sai. Retry loop no push
+        # abaixo so executa se guard passar.
+        run: |
+          python3 -c "
+          import json, sys, shutil
+          ck = json.load(open('global_ga_checkpoint.json'))
+          c = ck.get('metrics_snapshot', {}).get('candidate', {})
+          if not c.get('fit'):
+              try:
+                  import run_local_ga_staged as staged
+                  import ga_run as gr
+                  store, _w, _sg, _sf, _bg, _bf, _bi = staged.open_existing_store()
+                  cache = staged.build_ticker_arrays_cache(store)
+                  c = staged.evaluate_genome_full(ck['genome'], cache, gr)
+              except Exception as e:
+                  print(f'[WARN] eval falhou: {e}; seguindo sem guard')
+                  sys.exit(0)
+          cand_m = {
+              'fit': float(c.get('fit', ck['fitness']) or 0.0),
+              'wr_med_all': float(c.get('wr_med_all', 0.0) or 0.0),
+              'mean_alpha_ann': float(c.get('mean_alpha_ann', 0.0) or 0.0),
+              'n_ge_70': int(c.get('n_ge_70', 0) or 0),
+          }
+          from analysis.best_ever_guard import check_regression_vs_best, format_best_ever_summary, update_best_ever
+          print('[GUARD]', format_best_ever_summary())
+          ok, reason = check_regression_vs_best(cand_m)
+          if not ok:
+              print(f'[GUARD] REJEITA retrain: {reason}')
+              shutil.copy('global_ga_checkpoint_pre_retrain.json.bak', 'global_ga_checkpoint.json')
+              print('[GUARD] Main preservado em pre-retrain state')
+              sys.exit(2)
+          print(f'[GUARD] Retrain PASSOU: {reason}')
+          update_best_ever(cand_m, ck['genome'], reason='retrain_ga_staged')
+          "
+
       - name: Commit retrained checkpoint
         if: success()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add global_ga_checkpoint.json apply_last_5d__H5.csv summary_latest.xlsx
+          git add global_ga_checkpoint.json apply_last_5d__H5.csv summary_latest.xlsx analysis/best_ever_tracker.json 2>/dev/null || true
           FITNESS=$(python3 -c "import json; print(f'{json.load(open(\"global_ga_checkpoint.json\"))[\"fitness\"]:.4f}')")
-          git commit -m "Retrain GA staged: fitness=${FITNESS}" || echo "No changes"
-          git push
+          if ! git diff --cached --quiet; then
+            git commit -m "Retrain GA staged: fitness=${FITNESS}"
+            # Retry loop para race com sweep_matrix / daily_pipeline
+            for i in 1 2 3 4 5; do
+              if git pull --rebase origin main && git push origin main; then
+                echo "::notice::Push succeeded on attempt $i"
+                exit 0
+              fi
+              sleep $(( (RANDOM % 15) + 5 ))
+            done
+            echo "::error::Push failed after 5 retries"
+            exit 1
+          else
+            echo "No changes (guard rejected ou sem delta)"
+          fi
 
       - name: Upload artifacts
         if: always()
