@@ -1,16 +1,16 @@
 # Sweep Learnings Summary
 
-_Generated: 2026-04-22T12:45:44+00:00_
+_Generated: 2026-04-22T14:51:20+00:00_
 
 Aggregates all `local_fullmetric_sweep_result*.json` files plus the
 continuous-improvement state. Use this file to plan the next cycle.
 
 ## Current snapshot
 
-- Checkpoint fitness: `21.472890834312153`
-- Total sweeps seen: **221**
-- Total promotions: **89** (including 1 from codex log)
-- Promotion rate: **36.3%** (over 245 total attempts)
+- Checkpoint fitness: `10.714751778135053`
+- Total sweeps seen: **227**
+- Total promotions: **93** (including 1 from codex log)
+- Promotion rate: **37.1%** (over 251 total attempts)
 - Continuous cycles run: 34
 - Continuous promotions: 14
 - Codex attempts synced: **24** (11 promoted) from `codex_attempts_source.md`
@@ -112,6 +112,10 @@ categoria mais antiga: **D_entry_filter** (ultima vez: 2026-04-20T10:29:24+00:00
 | 2026-04-22 | local | `local_fullmetric_sweep_continuous_E_regime_vol_20260422_110205.json` | `momentum_confirm_days 4->5` | fit=20.068 WR=67.4% alpha=-8.11% MDD=12.5% |
 | 2026-04-22 | local | `local_fullmetric_sweep_continuous_E_regime_vol_20260422_121333.json` | `volatility_filter_percentile 0.05->0.0` | fit=21.244 WR=67.3% alpha=-7.99% MDD=12.5% |
 | 2026-04-22 | local | `local_fullmetric_sweep_continuous_D_entry_filter_20260422_121402.json` | `score_percentile_trigger 0.5->0.45` | fit=21.050 WR=66.7% alpha=-8.07% MDD=12.2% |
+| 2026-04-22 | local | `local_fullmetric_sweep_continuous_E_regime_vol_20260422_141648.json` | `ma_filter_mode 1->0` | fit=9.580 WR=66.1% alpha=-8.12% MDD=14.3% |
+| 2026-04-22 | local | `local_fullmetric_sweep_continuous_B_take_profit_20260422_141648.json` | `partial_take_level 1.0->0.75` | fit=10.280 WR=65.7% alpha=-8.11% MDD=13.3% |
+| 2026-04-22 | local | `local_fullmetric_sweep_continuous_C_timing_20260422_141655.json` | `consecutive_loss_cooldown 6->5` | fit=10.256 WR=65.7% alpha=-8.08% MDD=13.7% |
+| 2026-04-22 | local | `local_fullmetric_sweep_continuous_D_entry_filter_20260422_141721.json` | `score_percentile_trigger 0.45->0.4` | fit=9.760 WR=66.1% alpha=-8.12% MDD=13.7% |
 
 ## Graveyard (genes que falharam multiplas vezes)
 
@@ -120,19 +124,19 @@ Genes tentados >= 2 vezes sem nenhuma promocao. Considere SKIP no proximo ciclo.
 
 | Gene | Attempts | Promotions | (codex) Attempts | (codex) Promotions |
 |---|---:|---:|---:|---:|
-| `reward_risk_ratio` | 39 | 0 | 0 | 0 |
-| `vote_threshold_long` | 37 | 0 | 0 | 0 |
-| `score_strength_scaling` | 37 | 0 | 0 | 0 |
-| `min_signal_strength` | 36 | 0 | 0 | 0 |
-| `stop_atr_mult` | 36 | 0 | 0 | 0 |
-| `entry_confirmation_days` | 35 | 0 | 0 | 0 |
-| `volume_confirm_mode` | 35 | 0 | 1 | 0 |
-| `time_stop_bars` | 35 | 0 | 0 | 0 |
-| `ma_filter_period` | 35 | 0 | 1 | 0 |
-| `vote_threshold_short` | 34 | 0 | 1 | 0 |
-| `stop_tighten_after_bars` | 34 | 0 | 0 | 0 |
-| `z_threshold` | 33 | 0 | 0 | 0 |
-| `entry_aggressiveness` | 16 | 0 | 0 | 0 |
+| `reward_risk_ratio` | 40 | 0 | 0 | 0 |
+| `score_strength_scaling` | 38 | 0 | 0 | 0 |
+| `vote_threshold_long` | 38 | 0 | 0 | 0 |
+| `stop_atr_mult` | 37 | 0 | 0 | 0 |
+| `min_signal_strength` | 37 | 0 | 0 | 0 |
+| `time_stop_bars` | 36 | 0 | 0 | 0 |
+| `volume_confirm_mode` | 36 | 0 | 1 | 0 |
+| `entry_confirmation_days` | 36 | 0 | 0 | 0 |
+| `ma_filter_period` | 36 | 0 | 1 | 0 |
+| `stop_tighten_after_bars` | 35 | 0 | 0 | 0 |
+| `vote_threshold_short` | 35 | 0 | 1 | 0 |
+| `z_threshold` | 34 | 0 | 0 | 0 |
+| `entry_aggressiveness` | 17 | 0 | 0 | 0 |
 
 ## Hot zones (genes que ja promoveram)
 
@@ -140,26 +144,26 @@ Genes onde alguma combinacao funcionou. Vale revisitar com novos vizinhos.
 
 | Gene | Promotions | Attempts | Hit rate | (codex) Promotions |
 |---|---:|---:|---:|---:|
-| `consecutive_loss_cooldown` | 14 | 46 | 30% | 1 |
-| `score_percentile_trigger` | 11 | 39 | 28% | 0 |
-| `momentum_confirm_days` | 11 | 40 | 28% | 0 |
-| `signal_ema_span` | 7 | 38 | 18% | 0 |
-| `max_loss_per_trade_pct` | 6 | 38 | 16% | 0 |
-| `entry_score_threshold` | 6 | 48 | 12% | 0 |
-| `regime_threshold` | 6 | 55 | 11% | 1 |
-| `equity_drawdown_stop_pct` | 5 | 35 | 14% | 0 |
-| `partial_take_level` | 5 | 46 | 11% | 1 |
-| `ma_filter_mode` | 4 | 45 | 9% | 0 |
-| `partial_take_pct` | 3 | 39 | 8% | 0 |
-| `volatility_filter_percentile` | 3 | 45 | 7% | 0 |
-| `support_broken_gate` | 2 | 14 | 14% | 0 |
-| `entry_discount_atr_frac` | 2 | 34 | 6% | 0 |
-| `partial_take_pct_2` | 2 | 38 | 5% | 0 |
-| `stop_tighten_factor` | 2 | 41 | 5% | 0 |
-| `resistance_overext_gate` | 1 | 14 | 7% | 0 |
-| `trailing_stop_mode` | 1 | 36 | 3% | 0 |
-| `vol_regime_mode` | 1 | 37 | 3% | 0 |
-| `partial_take_level_2` | 1 | 41 | 2% | 0 |
+| `consecutive_loss_cooldown` | 15 | 47 | 32% | 1 |
+| `score_percentile_trigger` | 12 | 40 | 30% | 0 |
+| `momentum_confirm_days` | 11 | 41 | 27% | 0 |
+| `signal_ema_span` | 7 | 39 | 18% | 0 |
+| `max_loss_per_trade_pct` | 6 | 39 | 15% | 0 |
+| `partial_take_level` | 6 | 47 | 13% | 1 |
+| `entry_score_threshold` | 6 | 49 | 12% | 0 |
+| `regime_threshold` | 6 | 56 | 11% | 1 |
+| `equity_drawdown_stop_pct` | 5 | 36 | 14% | 0 |
+| `ma_filter_mode` | 5 | 46 | 11% | 0 |
+| `partial_take_pct` | 3 | 40 | 8% | 0 |
+| `volatility_filter_percentile` | 3 | 46 | 7% | 0 |
+| `support_broken_gate` | 2 | 15 | 13% | 0 |
+| `entry_discount_atr_frac` | 2 | 35 | 6% | 0 |
+| `partial_take_pct_2` | 2 | 39 | 5% | 0 |
+| `stop_tighten_factor` | 2 | 42 | 5% | 0 |
+| `resistance_overext_gate` | 1 | 15 | 7% | 0 |
+| `trailing_stop_mode` | 1 | 37 | 3% | 0 |
+| `vol_regime_mode` | 1 | 38 | 3% | 0 |
+| `partial_take_level_2` | 1 | 42 | 2% | 0 |
 
 ## Category rotation status
 
@@ -174,7 +178,7 @@ Genes onde alguma combinacao funcionou. Vale revisitar com novos vizinhos.
 
 ## Codex sync history (latest attempts)
 
-Parsed `codex_attempts_source.md` at 2026-04-22T12:45:44+00:00. Total attempts: **24**, promoted: **11**. Updates via `python analysis/codex_attempts_sync.py` at the start of every continuous cycle (auto) or on demand.
+Parsed `codex_attempts_source.md` at 2026-04-22T14:51:20+00:00. Total attempts: **24**, promoted: **11**. Updates via `python analysis/codex_attempts_sync.py` at the start of every continuous cycle (auto) or on demand.
 
 | Attempt | Timestamp | Promoted | Move(s) | Learning (snippet) |
 |---|---|:-:|---|---|
