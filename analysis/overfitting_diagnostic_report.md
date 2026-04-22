@@ -1,18 +1,18 @@
 # Overfitting diagnostic report
 
-Generated: overfitting_diagnostic.py sobre 59 attempts (25 promoted) + 179 sweeps
+Generated: overfitting_diagnostic.py sobre 59 attempts (25 promoted) + 185 sweeps
 
 ## Executive summary
 
-- Incumbent atual: fit=24.04, WR=69.0%, alpha=-8.09%, trades=30
+- Incumbent atual: fit=27.73, WR=70.0%, alpha=-7.92%, trades=33
 - Historico: 59 attempts, 25 promoted (42.4%)
 
 ## 1. Wilson 95% CI para WR
 
-- **WR observado**: 0.6905 (69.05%), com n=30 trades
-- **Wilson 95% IC**: [0.5116, 0.8261] = [51.16%, 82.61%]
+- **WR observado**: 0.7000 (70.00%), com n=33 trades
+- **Wilson 95% IC**: [0.5297, 0.8286] = [52.97%, 82.86%]
 - **Veredito**: significativamente melhor que 50%
-- **Interpretacao**: com n=30 trades, o IC tem largura 31.45pp — amostra pequena, alta variancia
+- **Interpretacao**: com n=33 trades, o IC tem largura 29.89pp — amostra pequena, alta variancia
 
 ## 2. Multiple testing correction
 
@@ -34,9 +34,9 @@ Generated: overfitting_diagnostic.py sobre 59 attempts (25 promoted) + 179 sweep
 | idx | timestamp | fit | alpha_ann |
 |---:|---|---:|---:|
 | 0 | 2026-04-18T15:38:22 | -75.19 | -8.28% |
-| 59 | 2026-04-20T22:17:18 | 23.71 | -8.17% |
-| 119 | 2026-04-21T19:52:00 | 25.53 | -7.89% |
-| 178 | 2026-04-20T15:07:48 | 23.64 | -8.23% |
+| 61 | 2026-04-20T22:17:18 | 23.71 | -8.17% |
+| 123 | 2026-04-21T19:52:00 | 25.53 | -7.89% |
+| 184 | 2026-04-20T15:07:48 | 23.64 | -8.23% |
 
 ## 4. Gene drift detection (retrospective B4 preview)
 
@@ -55,8 +55,8 @@ Generated: overfitting_diagnostic.py sobre 59 attempts (25 promoted) + 179 sweep
 
 ## 5. Signal-to-noise do ganho por attempt
 
-- **Ganho medio de fit por sweep**: +0.5552
-- **Desvio padrao dos deltas**: 27.7545
+- **Ganho medio de fit por sweep**: +0.5371
+- **Desvio padrao dos deltas**: 27.7617
 - **Signal-to-noise ratio**: 0.02
 - **Interpretacao**: SNR < 1 sugere que os ganhos sao indistinguiveis de ruido — overfit provavel
 
