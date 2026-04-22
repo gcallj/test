@@ -1,5 +1,5 @@
 {
-  "fitness": 26.459605239382256,
+  "fitness": 25.782103117383823,
   "genome": [
     0.15000000000000002,
     0.15000000000000002,
@@ -20,7 +20,7 @@
     0.1,
     300,
     1,
-    8,
+    7,
     0.22,
     2,
     0.4,
@@ -38,8 +38,8 @@
   "accepted_from_staged_chunk": -1,
   "accepted_on": "2026-04-22",
   "accepted_reason": "fullmetric_sweep:score_percentile_trigger:-1 (from local_fullmetric_sweep_continuous_D_entry_filter_20260420_102407.json)",
-  "baseline_main_ref": "07b122e1b8b62bed7ea1784a3dded89ddd80f186",
-  "previous_checkpoint_fitness": 28.081775998178898,
+  "baseline_main_ref": "b209f2f7ec543764acfda73a605d1c6b7ef5fea8",
+  "previous_checkpoint_fitness": 25.782103117383823,
   "previous_checkpoint_fit_current_formula": 24.343654495257724,
   "metrics_snapshot": {
     "main": {
@@ -73,18 +73,18 @@
       "n_ge_70": 59
     },
     "candidate": {
-      "fit": 26.459605239382256,
+      "fit": 25.782103117383823,
       "wr_med_all": 0.6923076923076923,
       "wr_target_med_all": 0.7,
-      "mean_alpha_ann": -0.07880512569271324,
-      "alpha_ann_pos_rate": 0.20168067226890757,
-      "mdd_med": 0.10885391715361648,
-      "mdd_p75": 0.16564855376993515,
-      "mdd_duration_med": 181.0,
-      "avg_hold_bars_med": 1.9722222222222223,
+      "mean_alpha_ann": -0.07997799530698735,
+      "alpha_ann_pos_rate": 0.19327731092436976,
+      "mdd_med": 0.10558830107170403,
+      "mdd_p75": 0.17063612966101227,
+      "mdd_duration_med": 191.0,
+      "avg_hold_bars_med": 1.9615384615384615,
       "median_hold_bars_med": 2.0,
       "max_hold_bars_p75": 6.0,
-      "trades_med": 35.0,
+      "trades_med": 33.0,
       "n_ge_70": 55
     }
   },
@@ -106,10 +106,10 @@
     "wr_target_med_all_floor_target": 0.6825,
     "alpha_ann_pos_rate_target": 0.18447058823529414,
     "alpha_ann_pos_rate_floor_target": 0.17147058823529412,
-    "mdd_med_limit": 0.1565085978444156,
-    "mdd_p75_limit": 0.22229490700183224,
+    "mdd_med_limit": 0.1535085978444156,
+    "mdd_p75_limit": 0.21929490700183224,
     "mdd_duration_limit": 283.75,
-    "mdd_relaxation_bonus": 0.007,
+    "mdd_relaxation_bonus": 0.004,
     "strong_alpha_wr_relax": false,
     "all_pass": true
   },
