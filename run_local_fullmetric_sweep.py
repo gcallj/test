@@ -113,6 +113,62 @@ def main() -> None:
     base_metrics = staged_runner.evaluate_genome_full(baseline_genome, cache, gr)
     seed_metrics = staged_runner.evaluate_genome_full(seed_genome, cache, gr)
 
+    # -----------------------------------------------------------------
+    # EFFICIENCY #1: se best_ever existe e e melhor que seed atual,
+    # usa best_ever.last_best_genome como seed do sweep. Evita desperdiciar
+    # orcamento explorando partir de estado degradado.
+    # -----------------------------------------------------------------
+    try:
+        from analysis.best_ever_guard import load_best_ever
+        best_ever = load_best_ever()
+        if (best_ever and best_ever.get("last_best_genome")
+                and float(best_ever.get("best_fit", 0.0))
+                    > float(seed_metrics.get("fit", 0.0)) + 0.5):
+            _bev_genome = list(best_ever["last_best_genome"])
+            if len(_bev_genome) == len(gr.GLOBAL_PARAM_SPECS):
+                print(f"[SWEEP] BASELINE SWITCH: usando best_ever genome "
+                      f"(best_fit={best_ever['best_fit']:.4f} vs "
+                      f"seed_fit={seed_metrics.get('fit', 0.0):.4f})")
+                _bev_metrics = staged_runner.evaluate_genome_full(_bev_genome, cache, gr)
+                if _bev_metrics.get("fit", 0.0) > seed_metrics.get("fit", 0.0):
+                    seed_genome = _bev_genome
+                    seed_metrics = _bev_metrics
+    except Exception as _e:
+        print(f"[SWEEP] WARN: best_ever seed switch falhou: {_e}")
+
+    # -----------------------------------------------------------------
+    # EFFICIENCY #2: cache de combos ja testados (analysis/tried_combos.json)
+    # evita re-testar os mesmos genomes. Populado progressivamente.
+    # -----------------------------------------------------------------
+    TRIED_CACHE_PATH = os.path.join(os.path.dirname(__file__),
+                                     "analysis", "tried_combos.json")
+    tried_combos = {}
+    try:
+        if os.path.exists(TRIED_CACHE_PATH):
+            with open(TRIED_CACHE_PATH, "r", encoding="utf-8") as _f:
+                tried_combos = json.load(_f)
+    except Exception as _e:
+        print(f"[SWEEP] WARN: cache combos falhou leitura: {_e}")
+        tried_combos = {}
+
+    def _combo_key(genome: list[float]) -> str:
+        gg = gr.sanitize_global_genome(list(genome))
+        return "|".join(f"{round(float(x), 6):g}" for x in gg)
+
+    def _save_tried_cache() -> None:
+        try:
+            os.makedirs(os.path.dirname(TRIED_CACHE_PATH), exist_ok=True)
+            # Limita cache a 5000 entries mais recentes
+            if len(tried_combos) > 5000:
+                keys_sorted = sorted(tried_combos.keys(),
+                                     key=lambda k: tried_combos[k].get("when", ""))
+                for k in keys_sorted[:len(tried_combos) - 5000]:
+                    del tried_combos[k]
+            with open(TRIED_CACHE_PATH, "w", encoding="utf-8") as _f:
+                json.dump(tried_combos, _f)
+        except Exception as _e:
+            print(f"[SWEEP] WARN: cache save falhou: {_e}")
+
     gene_names = [g.strip() for g in str(args.genes).split(",") if g.strip()]
     anchor_labels = [x.strip() for x in str(args.combo_anchor_labels).split(",") if x.strip()]
     anchor_label_set = set(anchor_labels)
@@ -168,11 +224,46 @@ def main() -> None:
     best_promoted = None
     best_guarded = None
 
+    # Stats de cache hits — log pra observability
+    _cache_hits = 0
+    _cache_misses = 0
+
     for i, cand in enumerate(candidates, start=1):
         genome = cand["genome"]
-        t_eval0 = time.time()
-        metrics = staged_runner.evaluate_genome_full(genome, cache, gr)
-        metrics["eval_time_s"] = round(time.time() - t_eval0, 1)
+        # EFFICIENCY #2: cache check. Reutilize metrics de avaliacao anterior
+        # se o genome ja foi testado (menor que 24h). Evita recomputar em
+        # cada sweep identicos candidates.
+        ckey = _combo_key(genome)
+        _cached = tried_combos.get(ckey)
+        if _cached and isinstance(_cached.get("metrics"), dict):
+            metrics = dict(_cached["metrics"])
+            metrics["_cache_hit"] = True
+            metrics["eval_time_s"] = 0.0
+            _cache_hits += 1
+        else:
+            t_eval0 = time.time()
+            metrics = staged_runner.evaluate_genome_full(genome, cache, gr)
+            metrics["eval_time_s"] = round(time.time() - t_eval0, 1)
+            _cache_misses += 1
+            # Armazena no cache (apenas metrics essenciais pra caber 5000 entries)
+            tried_combos[ckey] = {
+                "when": datetime.now().astimezone().isoformat(timespec="seconds"),
+                "metrics": {
+                    "fit": metrics.get("fit"),
+                    "wr_med_all": metrics.get("wr_med_all"),
+                    "wr_target_med_all": metrics.get("wr_target_med_all"),
+                    "mean_alpha_ann": metrics.get("mean_alpha_ann"),
+                    "alpha_ann_pos_rate": metrics.get("alpha_ann_pos_rate"),
+                    "n_ge_70": metrics.get("n_ge_70"),
+                    "trades_med": metrics.get("trades_med"),
+                    "mdd_med": metrics.get("mdd_med"),
+                    "mdd_p75": metrics.get("mdd_p75"),
+                    "mdd_duration_med": metrics.get("mdd_duration_med"),
+                    "avg_hold_bars_med": metrics.get("avg_hold_bars_med"),
+                    "median_hold_bars_med": metrics.get("median_hold_bars_med"),
+                    "max_hold_bars_p75": metrics.get("max_hold_bars_p75"),
+                },
+            }
         decision = staged_runner._candidate_beats_incumbent(metrics, base_metrics, seed_metrics)
         payload = {
             "label": cand["label"],
@@ -297,6 +388,11 @@ def main() -> None:
         "elapsed_s": round(time.time() - t0, 1),
     }
     _atomic_dump(str(args.out), payload)
+
+    # EFFICIENCY #2: persiste cache de combos testados
+    _save_tried_cache()
+    print(f"[SWEEP] Cache: hits={_cache_hits} misses={_cache_misses} "
+          f"total_tracked={len(tried_combos)}", flush=True)
 
     print("\n============================================================", flush=True)
     print("SWEEP SUMMARY", flush=True)

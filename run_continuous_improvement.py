@@ -136,26 +136,62 @@ def _save_state(state: dict) -> None:
 
 
 def _pick_next_category(state: dict, override: str | None = None) -> str:
-    """Pick least-recently-swept category. Prefer never-swept categories."""
+    """Pick next category. Multi-armed bandit com UCB1 simplificado.
+
+    Rationale: em vez de round-robin puro (todas categorias iguais), priorizar
+    categorias com MAIS taxa de promocao recente. Isso concentra compute nas
+    areas que estao entregando ganhos.
+
+    Formula UCB1: score = mean_reward + sqrt(2 * ln(N) / n_c)
+      mean_reward = n_promotions / n_runs (0..1)
+      N = total runs de todas categorias
+      n_c = runs dessa categoria
+    Categorias nunca testadas tem prioridade absoluta (score = +inf).
+    """
     if override:
-        # Match by suffix or full name
         for cat in GENE_CATEGORIES:
             if cat == override or cat.endswith(f"_{override.lower()}") or cat.startswith(override.upper()):
                 return cat
-        # If no match, accept exact prefix letter (A/B/C/D/E/F)
         for cat in GENE_CATEGORIES:
             if cat.startswith(override.upper() + "_"):
                 return cat
         raise SystemExit(f"Unknown category override: {override!r}. "
                         f"Valid: {list(GENE_CATEGORIES.keys())}")
 
+    import math
     cats = state.get("categories", {})
-    # Never-swept first
+
+    # Sempre prioriza categoria nunca testada
     never = [c for c, info in cats.items() if not info.get("last_swept")]
     if never:
         return sorted(never)[0]
-    # Otherwise oldest last_swept
-    return min(cats.keys(), key=lambda c: cats[c].get("last_swept") or "")
+
+    # Bandit UCB1 — apenas categorias em GENE_CATEGORIES (novas como v7 em E)
+    # tambem se qualificam automaticamente
+    total_runs = sum(info.get("n_runs", 0) for info in cats.values())
+    if total_runs < len(GENE_CATEGORIES) * 2:
+        # Cold start: ainda rodar round-robin ate ter dados suficientes
+        return min(cats.keys(), key=lambda c: cats[c].get("last_swept") or "")
+
+    best_cat = None
+    best_score = -1.0
+    ln_total = math.log(max(total_runs, 1))
+    for cat in GENE_CATEGORIES:
+        info = cats.get(cat, {"n_runs": 0, "n_promotions": 0})
+        n_runs = max(1, int(info.get("n_runs", 0) or 0))
+        n_prom = int(info.get("n_promotions", 0) or 0)
+        mean_reward = n_prom / n_runs
+        # Bonus de exploracao decresce com log(total)/n_runs
+        exploration = math.sqrt(2.0 * ln_total / n_runs)
+        ucb = mean_reward + exploration
+        if ucb > best_score:
+            best_score = ucb
+            best_cat = cat
+
+    if best_cat is None:
+        # Fallback round-robin
+        best_cat = min(cats.keys(), key=lambda c: cats[c].get("last_swept") or "")
+    return best_cat
 
 
 def _ensure_log_header() -> None:

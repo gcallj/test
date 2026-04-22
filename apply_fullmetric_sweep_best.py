@@ -98,6 +98,37 @@ def main() -> None:
     if not promote:
         raise SystemExit("Best sweep candidate failed staged guardrails; refusing to apply.")
 
+    # ================================================================
+    # LONG-TERM REGRESSION GUARD — best_ever_tracker.json
+    # ================================================================
+    # Alem do gate vs main, verifica contra o best_ever historico.
+    # Isso impede "death by a thousand cuts": cada promocao passa o gate
+    # vs main atual, mas main vai degradando step by step. Guard quebra
+    # esse loop checando contra o melhor observado ever.
+    try:
+        from analysis.best_ever_guard import (
+            load_best_ever, check_regression_vs_best, format_best_ever_summary
+        )
+        best_ever = load_best_ever()
+        if best_ever:
+            print(f"[GUARD] {format_best_ever_summary(best_ever)}")
+            ok, reason = check_regression_vs_best(cand_metrics, best_ever)
+            if not ok:
+                print(f"[GUARD] REJEITA: regressao vs best_ever -> {reason}")
+                raise SystemExit(
+                    "Long-term regression guard: candidate piora metricas "
+                    "vs best_ever. Use analysis/best_ever_tracker.json para "
+                    "resetar manual se necessario."
+                )
+            print(f"[GUARD] PASSA: {reason}")
+        else:
+            print("[GUARD] Sem best_ever_tracker ainda — primeira vez")
+    except SystemExit:
+        raise
+    except Exception as _e:
+        # Nao-fatal: se guard crashar, mantem comportamento antigo (sem guard)
+        print(f"[GUARD] WARN: long-term guard falhou: {_e} — seguindo sem guard")
+
     if args.dry_run:
         print("[DRY] Not writing checkpoint files.")
         return
@@ -136,6 +167,14 @@ def main() -> None:
     print(f"[APPLY] Wrote: {os.path.abspath(staged.MAIN_CHECKPOINT)}")
     print(f"[APPLY] Backup: {prev_path}")
     print(f"[APPLY] Snapshot: {new_path}")
+
+    # Atualiza best_ever_tracker (cada metrica rastreada independentemente).
+    try:
+        from analysis.best_ever_guard import update_best_ever
+        update_best_ever(cand_metrics, candidate_genome,
+                         checkpoint_sha="", reason=reason)
+    except Exception as _e:
+        print(f"[GUARD] WARN: update_best_ever falhou: {_e}")
 
 
 if __name__ == "__main__":
