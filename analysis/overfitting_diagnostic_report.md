@@ -1,18 +1,18 @@
 # Overfitting diagnostic report
 
-Generated: overfitting_diagnostic.py sobre 59 attempts (25 promoted) + 227 sweeps
+Generated: overfitting_diagnostic.py sobre 59 attempts (25 promoted) + 233 sweeps
 
 ## Executive summary
 
-- Incumbent atual: fit=10.71, WR=65.7%, alpha=-8.09%, trades=40
+- Incumbent atual: fit=22.21, WR=66.4%, alpha=-7.85%, trades=36
 - Historico: 59 attempts, 25 promoted (42.4%)
 
 ## 1. Wilson 95% CI para WR
 
-- **WR observado**: 0.6571 (65.71%), com n=40 trades
-- **Wilson 95% IC**: [0.5022, 0.7846] = [50.22%, 78.46%]
+- **WR observado**: 0.6642 (66.42%), com n=36 trades
+- **Wilson 95% IC**: [0.5008, 0.7959] = [50.08%, 79.59%]
 - **Veredito**: significativamente melhor que 50%
-- **Interpretacao**: com n=40 trades, o IC tem largura 28.24pp — amostra pequena, alta variancia
+- **Interpretacao**: com n=36 trades, o IC tem largura 29.50pp — amostra pequena, alta variancia
 
 ## 2. Multiple testing correction
 
@@ -34,9 +34,9 @@ Generated: overfitting_diagnostic.py sobre 59 attempts (25 promoted) + 227 sweep
 | idx | timestamp | fit | alpha_ann |
 |---:|---|---:|---:|
 | 0 | 2026-04-18T15:38:22 | -75.19 | -8.28% |
-| 75 | 2026-04-20T22:17:18 | 23.71 | -8.17% |
-| 151 | 2026-04-21T19:52:00 | 25.53 | -7.89% |
-| 226 | 2026-04-20T15:07:48 | 23.64 | -8.23% |
+| 77 | 2026-04-20T22:17:18 | 23.71 | -8.17% |
+| 155 | 2026-04-21T19:52:00 | 25.53 | -7.89% |
+| 232 | 2026-04-20T15:07:48 | 23.64 | -8.23% |
 
 ## 4. Gene drift detection (retrospective B4 preview)
 
@@ -55,14 +55,15 @@ Generated: overfitting_diagnostic.py sobre 59 attempts (25 promoted) + 227 sweep
 
 ## 5. Signal-to-noise do ganho por attempt
 
-- **Ganho medio de fit por sweep**: +0.4373
-- **Desvio padrao dos deltas**: 23.8302
+- **Ganho medio de fit por sweep**: +0.4260
+- **Desvio padrao dos deltas**: 24.4848
 - **Signal-to-noise ratio**: 0.02
 - **Interpretacao**: SNR < 1 sugere que os ganhos sao indistinguiveis de ruido — overfit provavel
 
 ## Vereditos e recomendacoes
 
 - 🔴 Alpha negativo atual (subperforma buy-and-hold)
+- 🔴 Poucos trades por ticker (< 40, amostra fraca)
 - 🟡 Taxa de promocao alta (42%) sem correcao multiple testing
 - 🟡 Genes com drift (>=3 promos consecutivas)
 
