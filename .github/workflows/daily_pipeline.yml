@@ -47,9 +47,20 @@ jobs:
         # Suppress ga_run internal Telegram: send_telegram.py below tem caption
         # mais rico (WR breakdown + Premium/HQ subsets + top buys). Um unico
         # envio por dia.
+        # predict_daily.py ja chama step_refresh_close() internamente (PR #134)
+        # que corrige close/Date/entrada/alvo/stop/pivot do xlsx com yfinance live.
+        # Desde o root-fix em stock_etl.py (shift apenas em indicadores, nao em
+        # OHLCV base), o refresh e redundante mas fica como safety net.
         env:
           GA_DISABLE_TELEGRAM_SEND: "1"
         run: python -u predict_daily.py
+
+      - name: Safety net — refresh_close standalone (garante close correto)
+        # Seguranca dupla: roda refresh_close explicitamente mesmo que
+        # predict_daily.py ja tenha rodado. Se nao houver nada para atualizar
+        # (root fix ja fez), sai rapido e nao muda o xlsx.
+        if: success()
+        run: python -u refresh_close.py summary_latest.xlsx || echo "refresh_close non-fatal skip"
 
       - name: Send Telegram (enhanced caption, dedup-guarded)
         if: success()

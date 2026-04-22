@@ -770,7 +770,23 @@ def run_etl():
         feats['sma200_slope_20d'] = to_float32_safe((sma200 - sma200.shift(20)) / sma200.shift(20).replace(0, np.nan))
 
         if shift_features > 0:
-            feats = feats.shift(shift_features)
+            # ROOT FIX: shift APENAS colunas derivadas (indicadores tecnicos),
+            # NAO as colunas OHLCV base. OHLCV base deve ficar no Date=T real
+            # para que downstream (ga_run, xlsx Apply sheet) reporte o close
+            # correto da barra. Shiftar OHLCV causava o bug historico de close
+            # stale no Telegram/xlsx que exigia refresh_close.py como patch.
+            #
+            # Rationale: os indicadores shiftados garantem que a GA treine com
+            # dados conhecidos ate o final de T-1 (evita leakage). Mas OHLCV
+            # base sao fatos historicos da barra T, nao features preditivas —
+            # sao a referencia temporal. Nao devem ser shiftados.
+            BASE_OHLCV_COLS = {
+                "Open", "High", "Low", "Close", "Adj Close", "Volume",
+                "open", "high", "low", "close", "adj close", "volume",
+            }
+            non_base = [c for c in feats.columns if c not in BASE_OHLCV_COLS]
+            if non_base:
+                feats[non_base] = feats[non_base].shift(shift_features)
 
         # >>> FIX: garantir que colunas discretas não tenham NaN
         # cross_ agora são float contínuos, só miner_ precisa int8

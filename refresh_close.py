@@ -213,6 +213,10 @@ def refresh(xlsx_path: str = DEFAULT_XLSX) -> dict:
     i_rec_pre = _opt("recomendacao_pre_guide")
     i_ent = _opt("entrada")
     i_piv = _opt("pivot")
+    i_stop = _opt("stop")
+    i_alvo = _opt("alvo")
+    i_pot = _opt("potencial_pct")
+    i_atr = _opt("atr")
 
     tickers_by_row: list[tuple[int, str]] = []
     unique_tickers: list[str] = []
@@ -268,10 +272,64 @@ def refresh(xlsx_path: str = DEFAULT_XLSX) -> dict:
             raw_sig = str(ws.cell(row=r, column=i_sig).value or "")
         is_buy = (raw_sig.strip().lower() == "buy")
 
-        entrada = pivot = None
-        if is_buy and i_ent > 0 and i_piv > 0:
-            entrada = _coerce(ws.cell(row=r, column=i_ent).value)
-            pivot = _coerce(ws.cell(row=r, column=i_piv).value)
+        entrada = pivot = stop_val = alvo_val = atr_val = None
+        if is_buy:
+            if i_ent > 0:
+                entrada = _coerce(ws.cell(row=r, column=i_ent).value)
+            if i_piv > 0:
+                pivot = _coerce(ws.cell(row=r, column=i_piv).value)
+            if i_stop > 0:
+                stop_val = _coerce(ws.cell(row=r, column=i_stop).value)
+            if i_alvo > 0:
+                alvo_val = _coerce(ws.cell(row=r, column=i_alvo).value)
+            if i_atr > 0:
+                atr_val = _coerce(ws.cell(row=r, column=i_atr).value)
+
+            # Re-ancora entrada/stop/alvo no close fresco preservando os RATIOS
+            # originais (proporcoes relativas). Isso evita inconsistencia tipo
+            # "close=35.00 mas entrada=32.80" que o usuario via antes.
+            #
+            # Preserva ATR de stop, ratio de takeprofit vs entrada, etc.
+            # O sinal (buy/hold/sell) foi decidido pela GA usando score[T]
+            # que ja nao muda; so re-escalamos os levels para fazer sentido
+            # com o close atualizado que o usuario vai ver.
+            old_close_for_ratio = None
+            # Tenta extrair o close antigo da string "Fechou @X.XX" em recomendacao
+            if i_rec > 0:
+                old_rec = ws.cell(row=r, column=i_rec).value
+                if old_rec:
+                    m = _FECHOU_RE.search(str(old_rec))
+                    if m:
+                        try:
+                            old_close_for_ratio = float(
+                                m.group(0).split("@")[1].strip().replace(",", ".")
+                            )
+                        except Exception:
+                            pass
+
+            if (old_close_for_ratio is not None
+                and old_close_for_ratio > 0
+                and new_close > 0):
+                ratio = new_close / old_close_for_ratio
+                # So re-escala se a mudanca e >0.3% (evita noise); senao
+                # mantem os valores originais (GA-computados estao coerentes).
+                if abs(ratio - 1.0) > 0.003:
+                    if entrada is not None and i_ent > 0:
+                        new_entrada = round(entrada * ratio, 4)
+                        ws.cell(row=r, column=i_ent, value=new_entrada)
+                        entrada = new_entrada
+                    if pivot is not None and i_piv > 0:
+                        new_pivot = round(pivot * ratio, 4)
+                        ws.cell(row=r, column=i_piv, value=new_pivot)
+                        pivot = new_pivot
+                    if stop_val is not None and i_stop > 0:
+                        new_stop = round(stop_val * ratio, 4)
+                        ws.cell(row=r, column=i_stop, value=new_stop)
+                    if alvo_val is not None and i_alvo > 0:
+                        new_alvo = round(alvo_val * ratio, 4)
+                        ws.cell(row=r, column=i_alvo, value=new_alvo)
+                    # potencial_pct = (alvo - entrada) / entrada; como ratio cancela,
+                    # mantem igual. Nao precisa re-escrever.
 
         for col_idx in (i_rec, i_rec_pre):
             if col_idx <= 0:
