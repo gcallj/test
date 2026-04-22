@@ -27,6 +27,10 @@ jobs:
       GA_RUN_MODE: "train"
       GA_FAST_MODE: "false"
       GA_EVAL_WORKERS: "2"
+      # Retrain NAO envia Telegram — so daily_pipeline.yml envia 1 msg/dia
+      # com caption rico via send_telegram.py. Evita parallel sends com
+      # formatos diferentes (ga_run internal vs send_telegram.py).
+      GA_DISABLE_TELEGRAM_SEND: "1"
 
     steps:
       - name: Checkout

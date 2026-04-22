@@ -5088,25 +5088,35 @@ def run():
         except Exception:
             caption = f"Trading Signals B3 - fitness={global_fit:.2f}"
 
-        # Dedup guard: evita enviar planilha identica (mesmo genome, mesma data,
-        # mesmo fit) duas vezes. Override via GA_FORCE_TELEGRAM_SEND=1.
-        _telegram_record = None
-        try:
-            from analysis.telegram_dedup import (
-                should_send_telegram as _dedup_check,
-                record_telegram_sent as _dedup_record,
-            )
-            _telegram_record = _dedup_record
-            _should, _reason = _dedup_check(xlsx_path=out_xlsx)
-            if not _should:
-                print(f"[TELEGRAM] SKIP (dedup): {_reason}")
-                _send_now = False
-            else:
-                print(f"[TELEGRAM] dedup OK: {_reason}")
+        # CRITICAL GUARD: respeita GA_DISABLE_TELEGRAM_SEND.
+        # Evita que build_store/sweep_matrix/retrain enviem Telegram em paralelo
+        # (so daily_pipeline.yml + send_telegram.py devem enviar — formato rico).
+        _disable_env = str(os.environ.get("GA_DISABLE_TELEGRAM_SEND", "")).strip().lower()
+        if _disable_env not in ("", "0", "false", "no", "off"):
+            print(f"[TELEGRAM] SKIP — GA_DISABLE_TELEGRAM_SEND={_disable_env!r} "
+                  f"(ga_run internal send desabilitado; use send_telegram.py).")
+            _send_now = False
+            _telegram_record = None
+        else:
+            # Dedup guard: evita enviar planilha identica (mesmo genome, mesma data,
+            # mesmo fit) duas vezes. Override via GA_FORCE_TELEGRAM_SEND=1.
+            _telegram_record = None
+            try:
+                from analysis.telegram_dedup import (
+                    should_send_telegram as _dedup_check,
+                    record_telegram_sent as _dedup_record,
+                )
+                _telegram_record = _dedup_record
+                _should, _reason = _dedup_check(xlsx_path=out_xlsx)
+                if not _should:
+                    print(f"[TELEGRAM] SKIP (dedup): {_reason}")
+                    _send_now = False
+                else:
+                    print(f"[TELEGRAM] dedup OK: {_reason}")
+                    _send_now = True
+            except Exception as _e:
+                print(f"[TELEGRAM] WARN: dedup guard falhou: {_e} — enviando sem guard")
                 _send_now = True
-        except Exception as _e:
-            print(f"[TELEGRAM] WARN: dedup guard falhou: {_e} — enviando sem guard")
-            _send_now = True
 
         if _send_now:
             print(f"[TELEGRAM] Sending {out_xlsx} ({os.path.getsize(out_xlsx)} bytes)...")

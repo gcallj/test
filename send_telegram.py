@@ -334,10 +334,32 @@ if os.path.exists(_guide_json):
     except Exception as _e:
         print(f"[WARN] guide caption build failed: {_e}")
 
-# Optional prefix for identification (ex: "Pos merge", "Dev run", "Backfill").
-# Set via env var GA_TELEGRAM_PREFIX. Appears as first line da caption.
+# Auto-generated VERSION_TAG + optional user prefix.
+# VERSION_TAG marca qual codigo/configuracao enviou este arquivo — permite
+# usuario distinguir planilhas mesmo quando multiplas foram enviadas.
+# Formato: [v7 gates | fit=X.XX | WR=YY% | a_ann=-Z.Z%]
+# v7 = versao com gates R1/S1 + entry_aggressiveness funcionais (pos root-fix).
+try:
+    # Le direto do checkpoint atual (source of truth)
+    _ck = json.load(open("global_ga_checkpoint.json", "r", encoding="utf-8"))
+    _ck_fit = float(_ck.get("fitness", 0.0))
+    _ck_metrics = _ck.get("metrics_snapshot", {}).get("candidate", {})
+    _ck_wr = float(_ck_metrics.get("wr_med_all", 0.0) or 0.0) * 100
+    _ck_alpha = float(_ck_metrics.get("mean_alpha_ann", 0.0) or 0.0) * 100
+    # Gene v7 ativo? (indice 31 e 32)
+    _genome = _ck.get("genome", [])
+    _v7_on = len(_genome) >= 33 and (_genome[31] > 1e-9 or _genome[32] > 1e-9)
+    _version_tag = (
+        f"[v7 gates={'ON' if _v7_on else 'OFF'} | "
+        f"fit={_ck_fit:.2f} | WR={_ck_wr:.1f}% | a={_ck_alpha:+.1f}%]"
+    )
+except Exception:
+    _version_tag = "[v?]"
+
+# Optional user prefix (ex: "Pos merge", "Best model", "Backfill").
+# Set via env var GA_TELEGRAM_PREFIX.
 _prefix = os.environ.get("GA_TELEGRAM_PREFIX", "").strip()
-_prefix_line = f"[{_prefix}]\n" if _prefix else ""
+_prefix_line = (f"[{_prefix}] " if _prefix else "") + _version_tag + "\n"
 
 caption = (
     f"{_prefix_line}"
