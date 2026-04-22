@@ -4,6 +4,16 @@ on:
   schedule:
     - cron: '30 21 * * *'    # 21:30 UTC = 18:30 BRT (TODOS os dias, incl. fins de semana)
   workflow_dispatch:           # permite rodar manualmente pelo GitHub
+    inputs:
+      prefix:
+        description: 'Tag de identificacao (aparece antes do VERSION_TAG automatico na caption)'
+        default: ''
+        type: string
+      force_send:
+        description: 'Ignorar dedup guard (enviar mesmo se duplicata)'
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
 
 jobs:
   pipeline:
@@ -66,6 +76,12 @@ jobs:
         if: success()
         # Dedup guard (.telegram_last_sent.json) evita duplicata se o cron
         # rodar duas vezes no mesmo dia ou se o modelo nao melhorou.
+        # Inputs workflow_dispatch:
+        #   prefix -> GA_TELEGRAM_PREFIX (vira "[prefix] ..." na caption)
+        #   force_send=true -> GA_FORCE_TELEGRAM_SEND=1 (bypassa dedup)
+        env:
+          GA_TELEGRAM_PREFIX: ${{ github.event.inputs.prefix }}
+          GA_FORCE_TELEGRAM_SEND: ${{ github.event.inputs.force_send == 'true' && '1' || '' }}
         run: python -u send_telegram.py
 
       - name: Verify outputs
