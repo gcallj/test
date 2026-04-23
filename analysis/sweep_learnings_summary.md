@@ -1,6 +1,6 @@
 # Sweep Learnings Summary
 
-_Generated: 2026-04-23T04:34:25+00:00_
+_Generated: 2026-04-23T10:46:48+00:00_
 
 Aggregates all `local_fullmetric_sweep_result*.json` files plus the
 continuous-improvement state. Use this file to plan the next cycle.
@@ -8,9 +8,9 @@ continuous-improvement state. Use this file to plan the next cycle.
 ## Current snapshot
 
 - Checkpoint fitness: `26.459605239382256`
-- Total sweeps seen: **257**
-- Total promotions: **108** (including 1 from codex log)
-- Promotion rate: **38.4%** (over 281 total attempts)
+- Total sweeps seen: **263**
+- Total promotions: **111** (including 1 from codex log)
+- Promotion rate: **38.7%** (over 287 total attempts)
 - Continuous cycles run: 34
 - Continuous promotions: 14
 - Codex attempts synced: **24** (11 promoted) from `codex_attempts_source.md`
@@ -131,6 +131,9 @@ categoria mais antiga: **D_entry_filter** (ultima vez: 2026-04-20T10:29:24+00:00
 | 2026-04-23 | local | `local_fullmetric_sweep_continuous_C_timing_20260423_040003.json` | `consecutive_loss_cooldown 8->9` | fit=20.013 WR=66.7% alpha=-8.19% MDD=11.9% |
 | 2026-04-23 | local | `local_fullmetric_sweep_continuous_D_entry_filter_20260423_040022.json` | `score_percentile_trigger 0.55->0.5` | fit=19.510 WR=66.7% alpha=-8.18% MDD=12.0% |
 | 2026-04-23 | local | `local_fullmetric_sweep_continuous_E_regime_vol_20260423_040040.json` | `momentum_confirm_days 4->5` | fit=19.629 WR=66.7% alpha=-8.14% MDD=11.7% |
+| 2026-04-23 | local | `local_fullmetric_sweep_continuous_B_take_profit_20260423_101031.json` | `partial_take_level 1.0->1.25` | fit=18.629 WR=66.7% alpha=-8.13% MDD=12.2% |
+| 2026-04-23 | local | `local_fullmetric_sweep_continuous_E_regime_vol_20260423_101039.json` | `momentum_confirm_days 4->5` | fit=19.111 WR=66.9% alpha=-8.06% MDD=11.7% |
+| 2026-04-23 | local | `local_fullmetric_sweep_continuous_D_entry_filter_20260423_101049.json` | `score_percentile_trigger 0.55->0.5` | fit=19.130 WR=66.7% alpha=-8.09% MDD=12.2% |
 
 ## Graveyard (genes que falharam multiplas vezes)
 
@@ -139,19 +142,19 @@ Genes tentados >= 2 vezes sem nenhuma promocao. Considere SKIP no proximo ciclo.
 
 | Gene | Attempts | Promotions | (codex) Attempts | (codex) Promotions |
 |---|---:|---:|---:|---:|
-| `reward_risk_ratio` | 45 | 0 | 0 | 0 |
-| `score_strength_scaling` | 43 | 0 | 0 | 0 |
-| `vote_threshold_long` | 43 | 0 | 0 | 0 |
-| `stop_atr_mult` | 42 | 0 | 0 | 0 |
-| `min_signal_strength` | 42 | 0 | 0 | 0 |
-| `time_stop_bars` | 41 | 0 | 0 | 0 |
-| `volume_confirm_mode` | 41 | 0 | 1 | 0 |
-| `entry_confirmation_days` | 41 | 0 | 0 | 0 |
-| `ma_filter_period` | 41 | 0 | 1 | 0 |
-| `stop_tighten_after_bars` | 40 | 0 | 0 | 0 |
-| `vote_threshold_short` | 40 | 0 | 1 | 0 |
-| `z_threshold` | 39 | 0 | 0 | 0 |
-| `entry_aggressiveness` | 22 | 0 | 0 | 0 |
+| `reward_risk_ratio` | 46 | 0 | 0 | 0 |
+| `score_strength_scaling` | 44 | 0 | 0 | 0 |
+| `vote_threshold_long` | 44 | 0 | 0 | 0 |
+| `stop_atr_mult` | 43 | 0 | 0 | 0 |
+| `min_signal_strength` | 43 | 0 | 0 | 0 |
+| `time_stop_bars` | 42 | 0 | 0 | 0 |
+| `volume_confirm_mode` | 42 | 0 | 1 | 0 |
+| `entry_confirmation_days` | 42 | 0 | 0 | 0 |
+| `ma_filter_period` | 42 | 0 | 1 | 0 |
+| `stop_tighten_after_bars` | 41 | 0 | 0 | 0 |
+| `vote_threshold_short` | 41 | 0 | 1 | 0 |
+| `z_threshold` | 40 | 0 | 0 | 0 |
+| `entry_aggressiveness` | 23 | 0 | 0 | 0 |
 
 ## Hot zones (genes que ja promoveram)
 
@@ -159,26 +162,26 @@ Genes onde alguma combinacao funcionou. Vale revisitar com novos vizinhos.
 
 | Gene | Promotions | Attempts | Hit rate | (codex) Promotions |
 |---|---:|---:|---:|---:|
-| `consecutive_loss_cooldown` | 19 | 52 | 37% | 1 |
-| `score_percentile_trigger` | 16 | 45 | 36% | 0 |
-| `momentum_confirm_days` | 15 | 46 | 33% | 0 |
-| `signal_ema_span` | 7 | 44 | 16% | 0 |
-| `max_loss_per_trade_pct` | 6 | 44 | 14% | 0 |
-| `partial_take_level` | 6 | 52 | 12% | 1 |
-| `entry_score_threshold` | 6 | 54 | 11% | 0 |
-| `regime_threshold` | 6 | 61 | 10% | 1 |
-| `equity_drawdown_stop_pct` | 5 | 41 | 12% | 0 |
-| `ma_filter_mode` | 5 | 51 | 10% | 0 |
-| `partial_take_pct` | 4 | 45 | 9% | 0 |
-| `volatility_filter_percentile` | 3 | 51 | 6% | 0 |
-| `support_broken_gate` | 2 | 20 | 10% | 0 |
-| `entry_discount_atr_frac` | 2 | 40 | 5% | 0 |
-| `trailing_stop_mode` | 2 | 42 | 5% | 0 |
-| `partial_take_pct_2` | 2 | 44 | 5% | 0 |
-| `stop_tighten_factor` | 2 | 47 | 4% | 0 |
-| `partial_take_level_2` | 2 | 47 | 4% | 0 |
-| `resistance_overext_gate` | 1 | 20 | 5% | 0 |
-| `vol_regime_mode` | 1 | 43 | 2% | 0 |
+| `consecutive_loss_cooldown` | 19 | 53 | 36% | 1 |
+| `score_percentile_trigger` | 17 | 46 | 37% | 0 |
+| `momentum_confirm_days` | 16 | 47 | 34% | 0 |
+| `signal_ema_span` | 7 | 45 | 16% | 0 |
+| `partial_take_level` | 7 | 53 | 13% | 1 |
+| `max_loss_per_trade_pct` | 6 | 45 | 13% | 0 |
+| `entry_score_threshold` | 6 | 55 | 11% | 0 |
+| `regime_threshold` | 6 | 62 | 10% | 1 |
+| `equity_drawdown_stop_pct` | 5 | 42 | 12% | 0 |
+| `ma_filter_mode` | 5 | 52 | 10% | 0 |
+| `partial_take_pct` | 4 | 46 | 9% | 0 |
+| `volatility_filter_percentile` | 3 | 52 | 6% | 0 |
+| `support_broken_gate` | 2 | 21 | 10% | 0 |
+| `entry_discount_atr_frac` | 2 | 41 | 5% | 0 |
+| `trailing_stop_mode` | 2 | 43 | 5% | 0 |
+| `partial_take_pct_2` | 2 | 45 | 4% | 0 |
+| `stop_tighten_factor` | 2 | 48 | 4% | 0 |
+| `partial_take_level_2` | 2 | 48 | 4% | 0 |
+| `resistance_overext_gate` | 1 | 21 | 5% | 0 |
+| `vol_regime_mode` | 1 | 44 | 2% | 0 |
 
 ## Category rotation status
 
@@ -193,7 +196,7 @@ Genes onde alguma combinacao funcionou. Vale revisitar com novos vizinhos.
 
 ## Codex sync history (latest attempts)
 
-Parsed `codex_attempts_source.md` at 2026-04-23T04:34:25+00:00. Total attempts: **24**, promoted: **11**. Updates via `python analysis/codex_attempts_sync.py` at the start of every continuous cycle (auto) or on demand.
+Parsed `codex_attempts_source.md` at 2026-04-23T10:46:48+00:00. Total attempts: **24**, promoted: **11**. Updates via `python analysis/codex_attempts_sync.py` at the start of every continuous cycle (auto) or on demand.
 
 | Attempt | Timestamp | Promoted | Move(s) | Learning (snippet) |
 |---|---|:-:|---|---|
