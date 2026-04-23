@@ -3256,19 +3256,35 @@ def run():
     if _leaked:
         print(f"[WARN] Blocked columns found in features, removing: {sorted(_leaked)}")
         base_feat_cols = [c for c in base_feat_cols if c not in _leaked]
-    # Cap features to prevent search space explosion (>100 features degrades GA convergence)
-    MAX_CAUSAL_FEATURES = 80
-    if len(base_feat_cols) > MAX_CAUSAL_FEATURES:
+    # Cap features to prevent search space explosion (>120 features degrades GA convergence)
+    # v8: elevado de 80 -> 120 para acomodar novas features (EWZ, USDBRL, sector, mean
+    # reversion, vol regime, candlestick, microstructure). Features v8_* tem prioridade
+    # absoluta (whitelist) — nao sao cortadas mesmo se std baixa.
+    MAX_CAUSAL_FEATURES = 120
+    V8_PREFIX = "v8_"
+    V8_ALLOWED_PREFIXES = (V8_PREFIX, "ewz_", "usdbrl_", "eem_", "alpha_ewz_",
+                            "corr_ewz_", "corr_usdbrl_", "sector_", "rel_strength_sector_",
+                            "corr_sector_", "own_sector_rank_")
+    _v8_cols = [c for c in base_feat_cols
+                if any(c.startswith(pfx) or c == pfx.rstrip("_") for pfx in V8_ALLOWED_PREFIXES)]
+    _non_v8_cols = [c for c in base_feat_cols if c not in _v8_cols]
+    if _v8_cols:
+        print(f"[FEATS] v8 protected: {len(_v8_cols)} features (whitelist, nao sofrem cap)")
+
+    if len(_non_v8_cols) > MAX_CAUSAL_FEATURES - len(_v8_cols):
+        # Cap aplica apenas aos non-v8; v8 sempre preservados.
         # Pre-filter: keep only features with sufficient variance across tickers
+        _budget = MAX_CAUSAL_FEATURES - len(_v8_cols)
         _var_scores = []
-        for c in base_feat_cols:
+        for c in _non_v8_cols:
             _v = pd.to_numeric(df[c], errors="coerce")
             _std = float(_v.std(skipna=True)) if _v.notna().mean() > 0.3 else 0.0
             _var_scores.append((c, _std))
         _var_scores.sort(key=lambda x: x[1], reverse=True)
-        base_feat_cols = [c for c, _ in _var_scores[:MAX_CAUSAL_FEATURES]]
-        print(f"[FEATS] capped from {len(_var_scores)} to {MAX_CAUSAL_FEATURES} by variance")
-    print(f"[FEATS] causal candidates: {len(base_feat_cols)} (blocked {len(_all_blocked & set(df.columns))} model/snapshot cols)")
+        _non_v8_cols = [c for c, _ in _var_scores[:_budget]]
+        print(f"[FEATS] non-v8 capped from {len(_var_scores)} to {_budget} by variance")
+    base_feat_cols = _v8_cols + _non_v8_cols
+    print(f"[FEATS] causal candidates: {len(base_feat_cols)} (blocked {len(_all_blocked & set(df.columns))} model/snapshot cols) [v8={len(_v8_cols)} non-v8={len(_non_v8_cols)}]")
 
     tickers = df[TICKER_COL].dropna().unique().tolist()
     total_tickers = len(tickers)
