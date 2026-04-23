@@ -179,6 +179,21 @@ def run_etl():
 
         # Suécia (relevante pra você)
         "^OMXS30",
+
+        # v8 feature engineering: ETFs-proxy para regime/flow
+        "EWZ",      # iShares MSCI Brazil — proxy foreign flow B3
+        "EEM",      # MSCI Emerging Markets
+        # Sector ETFs (Tier 2E: sector rotation)
+        "XLE",      # Energy (proxy oil/Petrobras/Vale)
+        "XLF",      # Financial (proxy banks like Itau/Bradesco)
+        "XLI",      # Industrial (proxy WEG/Embraer)
+        "XLB",      # Materials (proxy mining/Vale)
+        "XLY",      # Consumer Discretionary
+        "XLP",      # Consumer Staples
+        "XLU",      # Utilities (proxy Eletrobras/CEMIG)
+        "XLK",      # Technology
+        "XLV",      # Healthcare
+        "XLRE",     # Real Estate
     ]
 
     # FX + commodities + cripto (mais “robusto” no Yahoo que XAUEUR/XAGEUR)
@@ -1554,6 +1569,117 @@ def run_etl():
         _vix_pctl_252 = None
         print("[cross-features] WARNING: VIX not found, skipping VIX percentile")
 
+    # ============================================================
+    # v8 FEATURE ENGINEERING — Tier 1A: Foreign flow + USDBRL
+    # ============================================================
+    def _safe_extract_close(sym):
+        """Extract Close series from `data` MultiIndex, returning None if missing."""
+        try:
+            _oh = data.xs(sym, level=1, axis=1)
+            if "Close" in _oh.columns and _oh["Close"].notna().sum() > 100:
+                return _oh["Close"]
+        except (KeyError, ValueError):
+            pass
+        return None
+
+    _ewz_close = _safe_extract_close("EWZ")
+    _ewz_ret = _ewz_close.pct_change() if _ewz_close is not None else None
+    if _ewz_ret is not None:
+        print(f"[v8] EWZ foreign flow proxy: {_ewz_ret.notna().sum()} returns")
+    else:
+        print("[v8] WARNING: EWZ not found")
+
+    _usdbrl_close = _safe_extract_close("BRL=X")
+    if _usdbrl_close is not None:
+        _usdbrl_ret = _usdbrl_close.pct_change()
+        _usdbrl_pctl_252 = _usdbrl_close.rolling(252, min_periods=60).rank(pct=True)
+        print(f"[v8] USDBRL reference: {_usdbrl_close.notna().sum()} values")
+    else:
+        _usdbrl_ret = None
+        _usdbrl_pctl_252 = None
+        print("[v8] WARNING: USDBRL not found")
+
+    _eem_close = _safe_extract_close("EEM")
+    _eem_ret = _eem_close.pct_change() if _eem_close is not None else None
+
+    # Sector ETF returns (Tier 2E sector rotation)
+    _sector_rets = {}
+    for _sec in ("XLE", "XLF", "XLI", "XLB", "XLY", "XLP", "XLU", "XLK", "XLV", "XLRE"):
+        _sc = _safe_extract_close(_sec)
+        if _sc is not None:
+            _sector_rets[_sec] = _sc.pct_change()
+    print(f"[v8] Sector ETFs loaded: {len(_sector_rets)}")
+
+    # Ticker -> sector ETF heuristic mapping (B3 tickers to global sector ETFs).
+    # This is approximate -- B3 names map to global sectors they most resemble.
+    _SECTOR_MAP = {
+        # Energia (oil & gas)
+        "PETR3.SA": "XLE", "PETR4.SA": "XLE", "PRIO3.SA": "XLE",
+        "RECV3.SA": "XLE", "RRRP3.SA": "XLE",
+        # Materiais (mineracao + siderurgia)
+        "VALE3.SA": "XLB", "CSNA3.SA": "XLB", "GGBR4.SA": "XLB",
+        "GOAU4.SA": "XLB", "USIM5.SA": "XLB", "BRAP4.SA": "XLB",
+        # Financeiro
+        "ITUB4.SA": "XLF", "BBDC4.SA": "XLF", "BBAS3.SA": "XLF",
+        "SANB11.SA": "XLF", "BPAC11.SA": "XLF", "ITSA4.SA": "XLF",
+        "B3SA3.SA": "XLF",
+        # Industrial
+        "WEGE3.SA": "XLI", "EMBR3.SA": "XLI", "RAIL3.SA": "XLI",
+        "CCRO3.SA": "XLI", "MYPK3.SA": "XLI",
+        # Utilities
+        "ELET3.SA": "XLU", "ELET6.SA": "XLU", "CMIG4.SA": "XLU",
+        "EGIE3.SA": "XLU", "ENGI11.SA": "XLU", "TAEE11.SA": "XLU",
+        "CPFE3.SA": "XLU", "SBSP3.SA": "XLU",
+        # Consumer Discretionary
+        "LREN3.SA": "XLY", "MGLU3.SA": "XLY", "AMER3.SA": "XLY",
+        "VIIA3.SA": "XLY", "LOCA3.SA": "XLY", "PCAR3.SA": "XLY",
+        # Consumer Staples
+        "ABEV3.SA": "XLP", "JBSS3.SA": "XLP", "BRFS3.SA": "XLP",
+        "MRFG3.SA": "XLP", "NTCO3.SA": "XLP",
+        # Healthcare
+        "HAPV3.SA": "XLV", "FLRY3.SA": "XLV", "RDOR3.SA": "XLV",
+        "QUAL3.SA": "XLV",
+        # Tech
+        "TOTS3.SA": "XLK", "LWSA3.SA": "XLK",
+        # Real Estate
+        "CYRE3.SA": "XLRE", "MRVE3.SA": "XLRE", "EZTC3.SA": "XLRE",
+    }
+
+    # ============================================================
+    # v8 Tier 1B — Enhanced Market Breadth (new highs/lows, AD line)
+    # ============================================================
+    _market_breadth_v8 = None  # new_highs_new_lows_ratio + AD line momentum
+    if len(_sa_tickers) >= 10:
+        try:
+            _closes_list = []
+            for _t in _sa_tickers[:80]:
+                _tc = _safe_extract_close(_t)
+                if _tc is not None and _tc.notna().sum() > 300:
+                    _closes_list.append(_tc)
+            if len(_closes_list) >= 10:
+                _breadth_df = pd.concat(_closes_list, axis=1)
+                # New highs (60d) - new lows (60d) ratio
+                _rolling_max_60 = _breadth_df.rolling(60, min_periods=20).max()
+                _rolling_min_60 = _breadth_df.rolling(60, min_periods=20).min()
+                _is_new_high = (_breadth_df >= _rolling_max_60 * 0.999).sum(axis=1)
+                _is_new_low = (_breadth_df <= _rolling_min_60 * 1.001).sum(axis=1)
+                _nh_nl_ratio = (_is_new_high - _is_new_low) / _breadth_df.notna().sum(axis=1)
+                # Advance-decline line (cumsum of ups - downs, then momentum)
+                _daily_rets = _breadth_df.pct_change()
+                _advances = (_daily_rets > 0).sum(axis=1)
+                _declines = (_daily_rets < 0).sum(axis=1)
+                _ad_line = (_advances - _declines).cumsum()
+                # AD line momentum: slope over 20d normalized
+                _ad_mom = _ad_line.diff(20) / _breadth_df.notna().sum(axis=1).rolling(20).mean()
+                _market_breadth_v8 = pd.DataFrame({
+                    "new_highs_new_lows_ratio": _nh_nl_ratio,
+                    "ad_line_mom_20d": _ad_mom,
+                })
+                print(f"[v8] Enhanced breadth v8 computed: new_highs_new_lows + AD line mom")
+                del _breadth_df, _rolling_max_60, _rolling_min_60, _daily_rets, _ad_line
+        except Exception as _e:
+            print(f"[v8] Enhanced breadth failed: {_e}")
+
     # ── STRATEGY 3: Market regime features (cross-sectional) ──
     # These measure overall market conditions, shared across all tickers
     _sa_tickers = [t for t in valid_tickers if t.endswith('.SA') and not any(t.startswith(x) for x in ['^'])]
@@ -1585,7 +1711,10 @@ def run_etl():
             print(f"[cross-features] Market regime failed: {_e}")
 
     def compute_cross_ticker_features(tk, ohlcv, ibov_ret, vix_pctl, shift_features=1):
-        """Compute cross-ticker features: rolling beta, relative strength, VIX percentile."""
+        """Compute cross-ticker features: rolling beta, relative strength, VIX percentile.
+
+        v8 extension: foreign flow (EWZ/USDBRL), market breadth enhanced, sector rotation.
+        """
         close_col = 'Adj Close' if 'Adj Close' in ohlcv.columns else 'Close'
         tk_ret = ohlcv[close_col].pct_change()
         cross_feats = pd.DataFrame(index=ohlcv.index)
@@ -1620,11 +1749,235 @@ def run_etl():
         if _market_dispersion is not None:
             cross_feats['market_dispersion'] = _market_dispersion.reindex(ohlcv.index)
 
+        # ==================================================================
+        # v8 TIER 1A — Foreign flow proxies (USDBRL + EWZ)
+        # ==================================================================
+        if _usdbrl_ret is not None:
+            # USDBRL momentum: alta do dolar normalmente = saida de foreign capital = ruim p/ B3
+            _usdbrl_aligned = _usdbrl_ret.reindex(ohlcv.index)
+            cross_feats['usdbrl_ret_5d'] = _usdbrl_aligned.rolling(5).sum()
+            cross_feats['usdbrl_ret_20d'] = _usdbrl_aligned.rolling(20).sum()
+            if _usdbrl_pctl_252 is not None:
+                cross_feats['usdbrl_pctl_252'] = _usdbrl_pctl_252.reindex(ohlcv.index)
+            # Ticker vs USDBRL correlation (inverted for intuitiveness: negative = cambio alto = ticker cai)
+            _alig = pd.DataFrame({'tk': tk_ret, 'fx': _usdbrl_aligned}).dropna()
+            if len(_alig) > 60:
+                cross_feats['corr_usdbrl_60d'] = _alig['tk'].rolling(60, min_periods=30).corr(_alig['fx']).reindex(ohlcv.index)
+
+        if _ewz_ret is not None:
+            # EWZ como proxy foreign investor view on Brazil
+            _ewz_aligned = _ewz_ret.reindex(ohlcv.index)
+            cross_feats['ewz_ret_5d'] = _ewz_aligned.rolling(5).sum()
+            cross_feats['ewz_ret_20d'] = _ewz_aligned.rolling(20).sum()
+            # Ticker correlation with EWZ (high corr = moves with foreign flow)
+            _alig = pd.DataFrame({'tk': tk_ret, 'ewz': _ewz_aligned}).dropna()
+            if len(_alig) > 60:
+                cross_feats['corr_ewz_60d'] = _alig['tk'].rolling(60, min_periods=30).corr(_alig['ewz']).reindex(ohlcv.index)
+                # Alpha vs EWZ (idiosyncratic performance after adjusting for EWZ)
+                _ewz_ret20 = _ewz_aligned.rolling(20).sum().reindex(ohlcv.index)
+                cross_feats['alpha_ewz_20d'] = ohlcv[close_col].pct_change(20) - _ewz_ret20
+
+        if _eem_ret is not None:
+            _eem_aligned = _eem_ret.reindex(ohlcv.index)
+            cross_feats['eem_ret_20d'] = _eem_aligned.rolling(20).sum()
+
+        # ==================================================================
+        # v8 TIER 1B — Enhanced market breadth
+        # ==================================================================
+        if _market_breadth_v8 is not None:
+            for _mb_col in _market_breadth_v8.columns:
+                cross_feats[f'v8_{_mb_col}'] = _market_breadth_v8[_mb_col].reindex(ohlcv.index)
+
+        # ==================================================================
+        # v8 TIER 2E — Sector rotation features
+        # ==================================================================
+        _ticker_sector = _SECTOR_MAP.get(tk)
+        if _ticker_sector and _ticker_sector in _sector_rets:
+            _sec_ret = _sector_rets[_ticker_sector].reindex(ohlcv.index)
+            # Sector momentum (where IS this ticker's sector going?)
+            cross_feats['sector_ret_5d'] = _sec_ret.rolling(5).sum()
+            cross_feats['sector_ret_20d'] = _sec_ret.rolling(20).sum()
+            # Relative strength vs own sector (alpha idiossincratico)
+            cross_feats['rel_strength_sector_20d'] = (
+                ohlcv[close_col].pct_change(20) - _sec_ret.rolling(20).sum()
+            )
+            # Correlation com setor (se descolou = oportunidade ou risco)
+            _alig = pd.DataFrame({'tk': tk_ret, 'sec': _sec_ret}).dropna()
+            if len(_alig) > 60:
+                cross_feats['corr_sector_60d'] = _alig['tk'].rolling(60, min_periods=30).corr(_alig['sec']).reindex(ohlcv.index)
+
+        # Sector rotation leader: qual setor esta mais forte em 20d?
+        # Uma feature unica: rank do proprio setor entre 10 setores (0..1)
+        if _sector_rets and _ticker_sector in _sector_rets:
+            _sector_20d_rets = {}
+            for _sn, _sr in _sector_rets.items():
+                _sector_20d_rets[_sn] = _sr.reindex(ohlcv.index).rolling(20).sum()
+            _sec_rank_df = pd.DataFrame(_sector_20d_rets)
+            _own_rank = _sec_rank_df.rank(axis=1, pct=True)[_ticker_sector]
+            cross_feats['own_sector_rank_20d'] = _own_rank
+
         if shift_features > 0:
+            # v8 ROOT FIX: shift so nao-OHLCV (que aqui ja nao inclui OHLCV)
+            # Todas as colunas aqui sao derivadas, entao shift integral e OK.
             cross_feats = cross_feats.shift(shift_features)
 
         cross_feats = to_float32_safe(cross_feats)
         return cross_feats
+
+    # ============================================================
+    # v8 FEATURE ENGINEERING — Advanced per-ticker features
+    # Tier 1C (mean reversion) + Tier 2D (vol regime) +
+    # Tier 2F (candlestick continuous) + Tier 3H (microstructure)
+    # ============================================================
+    def compute_advanced_features_v8(ohlcv, shift_features=1):
+        """Per-ticker advanced features. Tier 1C + 2D + 2F + 3H."""
+        close_col = 'Adj Close' if 'Adj Close' in ohlcv.columns else 'Close'
+        c = pd.to_numeric(ohlcv[close_col], errors='coerce').astype(np.float64)
+        h = pd.to_numeric(ohlcv['High'], errors='coerce').astype(np.float64)
+        l = pd.to_numeric(ohlcv['Low'], errors='coerce').astype(np.float64)
+        o = pd.to_numeric(ohlcv['Open'], errors='coerce').astype(np.float64)
+        v = pd.to_numeric(ohlcv.get('Volume', pd.Series(0, index=ohlcv.index)),
+                          errors='coerce').astype(np.float64)
+        idx = ohlcv.index
+        af = pd.DataFrame(index=idx)
+
+        # ==================================================================
+        # TIER 1C — Mean reversion setups
+        # ==================================================================
+        # Distance to 52w high (negative = below high, 0 = at high)
+        _roll_52w_high = c.rolling(252, min_periods=60).max()
+        _roll_52w_low = c.rolling(252, min_periods=60).min()
+        af['v8_dist_52w_high_pct'] = ((c / _roll_52w_high.replace(0, np.nan)) - 1.0).clip(-0.80, 0.0)
+        af['v8_dist_52w_low_pct'] = ((c / _roll_52w_low.replace(0, np.nan)) - 1.0).clip(0.0, 3.0)
+
+        # Bollinger squeeze index: BB_width vs historical min (squeeze = breakout prox)
+        _ma20 = c.rolling(20, min_periods=10).mean()
+        _sd20 = c.rolling(20, min_periods=10).std()
+        _bb_upper = _ma20 + 2 * _sd20
+        _bb_lower = _ma20 - 2 * _sd20
+        _bb_width = (_bb_upper - _bb_lower) / _ma20.replace(0, np.nan)
+        _bb_width_min_100 = _bb_width.rolling(100, min_periods=30).min()
+        af['v8_bb_squeeze_idx'] = (_bb_width - _bb_width_min_100).clip(0.0, 0.30)
+        af['v8_bb_width'] = _bb_width.clip(0.0, 0.30)
+        # Position within bollinger band (0=at lower, 1=at upper)
+        _bb_range = (_bb_upper - _bb_lower).replace(0, np.nan)
+        af['v8_bb_position'] = ((c - _bb_lower) / _bb_range).clip(-0.20, 1.20)
+
+        # RSI divergence (preco new high mas RSI mais baixo -> bearish div; oposto bullish)
+        # Compute RSI(14) from scratch
+        _delta = c.diff()
+        _gain = _delta.clip(lower=0).rolling(14, min_periods=7).mean()
+        _loss = (-_delta.clip(upper=0)).rolling(14, min_periods=7).mean()
+        _rs = _gain / _loss.replace(0, np.nan)
+        _rsi = 100 - (100 / (1 + _rs))
+        # Bullish divergence: preco em new 20d low mas RSI nao em new 20d low
+        _price_min_20 = c.rolling(20, min_periods=10).min()
+        _rsi_min_20 = _rsi.rolling(20, min_periods=10).min()
+        _price_at_low = (c <= _price_min_20 * 1.005).astype(float)
+        _rsi_at_low = (_rsi <= _rsi_min_20 * 1.05).astype(float)
+        af['v8_rsi_bull_divergence'] = (_price_at_low * (1 - _rsi_at_low)).clip(0.0, 1.0)
+        # Bearish divergence: preco new high mas RSI nao
+        _price_max_20 = c.rolling(20, min_periods=10).max()
+        _rsi_max_20 = _rsi.rolling(20, min_periods=10).max()
+        _price_at_high = (c >= _price_max_20 * 0.995).astype(float)
+        _rsi_at_high = (_rsi >= _rsi_max_20 * 0.95).astype(float)
+        af['v8_rsi_bear_divergence'] = (_price_at_high * (1 - _rsi_at_high)).clip(0.0, 1.0)
+
+        # ==================================================================
+        # TIER 2D — Volatility regime transitions (GARCH-like)
+        # ==================================================================
+        _ret = c.pct_change()
+        _vol_20 = _ret.rolling(20, min_periods=10).std()
+        _vol_60 = _ret.rolling(60, min_periods=20).std()
+        _vol_ratio = (_vol_20 / _vol_60.replace(0, np.nan)).clip(0.3, 3.0)
+        # Vol expandindo: ratio > 1.2
+        af['v8_vol_expansion_ratio'] = _vol_ratio
+        af['v8_vol_expanding'] = (_vol_ratio > 1.2).astype(float)
+        af['v8_vol_contracting'] = (_vol_ratio < 0.8).astype(float)
+        # Vol regime: low / normal / high baseado em percentile 252d
+        _vol_pctl = _vol_20.rolling(252, min_periods=60).rank(pct=True)
+        af['v8_vol_regime_pctl'] = _vol_pctl
+        # Parkinson volatility (high-low range-based, low noise)
+        _parkinson = ((np.log(h / l.replace(0, np.nan))) ** 2).rolling(20, min_periods=10).mean()
+        _parkinson_pctl = _parkinson.rolling(252, min_periods=60).rank(pct=True)
+        af['v8_parkinson_vol_pctl'] = _parkinson_pctl
+
+        # ==================================================================
+        # TIER 2F — Candlestick patterns continuous
+        # ==================================================================
+        _body = (c - o).abs()
+        _range = (h - l).replace(0, np.nan)
+        _upper_shadow = h - pd.concat([c, o], axis=1).max(axis=1)
+        _lower_shadow = pd.concat([c, o], axis=1).min(axis=1) - l
+        _body_ratio = (_body / _range).clip(0.0, 1.0)
+        _upper_shadow_ratio = (_upper_shadow / _range).clip(0.0, 1.0)
+        _lower_shadow_ratio = (_lower_shadow / _range).clip(0.0, 1.0)
+
+        # Hammer strength: long lower shadow + small body + close>open (bullish)
+        # Conditions: lower_shadow >= 2*body AND body < 0.3*range
+        _is_hammer = ((_lower_shadow_ratio > 2 * _body_ratio) &
+                      (_body_ratio < 0.3) &
+                      (c > o)).astype(float)
+        af['v8_hammer_continuous'] = _is_hammer * (_lower_shadow_ratio - _body_ratio).clip(0.0, 1.0)
+
+        # Inverted hammer / shooting star
+        _is_shooting = ((_upper_shadow_ratio > 2 * _body_ratio) &
+                        (_body_ratio < 0.3) &
+                        (c < o)).astype(float)
+        af['v8_shooting_star_continuous'] = _is_shooting * (_upper_shadow_ratio - _body_ratio).clip(0.0, 1.0)
+
+        # Doji (very small body) — consolidation
+        _is_doji = (_body_ratio < 0.1).astype(float)
+        af['v8_doji_cluster_5d'] = _is_doji.rolling(5, min_periods=3).mean()
+
+        # Engulfing magnitude (body today > body yesterday, opposite direction)
+        _prev_body = _body.shift(1)
+        _prev_sign = np.sign(c.shift(1) - o.shift(1))
+        _curr_sign = np.sign(c - o)
+        _engulf_mag = ((_body / _prev_body.replace(0, np.nan)) - 1).clip(0.0, 5.0)
+        _is_bullish_engulf = ((_curr_sign > 0) & (_prev_sign < 0) & (_body > _prev_body)).astype(float)
+        _is_bearish_engulf = ((_curr_sign < 0) & (_prev_sign > 0) & (_body > _prev_body)).astype(float)
+        af['v8_bullish_engulfing'] = _is_bullish_engulf * _engulf_mag
+        af['v8_bearish_engulfing'] = _is_bearish_engulf * _engulf_mag
+
+        # ==================================================================
+        # TIER 3H — Microstructure liquidity
+        # ==================================================================
+        _dollar_vol = c * v
+        _dv_pctl = _dollar_vol.rolling(252, min_periods=60).rank(pct=True)
+        af['v8_dollar_volume_pctl_252'] = _dv_pctl
+        # Volume consistency: inverse coefficient of variation
+        _vol_mean_20 = v.rolling(20, min_periods=5).mean()
+        _vol_std_20 = v.rolling(20, min_periods=5).std()
+        _vol_cv_20 = _vol_std_20 / _vol_mean_20.replace(0, np.nan)
+        af['v8_volume_consistency_20d'] = (1.0 / (1.0 + _vol_cv_20)).clip(0.0, 1.0)
+        # Spread proxy (high-low range / close) — crude proxy para bid-ask spread
+        _spread_proxy = ((h - l) / c.replace(0, np.nan)).rolling(20, min_periods=5).mean()
+        af['v8_spread_proxy_20d'] = _spread_proxy.clip(0.0, 0.20)
+        # Volume surge frequency (>2sigma days in last 20d)
+        _z_vol = (v - _vol_mean_20) / _vol_std_20.replace(0, np.nan)
+        _surge_days = (_z_vol > 2.0).astype(float)
+        af['v8_vol_surge_freq_20d'] = _surge_days.rolling(20, min_periods=5).mean()
+
+        # ==================================================================
+        # TIER 3G — Earnings calendar proxies (best-effort, graceful fallback)
+        # ==================================================================
+        # yfinance calendar access is often flaky; put behind try/except, default 0.
+        # Implementacao minima: nao fazemos calendar scraping per-ticker (custo alto em ETL).
+        # Em vez disso, usamos proxy indireto: volatility spike frequency.
+        # Esses dias "anormais" sao geralmente proximos a earnings announcements.
+        _ret_vol_norm = _ret.abs() / _vol_20.replace(0, np.nan)
+        af['v8_abnormal_return_freq_20d'] = (_ret_vol_norm > 2.0).rolling(20, min_periods=5).mean()
+
+        # ==================================================================
+        # Shift (apenas indicadores, NAO OHLCV — que nao esta em af)
+        # ==================================================================
+        if shift_features > 0:
+            af = af.shift(shift_features)
+
+        af = to_float32_safe(af)
+        return af
+
 
     # ============================
     # Construção por ticker
@@ -1669,8 +2022,14 @@ def run_etl():
 
             fund = fundamentals_daily_for_ticker(tk, ohlcv.index, shift_features=SHIFT_FEATURES)
             cross = compute_cross_ticker_features(tk, ohlcv, _ibov_ret, _vix_pctl_252, shift_features=SHIFT_FEATURES)
+            # v8 advanced features: Tier 1C + 2D + 2F + 3H (per-ticker)
+            try:
+                adv_v8 = compute_advanced_features_v8(ohlcv, shift_features=SHIFT_FEATURES)
+            except Exception as _e:
+                print(f"[v8] advanced features falhou para {tk}: {_e}")
+                adv_v8 = pd.DataFrame(index=ohlcv.index)
 
-            X_tk = pd.concat([feats, pats, pats_wm, fund, cross], axis=1)
+            X_tk = pd.concat([feats, pats, pats_wm, fund, cross, adv_v8], axis=1)
             X_tk = fill_100pct(X_tk, allow_bfill=ALLOW_BFILL_EXOGENOUS)
             if X_tk.shape[1] == 0:
                 skip_reasons['empty_after_fill'] += 1
