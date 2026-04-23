@@ -105,6 +105,39 @@ jobs:
           python3 -c "import json; d=json.load(open('global_ga_checkpoint.json')); print(f'  fitness={d[\"fitness\"]:.4f}')"
           ls -lh summary_latest.xlsx apply_last_*d__H*.csv 2>/dev/null
 
+      - name: Overfitting stage (pristine holdout + bootstrap + sensitivity)
+        # Roda APOS o retrain mas ANTES de best_ever guard.
+        # Se detectar overfit critico, rejeita + restaura backup.
+        # --skip-sensitivity p/ nao dobrar tempo (sensitivity roda N genes*2 evals).
+        # --strict faz com que MARGINAL tambem bloqueie commit (conservador).
+        if: success()
+        continue-on-error: true
+        id: overfitting_stage
+        run: |
+          python3 -u analysis/overfitting_stage.py --holdout-days 90 --bootstrap 200 --skip-sensitivity
+          EXIT=$?
+          echo "overfitting_exit=$EXIT" >> $GITHUB_OUTPUT
+          if [ $EXIT -eq 2 ]; then
+            echo "::warning::Overfitting stage reportou OVERFIT — rollback e exit"
+            cp global_ga_checkpoint_pre_retrain.json.bak global_ga_checkpoint.json
+            echo "[overfitting] Main preservado em pre-retrain state"
+            exit 2
+          elif [ $EXIT -eq 1 ]; then
+            echo "::warning::Overfitting stage reportou MARGINAL — seguindo com warning"
+          fi
+          exit 0
+
+      - name: Upload overfitting report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: overfitting-report-${{ github.run_number }}
+          path: |
+            analysis/overfitting_stage_report.json
+            analysis/overfitting_stage_report.md
+          retention-days: 30
+          if-no-files-found: ignore
+
       - name: Check retrained vs best_ever guard (rollback se pior)
         if: success()
         # Impede retrain pior que best_ever de sobrescrever main.
