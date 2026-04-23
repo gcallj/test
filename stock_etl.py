@@ -1648,6 +1648,9 @@ def run_etl():
     # ============================================================
     # v8 Tier 1B — Enhanced Market Breadth (new highs/lows, AD line)
     # ============================================================
+    # _sa_tickers precisa ser definido aqui (v8) antes de usar — pre-existe logo
+    # abaixo mas fora de escopo no ponto v8.
+    _sa_tickers = [t for t in valid_tickers if t.endswith('.SA') and not any(t.startswith(x) for x in ['^'])]
     _market_breadth_v8 = None  # new_highs_new_lows_ratio + AD line momentum
     if len(_sa_tickers) >= 10:
         try:
@@ -1682,7 +1685,7 @@ def run_etl():
 
     # ── STRATEGY 3: Market regime features (cross-sectional) ──
     # These measure overall market conditions, shared across all tickers
-    _sa_tickers = [t for t in valid_tickers if t.endswith('.SA') and not any(t.startswith(x) for x in ['^'])]
+    # _sa_tickers ja foi definido acima no bloco v8
     _market_breadth = None
     _market_dispersion = None
     if len(_sa_tickers) >= 10:
