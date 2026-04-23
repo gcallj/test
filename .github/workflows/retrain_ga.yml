@@ -147,12 +147,16 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add global_ga_checkpoint.json apply_last_5d__H5.csv summary_latest.xlsx analysis/best_ever_tracker.json 2>/dev/null || true
           FITNESS=$(python3 -c "import json; print(f'{json.load(open(\"global_ga_checkpoint.json\"))[\"fitness\"]:.4f}')")
+          # BRANCH-AWARE push: dispatch em branch nao-main push de volta na mesma branch.
+          # Evita contaminar main com experimentos de feature engineering em branches
+          # dedicadas (ex: feature-engineering-v8).
+          BRANCH="${GITHUB_REF_NAME:-main}"
+          echo "::notice::Pushing retrain result to branch: $BRANCH"
           if ! git diff --cached --quiet; then
             git commit -m "Retrain GA staged: fitness=${FITNESS}"
-            # Retry loop para race com sweep_matrix / daily_pipeline
             for i in 1 2 3 4 5; do
-              if git pull --rebase origin main && git push origin main; then
-                echo "::notice::Push succeeded on attempt $i"
+              if git pull --rebase origin "$BRANCH" && git push origin "$BRANCH"; then
+                echo "::notice::Push succeeded on attempt $i to $BRANCH"
                 exit 0
               fi
               sleep $(( (RANDOM % 15) + 5 ))
