@@ -19,7 +19,9 @@ on:
 jobs:
   retrain:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    # Budget v4: stages=8 pop=80 windows=10 pode levar 10-12h.
+    # Timeout 720 min (12h) — GitHub public repos permitem ate 72h/job.
+    timeout-minutes: 720
 
     permissions:
       contents: write
@@ -107,20 +109,21 @@ jobs:
 
       - name: Overfitting stage (pristine holdout + bootstrap + sensitivity)
         # Roda APOS o retrain mas ANTES de best_ever guard.
-        # Se detectar overfit critico, rejeita + restaura backup.
+        # Se detectar overfit critico -> rollback backup + FAIL step
+        # (propaga para subsequent steps `if: success()` que serao skipped).
         # --skip-sensitivity p/ nao dobrar tempo (sensitivity roda N genes*2 evals).
         # --strict faz com que MARGINAL tambem bloqueie commit (conservador).
         if: success()
-        continue-on-error: true
         id: overfitting_stage
         run: |
+          set +e
           python3 -u analysis/overfitting_stage.py --holdout-days 90 --bootstrap 200 --skip-sensitivity
           EXIT=$?
           echo "overfitting_exit=$EXIT" >> $GITHUB_OUTPUT
           if [ $EXIT -eq 2 ]; then
-            echo "::warning::Overfitting stage reportou OVERFIT — rollback e exit"
+            echo "::error::Overfitting stage reportou OVERFIT critico — rollback + abort"
             cp global_ga_checkpoint_pre_retrain.json.bak global_ga_checkpoint.json
-            echo "[overfitting] Main preservado em pre-retrain state"
+            echo "[overfitting] Checkpoint restaurado ao pre-retrain state"
             exit 2
           elif [ $EXIT -eq 1 ]; then
             echo "::warning::Overfitting stage reportou MARGINAL — seguindo com warning"
