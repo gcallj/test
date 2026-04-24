@@ -1,0 +1,64 @@
+{
+  "generated_at": "2026-04-24T22:21:59+00:00",
+  "verdict": "OVERFIT",
+  "reasons": [
+    "holdout_alpha_drop=0.1890 > critical (0.06)",
+    "holdout_wr_drop=0.0892 > warn (0.05)"
+  ],
+  "checkpoint_fit": 26.459605239382256,
+  "holdout_result": {
+    "metrics_full": {
+      "fit": 25.470103055410718,
+      "wr_med_all": 0.6923076923076923,
+      "mean_alpha_ann": -0.079115210624021,
+      "n_ge_70": 57,
+      "trades_med": 34.0
+    },
+    "metrics_train": {
+      "fit": 23.110703708615304,
+      "wr_med_all": 0.672566371681416,
+      "mean_alpha_ann": -0.07853464646950224,
+      "n_ge_70": 52,
+      "trades_med": 32.0
+    },
+    "metrics_holdout": {
+      "fit": -34.36037522146023,
+      "wr_med_all": 0.5833333333333334,
+      "mean_alpha_ann": -0.26749533904475586,
+      "n_ge_70": 47,
+      "trades_med": 10.0
+    },
+    "delta_holdout_vs_train": {
+      "fit": -57.471078930075535,
+      "wr_med_all": -0.0892330383480826,
+      "mean_alpha_ann": -0.1889606925752536,
+      "n_ge_70": -5.0
+    },
+    "n_tickers_train": 119,
+    "n_tickers_holdout": 119,
+    "holdout_days": 90
+  },
+  "bootstrap_result": {
+    "n_samples": 100,
+    "n_tickers_in_bootstrap": 103,
+    "wr_ci_5": 0.6732780612244897,
+    "wr_ci_50": 0.696969696969697,
+    "wr_ci_95": 0.7168674698795181,
+    "wr_ci_width": 0.04358940865502836,
+    "point_estimate_wr_median": 0.696969696969697
+  },
+  "sensitivity_result": {
+    "skipped": true,
+    "median_abs_delta": 0.0
+  },
+  "thresholds": {
+    "holdout_wr_drop_max": 0.05,
+    "holdout_wr_drop_critical": 0.1,
+    "holdout_alpha_drop_max": 0.03,
+    "holdout_alpha_drop_critical": 0.06,
+    "bootstrap_wr_ci_width_max": 0.1,
+    "bootstrap_wr_ci_width_critical": 0.2,
+    "sensitivity_median_max": 1.5,
+    "sensitivity_median_critical": 3.0
+  }
+}

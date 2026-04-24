@@ -47,6 +47,11 @@ ROOT = Path(__file__).resolve().parent.parent
 REPORT_JSON = ROOT / "analysis" / "overfitting_stage_report.json"
 REPORT_MD = ROOT / "analysis" / "overfitting_stage_report.md"
 
+# Garante que ga_run / run_local_ga_staged sao importaveis quando o script
+# eh executado de fora do ROOT (ex: workflow chama "python analysis/...py").
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 # Thresholds para classificar retrain como OVERFIT
 # Usa tolerancias absolutas onde faz sentido (pp) e relativas onde escala e continua.
 THRESHOLDS = {
