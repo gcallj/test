@@ -1792,32 +1792,30 @@ def run_etl():
                 cross_feats[f'v8_{_mb_col}'] = _market_breadth_v8[_mb_col].reindex(ohlcv.index)
 
         # ==================================================================
-        # v8 TIER 2E — Sector rotation features
+        # v8 TIER 2E — Sector rotation features (CURATED OUT post v4)
         # ==================================================================
-        _ticker_sector = _SECTOR_MAP.get(tk)
-        if _ticker_sector and _ticker_sector in _sector_rets:
-            _sec_ret = _sector_rets[_ticker_sector].reindex(ohlcv.index)
-            # Sector momentum (where IS this ticker's sector going?)
-            cross_feats['sector_ret_5d'] = _sec_ret.rolling(5).sum()
-            cross_feats['sector_ret_20d'] = _sec_ret.rolling(20).sum()
-            # Relative strength vs own sector (alpha idiossincratico)
-            cross_feats['rel_strength_sector_20d'] = (
-                ohlcv[close_col].pct_change(20) - _sec_ret.rolling(20).sum()
-            )
-            # Correlation com setor (se descolou = oportunidade ou risco)
-            _alig = pd.DataFrame({'tk': tk_ret, 'sec': _sec_ret}).dropna()
-            if len(_alig) > 60:
-                cross_feats['corr_sector_60d'] = _alig['tk'].rolling(60, min_periods=30).corr(_alig['sec']).reindex(ohlcv.index)
-
-        # Sector rotation leader: qual setor esta mais forte em 20d?
-        # Uma feature unica: rank do proprio setor entre 10 setores (0..1)
-        if _sector_rets and _ticker_sector in _sector_rets:
-            _sector_20d_rets = {}
-            for _sn, _sr in _sector_rets.items():
-                _sector_20d_rets[_sn] = _sr.reindex(ohlcv.index).rolling(20).sum()
-            _sec_rank_df = pd.DataFrame(_sector_20d_rets)
-            _own_rank = _sec_rank_df.rank(axis=1, pct=True)[_ticker_sector]
-            cross_feats['own_sector_rank_20d'] = _own_rank
+        # Desativado por padrao. Sector mapping _SECTOR_MAP fica disponivel
+        # mas features nao sao geradas pra evitar diluir signal-to-noise.
+        # Re-ativar via V8_FULL_FEATURES=1 (controlado no ticker loop).
+        if os.getenv("V8_FULL_FEATURES", "0").lower() in ("1", "true", "yes"):
+            _ticker_sector = _SECTOR_MAP.get(tk)
+            if _ticker_sector and _ticker_sector in _sector_rets:
+                _sec_ret = _sector_rets[_ticker_sector].reindex(ohlcv.index)
+                cross_feats['sector_ret_5d'] = _sec_ret.rolling(5).sum()
+                cross_feats['sector_ret_20d'] = _sec_ret.rolling(20).sum()
+                cross_feats['rel_strength_sector_20d'] = (
+                    ohlcv[close_col].pct_change(20) - _sec_ret.rolling(20).sum()
+                )
+                _alig = pd.DataFrame({'tk': tk_ret, 'sec': _sec_ret}).dropna()
+                if len(_alig) > 60:
+                    cross_feats['corr_sector_60d'] = _alig['tk'].rolling(60, min_periods=30).corr(_alig['sec']).reindex(ohlcv.index)
+            if _sector_rets and _ticker_sector in _sector_rets:
+                _sector_20d_rets = {}
+                for _sn, _sr in _sector_rets.items():
+                    _sector_20d_rets[_sn] = _sr.reindex(ohlcv.index).rolling(20).sum()
+                _sec_rank_df = pd.DataFrame(_sector_20d_rets)
+                _own_rank = _sec_rank_df.rank(axis=1, pct=True)[_ticker_sector]
+                cross_feats['own_sector_rank_20d'] = _own_rank
 
         if shift_features > 0:
             # v8 ROOT FIX: shift so nao-OHLCV (que aqui ja nao inclui OHLCV)
@@ -2025,14 +2023,25 @@ def run_etl():
 
             fund = fundamentals_daily_for_ticker(tk, ohlcv.index, shift_features=SHIFT_FEATURES)
             cross = compute_cross_ticker_features(tk, ohlcv, _ibov_ret, _vix_pctl_252, shift_features=SHIFT_FEATURES)
-            # v8 advanced features: Tier 1C + 2D + 2F + 3H (per-ticker)
-            try:
-                adv_v8 = compute_advanced_features_v8(ohlcv, shift_features=SHIFT_FEATURES)
-            except Exception as _e:
-                print(f"[v8] advanced features falhou para {tk}: {_e}")
-                adv_v8 = pd.DataFrame(index=ohlcv.index)
-
-            X_tk = pd.concat([feats, pats, pats_wm, fund, cross, adv_v8], axis=1)
+            # v8 CURATED (pos-retrain v4 cancelled):
+            # Mantemos apenas Tier 1A (foreign flow) + 1B (market breadth) em
+            # compute_cross_ticker_features. Advanced per-ticker features (Tier
+            # 1C mean reversion, 2D vol regime, 2F candlestick, 3G/3H earnings/
+            # micro) foram REMOVIDOS pois:
+            #   - Diluíam o signal-to-noise do weighted voting
+            #   - Aumentavam custo de eval (120 vs 91 features) sem ganho claro
+            #   - v4 nao terminou Stage 1 em 6h devido a complexidade
+            # Re-ativar via V8_FULL_FEATURES=1 se quiser experimentar depois.
+            _use_full_v8 = os.getenv("V8_FULL_FEATURES", "0").lower() in ("1", "true", "yes")
+            if _use_full_v8:
+                try:
+                    adv_v8 = compute_advanced_features_v8(ohlcv, shift_features=SHIFT_FEATURES)
+                except Exception as _e:
+                    print(f"[v8] advanced features falhou para {tk}: {_e}")
+                    adv_v8 = pd.DataFrame(index=ohlcv.index)
+                X_tk = pd.concat([feats, pats, pats_wm, fund, cross, adv_v8], axis=1)
+            else:
+                X_tk = pd.concat([feats, pats, pats_wm, fund, cross], axis=1)
             X_tk = fill_100pct(X_tk, allow_bfill=ALLOW_BFILL_EXOGENOUS)
             if X_tk.shape[1] == 0:
                 skip_reasons['empty_after_fill'] += 1
