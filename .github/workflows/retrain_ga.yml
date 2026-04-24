@@ -19,7 +19,12 @@ on:
 jobs:
   retrain:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    # Budget v4: stages=8 pop=80 windows=10 pode levar 10-12h.
+    # Timeout 720 min (12h) — GitHub public repos permitem ate 72h/job.
+    timeout-minutes: 720
+
+    permissions:
+      contents: write
 
     env:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -102,6 +107,40 @@ jobs:
           python3 -c "import json; d=json.load(open('global_ga_checkpoint.json')); print(f'  fitness={d[\"fitness\"]:.4f}')"
           ls -lh summary_latest.xlsx apply_last_*d__H*.csv 2>/dev/null
 
+      - name: Overfitting stage (pristine holdout + bootstrap + sensitivity)
+        # Roda APOS o retrain mas ANTES de best_ever guard.
+        # Se detectar overfit critico -> rollback backup + FAIL step
+        # (propaga para subsequent steps `if: success()` que serao skipped).
+        # --skip-sensitivity p/ nao dobrar tempo (sensitivity roda N genes*2 evals).
+        # --strict faz com que MARGINAL tambem bloqueie commit (conservador).
+        if: success()
+        id: overfitting_stage
+        run: |
+          set +e
+          python3 -u analysis/overfitting_stage.py --holdout-days 90 --bootstrap 200 --skip-sensitivity
+          EXIT=$?
+          echo "overfitting_exit=$EXIT" >> $GITHUB_OUTPUT
+          if [ $EXIT -eq 2 ]; then
+            echo "::error::Overfitting stage reportou OVERFIT critico — rollback + abort"
+            cp global_ga_checkpoint_pre_retrain.json.bak global_ga_checkpoint.json
+            echo "[overfitting] Checkpoint restaurado ao pre-retrain state"
+            exit 2
+          elif [ $EXIT -eq 1 ]; then
+            echo "::warning::Overfitting stage reportou MARGINAL — seguindo com warning"
+          fi
+          exit 0
+
+      - name: Upload overfitting report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: overfitting-report-${{ github.run_number }}
+          path: |
+            analysis/overfitting_stage_report.json
+            analysis/overfitting_stage_report.md
+          retention-days: 30
+          if-no-files-found: ignore
+
       - name: Check retrained vs best_ever guard (rollback se pior)
         if: success()
         # Impede retrain pior que best_ever de sobrescrever main.
@@ -147,12 +186,16 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add global_ga_checkpoint.json apply_last_5d__H5.csv summary_latest.xlsx analysis/best_ever_tracker.json 2>/dev/null || true
           FITNESS=$(python3 -c "import json; print(f'{json.load(open(\"global_ga_checkpoint.json\"))[\"fitness\"]:.4f}')")
+          # BRANCH-AWARE push: dispatch em branch nao-main push de volta na mesma branch.
+          # Evita contaminar main com experimentos de feature engineering em branches
+          # dedicadas (ex: feature-engineering-v8).
+          BRANCH="${GITHUB_REF_NAME:-main}"
+          echo "::notice::Pushing retrain result to branch: $BRANCH"
           if ! git diff --cached --quiet; then
             git commit -m "Retrain GA staged: fitness=${FITNESS}"
-            # Retry loop para race com sweep_matrix / daily_pipeline
             for i in 1 2 3 4 5; do
-              if git pull --rebase origin main && git push origin main; then
-                echo "::notice::Push succeeded on attempt $i"
+              if git pull --rebase origin "$BRANCH" && git push origin "$BRANCH"; then
+                echo "::notice::Push succeeded on attempt $i to $BRANCH"
                 exit 0
               fi
               sleep $(( (RANDOM % 15) + 5 ))
