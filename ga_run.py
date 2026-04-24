@@ -2960,15 +2960,35 @@ def load_etl_features_long(etl_path: str, ticker_filter=None) -> pd.DataFrame:
     return pd.concat(frames, ignore_index=True)
 
 
-def build_temporal_windows(min_date: pd.Timestamp, max_date: pd.Timestamp, train_years: int = 3, test_months: int = 6, step_months: int = 6) -> List[Tuple[pd.Timestamp, pd.Timestamp, pd.Timestamp, pd.Timestamp]]:
+def build_temporal_windows(min_date: pd.Timestamp, max_date: pd.Timestamp,
+                           train_years: int = 3, test_months: int = 6,
+                           step_months: int = 6,
+                           holdout_days: int = 0) -> List[Tuple[pd.Timestamp, pd.Timestamp, pd.Timestamp, pd.Timestamp]]:
+    """Constroi walk-forward windows.
+
+    holdout_days: se >0, RESERVA os ultimos N dias do range do max_date.
+    O GA NUNCA ve esse range nas suas windows de treinamento/test, criando
+    um TRUE pristine holdout para validacao posterior (overfitting_stage).
+    Default 0 = comportamento original (sem holdout).
+
+    Recomendado: holdout_days=90 (3 meses) para ter ~10 trades/ticker no
+    holdout enquanto preserva 99%+ dos dados para o GA aprender.
+    """
     windows = []
     cur_train_start = pd.Timestamp(min_date).normalize()
     max_date = pd.Timestamp(max_date).normalize()
+    # Aplica holdout: GA so pode ver ate effective_max_date
+    if holdout_days and holdout_days > 0:
+        effective_max_date = max_date - pd.Timedelta(days=int(holdout_days))
+        print(f"[WALK-FORWARD] holdout_days={holdout_days} active: GA windows "
+              f"limitadas a {effective_max_date.date()} (excludes {holdout_days}d at end)")
+    else:
+        effective_max_date = max_date
     while True:
         train_end = cur_train_start + pd.DateOffset(years=train_years) - pd.Timedelta(days=1)
         test_start = train_end + pd.Timedelta(days=1)
         test_end = test_start + pd.DateOffset(months=test_months) - pd.Timedelta(days=1)
-        if test_end > max_date:
+        if test_end > effective_max_date:
             break
         windows.append((cur_train_start, train_end, test_start, test_end))
         cur_train_start = cur_train_start + pd.DateOffset(months=step_months)
@@ -3602,7 +3622,14 @@ def run():
     if global_params is None:
         dmin = store.min_date
         dmax = store.max_date
-        windows = build_temporal_windows(dmin, dmax, train_years=3, test_months=6, step_months=6)
+        # ITEM 3 walk-forward TRUE: holdout_days reserva ultimos N dias para
+        # pristine validation. Default 90 dias (3 meses) — GA nao ve esse range.
+        # Desligar via GA_HOLDOUT_DAYS=0 para retornar ao comportamento antigo.
+        _holdout_days = int(os.environ.get("GA_HOLDOUT_DAYS", "90"))
+        windows = build_temporal_windows(
+            dmin, dmax, train_years=3, test_months=6, step_months=6,
+            holdout_days=_holdout_days,
+        )
         if not windows:
             windows = [(dmin, dmax - pd.Timedelta(days=180), dmax - pd.Timedelta(days=179), dmax)]
 

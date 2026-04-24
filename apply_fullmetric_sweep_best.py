@@ -129,6 +129,60 @@ def main() -> None:
         # Nao-fatal: se guard crashar, mantem comportamento antigo (sem guard)
         print(f"[GUARD] WARN: long-term guard falhou: {_e} — seguindo sem guard")
 
+    # ================================================================
+    # HOLDOUT GUARD — pristine 90d test
+    # ================================================================
+    # Avalia candidato em ultimos 90 dias e compara com train regime.
+    # Diagnostico (2026-04-24): main esta OVERFIT (alpha drop -19pp em
+    # holdout). Sem este guard, sweeps continuariam cavando o mesmo
+    # over-fitted optimum. Com este guard, so promove se candidato
+    # mantem performance no regime mais recente.
+    #
+    # Pode ser desligado via GA_DISABLE_HOLDOUT_GUARD=1 (ex: durante
+    # cold-start ou quando best_ever ainda imaturo).
+    if str(os.environ.get("GA_DISABLE_HOLDOUT_GUARD", "")).lower() not in ("1", "true", "yes"):
+        try:
+            from analysis.overfitting_stage import (
+                evaluate_holdout, classify, THRESHOLDS as _OF_THR
+            )
+            print(f"[HOLDOUT] Evaluating candidate on pristine holdout (90d)...")
+            holdout_data = evaluate_holdout(candidate_genome, holdout_days=90)
+            delta = holdout_data.get("delta_holdout_vs_train", {})
+            wr_drop = -float(delta.get("wr_med_all", 0.0))
+            alpha_drop = -float(delta.get("mean_alpha_ann", 0.0))
+            print(f"[HOLDOUT] WR drop = {wr_drop:+.4f} (warn={_OF_THR['holdout_wr_drop_max']}, "
+                  f"critical={_OF_THR['holdout_wr_drop_critical']})")
+            print(f"[HOLDOUT] alpha drop = {alpha_drop:+.4f} (warn={_OF_THR['holdout_alpha_drop_max']}, "
+                  f"critical={_OF_THR['holdout_alpha_drop_critical']})")
+            # Critical drop = REJEITA. Warn-only = log e continua.
+            critical = []
+            if wr_drop > _OF_THR["holdout_wr_drop_critical"]:
+                critical.append(f"wr_drop={wr_drop:.4f} > critical")
+            if alpha_drop > _OF_THR["holdout_alpha_drop_critical"]:
+                critical.append(f"alpha_drop={alpha_drop:.4f} > critical")
+            if critical:
+                print(f"[HOLDOUT] REJEITA: {'; '.join(critical)}")
+                raise SystemExit(
+                    f"Holdout guard: candidato falha no regime recente. "
+                    f"{'; '.join(critical)}"
+                )
+            # Warn-only thresholds (nao bloqueia mas registra)
+            warns = []
+            if wr_drop > _OF_THR["holdout_wr_drop_max"]:
+                warns.append(f"wr_drop={wr_drop:.4f} > warn")
+            if alpha_drop > _OF_THR["holdout_alpha_drop_max"]:
+                warns.append(f"alpha_drop={alpha_drop:.4f} > warn")
+            if warns:
+                print(f"[HOLDOUT] WARNING: {'; '.join(warns)}")
+            else:
+                print(f"[HOLDOUT] PASSA: holdout estavel")
+        except SystemExit:
+            raise
+        except Exception as _e:
+            print(f"[HOLDOUT] WARN: holdout guard falhou: {_e} — seguindo sem guard")
+    else:
+        print("[HOLDOUT] SKIP — GA_DISABLE_HOLDOUT_GUARD ativo")
+
     if args.dry_run:
         print("[DRY] Not writing checkpoint files.")
         return
