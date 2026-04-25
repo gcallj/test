@@ -107,6 +107,24 @@ jobs:
           python3 -c "import json; d=json.load(open('global_ga_checkpoint.json')); print(f'  fitness={d[\"fitness\"]:.4f}')"
           ls -lh summary_latest.xlsx apply_last_*d__H*.csv 2>/dev/null
 
+      - name: Build PayloadStore (load mode) for overfitting stage
+        # Retrain staged usa store em path interno e/ou cleanup automatico.
+        # overfitting_stage.py precisa do store em output/ga_memmap pra rodar
+        # evaluate_holdout. Roda ga_run em load mode pra reconstruir o store
+        # com checkpoint atual sem mudar nada.
+        # Tempo: ~5-10 min (Phase 1 prep apenas, sem treino).
+        if: success()
+        env:
+          GA_RUN_MODE: "load"
+          GA_FAST_MODE: "true"
+          GA_KEEP_STORE: "1"
+          GA_DISABLE_TELEGRAM_SEND: "1"
+          # Sem holdout aqui — load mode so re-aplica genome corrente em todos os dados.
+          GA_HOLDOUT_DAYS: "0"
+        run: |
+          python -u ga_run.py 2>&1 | tail -30
+          test -f output/ga_memmap/meta.json && echo "[OK] PayloadStore built" || echo "[WARN] Store missing"
+
       - name: Overfitting stage (pristine holdout + bootstrap + sensitivity)
         # Roda APOS o retrain mas ANTES de best_ever guard.
         # Se detectar overfit critico -> rollback backup + FAIL step
