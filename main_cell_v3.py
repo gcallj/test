@@ -2856,7 +2856,7 @@ def load_full_history_all_cols(path: str) -> pd.DataFrame:
     df = df.dropna(subset=[DATE_COL, TICKER_COL, OPEN_COL, HIGH_COL, LOW_COL, CLOSE_COL])
     df = df[(df[CLOSE_COL] > MIN_PRICE) & (df[OPEN_COL] > MIN_PRICE) & (df[HIGH_COL] > MIN_PRICE) & (df[LOW_COL] > MIN_PRICE)]
     if ONLY_SA:
-        df = df[df[TICKER_COL].str.endswith(".SA", na=False)]
+        df = df[df[TICKER_COL].str.endswith(".ST", na=False)]
 
     df = df.sort_values([TICKER_COL, DATE_COL]).reset_index(drop=True)
     df = add_sma200(df)

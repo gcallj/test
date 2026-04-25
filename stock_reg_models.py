@@ -301,8 +301,8 @@ def run_reg_models(mode: str = "full"):
 
     def asset_class(ticker: str) -> str:
         t = str(ticker)
-        if t.endswith(".SA"):
-            return "equity_br"
+        if t.endswith(".ST"):
+            return "equity_se"
         if t.startswith("^"):
             return "index"
         if t.endswith("=X"):

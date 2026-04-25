@@ -53,158 +53,82 @@ def run_etl():
     SKIP_MI_REDUCTION = True   # skip slow MI-based feature reduction; GA does its own Spearman selection
 
     # ============================
-    # Listas de tickers
+    # Listas de tickers (curadas) — UNIVERSO SUECO (OMX Stockholm)
     # ============================
-    # ============================
-    # Listas de tickers (curadas)
-    # ============================
+    # Branch experimental: substitui universo BR (.SA) por SE (.ST).
+    # Mantem indices globais + cripto como contexto macro.
 
-    # Ações Brasil (foco em liquidez/setores + alguns nomes clássicos)
-    ibovespa_tickers = [
-        # Bancos / financeiros
-        "BBAS3.SA", "BBDC4.SA", "ITUB4.SA", "ITSA4.SA", "BBSE3.SA", "BPAC11.SA", "SANB11.SA",
+    # Acoes Suecia (OMX Stockholm largecaps + selecionadas mid-caps)
+    omx_tickers = [
+        # Bancos / financials
+        "SEB-A.ST", "SHB-A.ST", "SWED-A.ST", "NDA-SE.ST",
+        "INVE-B.ST", "KINV-B.ST", "EQT.ST",
 
-        # Commodities / energia / materiais
-        "VALE3.SA", "PETR4.SA", "PRIO3.SA", "BRKM5.SA",
-        "GGBR4.SA", "GOAU4.SA", "CSNA3.SA", "USIM5.SA",
-        "SUZB3.SA", "KLBN11.SA",
+        # Commodities / mining / paper / steel
+        "BOL.ST", "SSAB-A.ST", "SSAB-B.ST", "SCA-B.ST", "STORA-A.ST",
+        "HOLM-B.ST", "BILL.ST", "LUNDIN.ST",
 
-        # Utilities / infraestrutura
-        "AXIA3.SA", "AXIA6.SA", "EQTL3.SA", "ENGI11.SA", "TAEE11.SA", "CMIG4.SA", "CPLE6.SA",
-        "SBSP3.SA", "SAPR11.SA",
+        # Utilities / telecom / infra
+        "TELIA.ST", "TEL2-B.ST",
 
-        # Consumo / varejo / saúde
-        "ABEV3.SA", "ASAI3.SA", "RADL3.SA", "LREN3.SA", "MGLU3.SA", "RENT3.SA", "MULT3.SA", "HAPV3.SA",
+        # Domestic cyclicals / consumer / construction
+        "HM-B.ST", "ELUX-B.ST", "SKA-B.ST", "BHG.ST", "MTRS.ST",
+        "EMBRAC-B.ST",
 
-        # Indústria / transporte / energia downstream
-        "WEGE3.SA", "EMBR3.SA", "RAIL3.SA", "CCRO3.SA", "ECOR3.SA",
-        "CSAN3.SA", "RAIZ4.SA", "UGPA3.SA", "VBBR3.SA", "SLCE3.SA",
+        # Defensives / health / staples
+        "AZN.ST", "ESSITY-B.ST", "GETI-B.ST", "ICA.ST",
 
-        # Proteínas (mantém diversificação exportadora)
-        "MBRF3.SA", "BEEF3.SA",
+        # Industrials / exporters
+        "ABB.ST", "ALFA.ST", "ASSA-B.ST", "ATCO-A.ST", "ATCO-B.ST",
+        "NIBE-B.ST", "SAND.ST", "SKF-B.ST", "VOLV-A.ST", "VOLV-B.ST",
+        "TREL-B.ST", "BEIJ-B.ST", "LIFCO-B.ST", "EPI-A.ST",
 
-        # Telecom / real estate (opcionais, mas costumam ser úteis)
-        "VIVT3.SA", "TIMS3.SA", "CYRE3.SA", "JHSF3.SA",
+        # Tech / growth
+        "ERIC-B.ST", "EVO.ST", "HEXA-B.ST", "SINCH.ST", "TIETO.ST",
 
-        # JBS: no Yahoo costuma funcionar melhor via BDR (mantém “JBS” sem depender do JBSS3.SA)
-        "JBSS32.SA",
-
-        # Incorporação / real estate (apareceram forte em DY 2025)
-        "DIRR3.SA", "CURY3.SA", "LAVV3.SA", "SYNE3.SA",
-
-        # Energia / utilities (tradicionalmente boas pagadoras)
-        "ISAE4.SA", "TRPL4.SA", "EGIE3.SA", "ALUP11.SA", "CPFE3.SA", "NEOE3.SA", "ENBR3.SA",
-
-        # Saneamento
-        "CSMG3.SA",
-
-        # Bancos / seguros / serviços financeiros
-        "ABCB4.SA", "BRSR6.SA", "PSSA3.SA", "CXSE3.SA", "WIZC3.SA",
-
-        # Saúde / consumo
-        "FLRY3.SA", "ODPV3.SA", "MDIA3.SA", "GRND3.SA", "VULC3.SA",
-
-        # Indústria / logística
-        "POMO4.SA", "LEVE3.SA", "RANI3.SA", "TGMA3.SA",
-
-        # Agro
-        "SMTO3.SA", "AGRO3.SA",
-
-        # Shoppings
-        "IGTI11.SA",
-
-        # Química / materiais
-        "UNIP6.SA",
-
-        # Construção civil / incorporação
-        "EZTC3.SA",
-
-        # Frigoríficos / alimentos
-        "MLAS3.SA",
-
-        # Turismo / lazer
-        "CVCB3.SA",
-
-        # BDR / ETF internacional
-        "XPBR31.SA",
-
-        # Construção civil (adicionados)
-        "TCSA3.SA",
-
-        # ETF internacional (adicionado)
-        "IVVB11.SA",
-
+        # Real estate (sem FII suecos; classifica como cyclicals/commodity downstream)
+        "SBB-B.ST", "SAGA-B.ST",
     ]
 
-    # FIIs Brasil (mix: logística, shoppings, lajes, papel, FoF)
-    fii_tickers = [
-        # Tijolo - logística / renda
-        "MXRF11.SA", "KNRI11.SA", "HGLG11.SA", "XPLG11.SA", "BTLG11.SA", "BRCO11.SA", "GGRC11.SA", "LVBI11.SA",
-        # Tijolo - shoppings
-        "VISC11.SA", "XPML11.SA", "HSML11.SA", "HGBS11.SA",
-        # Tijolo - lajes / híbridos
-        "BRCR11.SA", "HGRE11.SA", "HGPO11.SA", "PVBI11.SA", "RCRB11.SA", "VINO11.SA",
-        # Híbridos / renda urbana
-        "ALZR11.SA", "TRXF11.SA", "RBRP11.SA",
-        # Papel / crédito
-        "KNCR11.SA", "KNSC11.SA", "KNHY11.SA", "CPTS11.SA", "IRDM11.SA", "IRIM11.SA",
-        # FoF
-        "BCFF11.SA", "HFOF11.SA", "KFOF11.SA", "RBRF11.SA",
-        # Saúde / biotech
-        "RBRX11.SA",
-        # Híbridos / diversificados
-        "BCIA11.SA",
-    ]
-
-    # Índices globais + proxies macro (inclui Suécia e juros EUA)
+    # Indices globais + proxies macro (foco Europa/EUA, sem LatAm/Asia que dominava BR)
     global_indices = [
+        # Suecia / Europa (foco da branch)
+        "^OMXS30",
+        "^STOXX", "^STOXX50E", "^FTSE", "^GDAXI", "^FCHI",
+
         # EUA (equities)
         "^GSPC", "^DJI", "^IXIC", "^NDX", "^RUT",
+
         # Volatilidade / sentimento
         "^VIX", "^VVIX",
-        # Juros EUA (yields)
+
+        # Juros EUA (yields) — relevantes p/ flow global
         "^IRX", "^FVX", "^TNX", "^TYX",
 
-        # Europa
-        "^FTSE", "^GDAXI", "^FCHI", "^STOXX50E", "^STOXX",
-
-        # Ásia-Pacífico
-        "^N225", "^HSI", "^KS11", "^AXJO", "^TWII", "^JKSE",
-
-        # Emergentes / LatAm
-        "^BVSP", "^BSESN", "^MXX",
-
-        # China (muitas vezes o Yahoo usa “códigos de bolsa” como índices)
-        "000001.SS", "399001.SZ",
-
-        # Suécia (relevante pra você)
-        "^OMXS30",
+        # Asia (mantem alguns p/ regime global)
+        "^N225", "^HSI",
     ]
 
-    # FX + commodities + cripto (mais “robusto” no Yahoo que XAUEUR/XAGEUR)
+    # FX + commodities + cripto (focado em SEK/EUR/USD)
     currency_commodity_tickers = [
-        # Dólar (DXY)
+        # Dolar (DXY)
         "DX-Y.NYB",
 
-        # FX principais (formas mais comuns no Yahoo)
-        "EURUSD=X", "GBPUSD=X", "AUDUSD=X",
-        "JPY=X", "CNY=X", "CHF=X", "BRL=X", "MXN=X", "SEK=X",
+        # FX principais (SEK/EUR foco)
+        "SEK=X", "EURUSD=X", "GBPUSD=X", "JPY=X", "CHF=X", "AUDUSD=X",
 
         # Metais / energia (futuros)
         "GC=F", "SI=F", "HG=F",
-        "CL=F", "BZ=F", "NG=F", "HO=F",
+        "CL=F", "BZ=F", "NG=F",
 
-        # Agricultura / pecuária
-        "ZC=F", "ZW=F", "ZS=F", "KC=F", "SB=F", "HE=F", "LE=F",
-
-        # ETFs macro/temáticos (complemento)
+        # ETFs macro/tematicos
         "UUP", "FXE", "FXY", "GLD", "USO", "COPX",
 
         # Crypto
-        "BTC-USD", "ETH-USD", "SOL-USD", "LTC-USD", "DOGE-USD","CRO-USD",
+        "BTC-USD", "ETH-USD", "SOL-USD", "LTC-USD", "DOGE-USD",
     ]
 
-    ALL_TICKERS = ibovespa_tickers + fii_tickers + global_indices + currency_commodity_tickers
+    ALL_TICKERS = omx_tickers + global_indices + currency_commodity_tickers
 
     # ============================
     # Fundamentals (opcional)
@@ -1522,8 +1446,10 @@ def run_etl():
     # ============================
     # Pre-compute market reference data for cross-ticker features
     # ============================
+    # Branch SE: benchmark de mercado e ^OMXS30 (no lugar de ^BVSP).
+    # Mantemos os nomes de variavel _ibov_* p/ nao quebrar consumidores downstream.
     _ibov_sym = None
-    for _try_sym in ['^BVSP', '^BVSP.SA']:
+    for _try_sym in ['^OMXS30', '^BVSP']:
         try:
             _ibov_ohlcv = data.xs(_try_sym, level=1, axis=1)
             if 'Close' in _ibov_ohlcv.columns and _ibov_ohlcv['Close'].notna().sum() > 100:
@@ -1533,10 +1459,10 @@ def run_etl():
             continue
     if _ibov_sym:
         _ibov_ret = data.xs(_ibov_sym, level=1, axis=1)['Close'].pct_change()
-        print(f"[cross-features] IBOV reference: {_ibov_sym} ({_ibov_ret.notna().sum()} returns)")
+        print(f"[cross-features] Market index reference: {_ibov_sym} ({_ibov_ret.notna().sum()} returns)")
     else:
         _ibov_ret = None
-        print("[cross-features] WARNING: IBOV not found, skipping beta/relative-strength")
+        print("[cross-features] WARNING: market index not found, skipping beta/relative-strength")
 
     _vix_data = None
     for _try_vix in ['^VIX', '^VIX.SA']:
@@ -1556,12 +1482,12 @@ def run_etl():
 
     # ── STRATEGY 3: Market regime features (cross-sectional) ──
     # These measure overall market conditions, shared across all tickers
-    _sa_tickers = [t for t in valid_tickers if t.endswith('.SA') and not any(t.startswith(x) for x in ['^'])]
+    _sa_tickers = [t for t in valid_tickers if t.endswith('.ST') and not any(t.startswith(x) for x in ['^'])]
     _market_breadth = None
     _market_dispersion = None
     if len(_sa_tickers) >= 10:
         try:
-            # Collect closes for SA tickers
+            # Collect closes for ST tickers (OMX universe)
             _closes_list = []
             for _t in _sa_tickers[:60]:  # cap at 60 to save memory
                 try:

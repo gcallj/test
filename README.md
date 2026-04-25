@@ -121,7 +121,7 @@ GA disse HOLD mas Stage 2 ideal/momentum indica oportunidade? Promove SE:
 | `run_local_ga_staged.py` | Retrain seeded (chunks × gens × pop × windows) |
 | `ga_run_modular_final.py` | GA two-stage modular (exploração + refinamento) |
 | `payload_store.py` | Payloads por ticker em memmap (economia de RAM) |
-| `ticker_metadata.py` | Mapa setorial: 119 tickers B3 em 11 segmentos |
+| `ticker_metadata.py` | Mapa setorial: 48 tickers OMX Stockholm em 8 segmentos (branch SE) |
 | `global_ga_checkpoint.json` | Checkpoint GA (30 genes, fitness) |
 
 ### Analise (analysis/)

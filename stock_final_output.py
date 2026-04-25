@@ -49,7 +49,7 @@ def run_final_output():
     WRITE_PARQUET = True
     OVERWRITE_OUTPUTS = True
     ONLY_SA = False
-    ALLOWED_SUFFIXES = (".SA", "-USD")  # .SA = Brasil, -USD = crypto
+    ALLOWED_SUFFIXES = (".ST", "-USD")  # .ST = Suecia (OMX Stockholm), -USD = crypto
 
     # ============================================================
     # PARAMS
@@ -118,8 +118,9 @@ def run_final_output():
         return pd.to_datetime(series, errors="coerce").dt.date.astype(str)
 
     def looks_like_equity_br(t: str) -> bool:
+        # Branch SE: aceita .ST (OMX Stockholm) + -USD (cripto). Nome mantido por compat.
         t = str(t).upper().strip()
-        return (t.endswith(".SA") or t.endswith("-USD")) and ("=" not in t) and ("^" not in t)
+        return (t.endswith(".ST") or t.endswith("-USD")) and ("=" not in t) and ("^" not in t)
 
     def to_prob(series):
         s = series.astype(str).str.strip()
@@ -1023,7 +1024,7 @@ def run_final_output():
     HISTORY_PARQUET_PATH = "./output/history_consolidated.parquet"
     SCORE_COL = "EV_buy_fund_3"
     ONLY_SA = False  # replaced by ALLOWED_SUFFIXES in ga_run.py; keep False to include crypto
-    ALLOWED_SUFFIXES = (".SA", "-USD")
+    ALLOWED_SUFFIXES = (".ST", "-USD")
 
     # ==============================================================================
     # 1. CORRELAÇÃO SCORE × RETORNO FUTURO
@@ -1230,7 +1231,7 @@ def run_final_output():
         if ALLOWED_SUFFIXES:
             df = df[df["ticker"].apply(lambda t: any(str(t).endswith(s) for s in ALLOWED_SUFFIXES))]
         elif ONLY_SA:
-            df = df[df["ticker"].str.endswith(".SA", na=False)]
+            df = df[df["ticker"].str.endswith(".ST", na=False)]
 
         df = df.sort_values(["ticker", "Date"])
 

@@ -117,7 +117,7 @@ LOW_COL   = "low"
 CLOSE_COL = "close"
 
 ONLY_SA    = False  # replaced by ALLOWED_SUFFIXES
-ALLOWED_SUFFIXES = (".SA", "-USD")  # .SA = Brasil equities/FIIs, -USD = crypto
+ALLOWED_SUFFIXES = (".ST", "-USD")  # .ST = Suecia (OMX Stockholm), -USD = crypto
 LONG_ONLY  = True
 
 APPLY_DAYS = 5
@@ -150,7 +150,7 @@ ATR_MULT_RANGE = (1.5, 3.5)
 RR_MULT_RANGE  = (1.5, 4.0)  # wider RR to pursue larger trend-following payoffs
 
 # Volume / liquidity filter (v5)
-MIN_VOL_FIN_DAILY = 200_000  # R$200k/dia — focus on liquid tickers to save memory during GA
+MIN_VOL_FIN_DAILY = 200_000  # SEK 200k/dia — focus on liquid tickers to save memory during GA
 
 # Apply output constraints
 MIN_STOP_PCT = 0.02       # 2% minimum stop (avoids unrealistic tight stops)
@@ -170,22 +170,24 @@ GA_STAGE_GATE = os.environ.get("GA_STAGE_GATE", "off").lower()
 GA_ALPHA_FOCUS = os.environ.get("GA_ALPHA_FOCUS", "off").lower() == "on"
 MIN_BUY_CONFIDENCE = 38.0 # Lowered from 50 to allow more buy signals while maintaining quality gate
 
-# Friction — custos realistas Brasil
-# Corretagem: R$7.00 por ordem (compra + venda = R$14 round-trip)
-BROKERAGE_PER_ORDER = 7.00     # R$ por ordem
-DEFAULT_POSITION_SIZE = 5000.0 # R$ posicao tipica para calculo de custo %
-# B3 fees: emolumentos + liquidacao ≈ 0.0325% por operacao (compra+venda)
-B3_FEES_PCT = 0.000325 * 2    # 0.065% round-trip
-# Slippage estimado
+# Friction — custos realistas Suecia (Avanza/Nordnet retail, OMX Stockholm)
+# Corretagem: SEK 9.00 por ordem (Avanza Mini tier)
+BROKERAGE_PER_ORDER = 9.00     # SEK por ordem
+DEFAULT_POSITION_SIZE = 5000.0 # SEK posicao tipica para calculo de custo %
+# Nasdaq Stockholm: sem fees retail explicitos (embutidos no spread)
+EXCHANGE_FEES_PCT = 0.0
+# Backwards-compat alias (consumers may import B3_FEES_PCT)
+B3_FEES_PCT = EXCHANGE_FEES_PCT
+# Slippage estimado (largecaps OMX tem spread similar a B3)
 SLIPPAGE_BPS = 10.0           # 0.10% por lado
-# IR: 15% sobre lucro liquido (swing trade), 20% day trade
-IR_SWING_PCT = 0.15
+# IR: 30% capital gains em depa regular sueco (swing trade)
+IR_SWING_PCT = 0.30
 # Custo total por trade (round-trip):
-#   corretagem: 2*7/5000 = 0.28%
-#   B3: 0.065%
+#   corretagem: 2*9/5000 = 0.36%
+#   exchange fees: 0.0%
 #   slippage: 0.20%
-#   total: ~0.55% (sem IR)
-COST_PER_TRADE_PCT = (2 * BROKERAGE_PER_ORDER / DEFAULT_POSITION_SIZE) + B3_FEES_PCT + (2 * SLIPPAGE_BPS / 10000)
+#   total: ~0.56% (sem IR)
+COST_PER_TRADE_PCT = (2 * BROKERAGE_PER_ORDER / DEFAULT_POSITION_SIZE) + EXCHANGE_FEES_PCT + (2 * SLIPPAGE_BPS / 10000)
 
 MIN_PRICE     = 0.01
 CAP_DAILY_RET = 0.30
@@ -2784,7 +2786,7 @@ def load_full_history_all_cols(path: str) -> pd.DataFrame:
         mask = df[TICKER_COL].apply(lambda t: any(str(t).endswith(s) for s in ALLOWED_SUFFIXES))
         df = df[mask].copy()
     elif ONLY_SA:
-        df = df[df[TICKER_COL].str.endswith(".SA")].copy()
+        df = df[df[TICKER_COL].str.endswith(".ST")].copy()
 
     df = add_sma200(df)
     df = add_atr_ohlc_fast(df)
@@ -3294,7 +3296,7 @@ def run():
     total_tickers = len(tickers)
     if EVAL_ONLY_TICKER:
         t_req = str(EVAL_ONLY_TICKER).strip().upper()
-        tickers = [t for t in tickers if str(t).upper() in {t_req, f"{t_req}.SA"}]
+        tickers = [t for t in tickers if str(t).upper() in {t_req, f"{t_req}.ST"}]
     elif TEST_ONLY_PREFIX_C_TICKERS:
         tickers = [t for t in tickers if str(t).startswith(TEST_TICKER_PREFIX)]
 
