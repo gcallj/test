@@ -1,640 +1,599 @@
-Date,ticker,recomendacao,potencial_pct,signal,estagio,close,entrada,saida,stop,alvo,cancelar,RR,pivot,r1,s1,rank,confidence,win_rate,wr_alvo,universe,queda_max,regime,signal_ga
-2026-04-20,CSMG3.SA,"PREMIUM
-Fechou @57.35
-ORDEM LIMITE @55.92
+Date,ticker,recomendacao,potencial_pct,signal,estagio,close,entrada,saida,stop,alvo,cancelar,RR,pivot,r1,s1,rank,confidence,win_rate,wr_alvo,n_trades,wr_ci_lo,wr_ci_hi,stat_conf,universe,queda_max,regime,signal_ga
+2026-04-24,PSSA3.SA,"PREMIUM
+Fechou @51.88
+ORDEM LIMITE @50.88
 esperar recuo a partir do fechamento
 Contexto: S2 Alta momentum
-+8.9% alvo @60.90 (WR 77% / alvo 77%)
-Stop @54.01 (-3.4%)
-Cancelar se < MA50/S1 @55.56",+8.9%,buy,Stage 2 Alta - momentum,57.35,55.9163,57.35,54.0099,60.8983,55.5575,2.6,57.2667,58.4334,56.1834,93.8,84.0,76.74,76.74,PREMIUM,11.2,favoravel,hold
-2026-04-20,BBSE3.SA,"PREMIUM
-Fechou @34.92
-ABAIXO DO PIVOT: esperar confirmacao @35.06
-setup montado, mas sem entrada agora; so comprar apos fechamento acima do Pivot
-Contexto: S2 Alta ideal
-+5.5% alvo @36.38 (WR 76% / alvo 76%)
-Stop @33.78 (-2.0%)
-Cancelar se < MA50/S1 @34.70",+5.5%,buy,Stage 2 Alta - ideal,34.92,34.4734,34.92,33.7839,36.3811,34.6966,2.8,35.0633,35.2866,34.6966,87.9,77.6,76.0,76.0,PREMIUM,5.2,favoravel,hold
-2026-04-20,PSSA3.SA,"PREMIUM
-Fechou @54.31
-ABAIXO DO PIVOT: esperar confirmacao @54.40
-setup montado, mas sem entrada agora; so comprar apos fechamento acima do Pivot
-Contexto: S2 Alta momentum
-+7.4% alvo @57.24 (WR 79% / alvo 79%)
-Stop @51.73 (-3.0%)
-Cancelar se < MA50/S1 @49.80",+7.4%,buy,Stage 2 Alta - momentum,54.31,53.3136,54.31,51.728,57.2387,49.7974,2.5,54.3967,54.7834,53.9234,87.8,80.3,79.49,79.49,PREMIUM,7.0,favoravel,hold
-2026-04-20,WEGE3.SA,"PREMIUM
-Fechou @48.65
-RETOMADA APOS PULLBACK: esperar Pivot @49.07
-contexto bom, mas sem entrada abaixo dele; so comprar apos fechamento acima do Pivot
++9.3% alvo @55.62 (WR 87% / alvo 87%)
+Stop @49.18 (-3.4%)
+Cancelar se < MA50/S1 @50.07",+9.3%,buy,Stage 2 Alta - momentum,51.88,50.8824,51.88,49.176,55.6232,50.0743,2.8,51.67,52.19,51.36,98.7,84.1,87.1,87.1,31,71.1,94.9,CI [71-95%],PREMIUM,4.7,favoravel,hold
+2026-04-24,VIVT3.SA,"PREMIUM
+Fechou @40.18
+PULLBACK EM ALTA: ordem limite @39.58
+recuo controlado acima do Pivot @40.08
 Contexto: S2 Alta pullback
-+11.5% alvo @53.23 (WR 78% / alvo 78%)
-Stop @46.12 (-3.4%)
-Cancelar se < MA200 @43.18",+11.5%,buy,Stage 2 Alta - pullback,48.65,47.7556,48.65,46.1156,53.2283,43.1791,3.3,49.0667,49.5334,48.1834,86.0,75.2,77.94,77.94,PREMIUM,12.3,favoravel,hold
-2026-04-20,TAEE11.SA,"ALTA QUALIDADE
-Fechou @45.01
-ORDEM LIMITE @44.25
-esperar recuo a partir do fechamento
-Contexto: S2 Alta momentum
-+5.7% alvo @46.79 (WR 74% / alvo 74%)
-Stop @43.19 (-2.4%)
-Cancelar se < MA50/S1 @43.28",+5.7%,buy,Stage 2 Alta - momentum,45.01,44.2498,45.01,43.1877,46.7855,43.2806,2.4,44.9567,45.2834,44.6834,82.6,82.9,73.53,73.53,HIGH_QUAL,5.5,favoravel,hold
-2026-04-20,ABEV3.SA,"ALTA QUALIDADE
-Fechou @15.33
-RETOMADA APOS PULLBACK: esperar Pivot @15.47
-contexto bom, mas sem entrada abaixo dele; so comprar apos fechamento acima do Pivot
-Contexto: S2 Alta pullback
-+8.1% alvo @16.32 (WR 72% / alvo 69%)
-Stop @14.75 (-2.2%)
-Cancelar se < MA200 @12.96",+8.1%,buy,Stage 2 Alta - pullback,15.33,15.0915,15.33,14.7536,16.315,12.9593,3.6,15.47,15.63,15.17,76.4,75.9,72.22,69.44,HIGH_QUAL,6.5,favoravel,hold
-2026-04-20,SLCE3.SA,"Fechou @17.74
-ABAIXO DO PIVOT: esperar confirmacao @17.89
-setup montado, mas sem entrada agora; so comprar apos fechamento acima do Pivot
-Contexto: S2 Alta ideal
-+11.4% alvo @19.44 (WR 73% / alvo 73%)
-Stop @16.81 (-3.6%)
-Cancelar se < MA50/S1 @17.32",+11.4%,buy,Stage 2 Alta - ideal,17.74,17.4473,17.74,16.8116,19.4393,17.3248,3.1,17.8867,18.1234,17.5034,75.8,80.6,72.97,72.97,REGULAR,20.8,favoravel,hold
-2026-04-20,PETR4.SA,"Fechou @46.22
-ORDEM LIMITE @45.51
-esperar recuo a partir do fechamento
-Contexto: S2 Alta momentum
-+11.1% alvo @50.59 (WR 67% / alvo 67%)
-Stop @43.50 (-4.4%)
-Cancelar se < MA50/S1 @43.54",+11.1%,buy,Stage 2 Alta - momentum,46.22,45.5127,46.22,43.4991,50.5865,43.5386,2.5,45.88,46.89,45.21,74.5,77.7,66.67,66.67,REGULAR,26.3,favoravel,hold
-2026-04-20,CURY3.SA,"ALTA QUALIDADE
-Fechou @35.11
-RETOMADA APOS PULLBACK: esperar Pivot @35.19
-contexto bom, mas sem entrada abaixo dele; so comprar apos fechamento acima do Pivot
-Contexto: S2 Alta pullback
-+11.0% alvo @37.81 (WR 70% / alvo 70%)
-Stop @32.30 (-5.2%)
-Cancelar se < MA200 @32.48",+11.0%,buy,Stage 2 Alta - pullback,35.11,34.0567,35.11,32.3003,37.8133,32.4817,2.1,35.19,35.66,34.64,74.4,73.6,70.0,70.0,HIGH_QUAL,19.6,favoravel,hold
-2026-04-20,VIVT3.SA,"ALTA QUALIDADE
-Fechou @40.69
-RETOMADA APOS PULLBACK: esperar Pivot @41.06
-contexto bom, mas sem entrada abaixo dele; so comprar apos fechamento acima do Pivot
-Contexto: S2 Alta pullback
-+7.6% alvo @43.15 (WR 67% / alvo 67%)
-Stop @39.04 (-2.6%)
-Cancelar se < MA200 @35.15",+7.6%,buy,Stage 2 Alta - pullback,40.69,40.0816,40.69,39.0352,43.1474,35.1464,2.9,41.0567,41.4734,40.2734,73.8,71.1,67.21,67.21,HIGH_QUAL,13.7,favoravel,hold
-2026-04-20,BBAS3.SA,"ALTA QUALIDADE
-Fechou @24.40
-RETOMADA APOS PULLBACK: esperar Pivot @24.53
-contexto bom, mas sem entrada abaixo dele; so comprar apos fechamento acima do Pivot
-Contexto: S2 Alta pullback
-+6.7% alvo @25.46 (WR 68% / alvo 68%)
-Stop @23.15 (-2.9%)
-Cancelar se < MA200 @22.08",+6.7%,buy,Stage 2 Alta - pullback,24.4,23.8575,24.4,23.1539,25.4573,22.0759,2.3,24.5333,24.7666,24.1666,71.5,71.1,67.86,67.86,HIGH_QUAL,11.3,favoravel,hold
-2026-04-20,NEOE3.SA,"Fechou @33.63
-ORDEM LIMITE @33.46
++9.0% alvo @43.14 (WR 74% / alvo 76%)
+Stop @38.56 (-2.6%)
+Cancelar se < MA200 @35.39",+9.0%,buy,Stage 2 Alta - pullback,40.18,39.5792,40.18,38.5621,43.1374,35.389,3.5,40.0833,40.3966,39.8666,89.6,78.6,74.36,75.64,78,63.7,82.7,CI [64-83%],PREMIUM,5.6,favoravel,hold
+2026-04-24,CSMG3.SA,"ALTA QUALIDADE
+Fechou @57.32
+ORDEM LIMITE @55.98
 esperar recuo a partir do fechamento
 Contexto: S2 Alta ideal
-+5.4% alvo @35.26 (WR 60% / alvo 60%)
-Stop @32.79 (-2.0%)
-Cancelar se < MA50/S1 @33.07",+5.4%,buy,Stage 2 Alta - ideal,33.63,33.4619,33.63,32.7927,35.2594,33.0708,2.7,33.61,33.66,33.58,71.4,78.5,60.42,60.42,REGULAR,8.5,favoravel,hold
-2026-04-20,AXIA3.SA,"Fechou @63.49
-ABAIXO DO PIVOT: esperar confirmacao @64.74
-setup montado, mas sem entrada agora; so comprar apos fechamento acima do Pivot
-Contexto: S2 Alta momentum
-+5.2% alvo @66.45 (WR 64% / alvo 64%)
-Stop @61.34 (-2.9%)
-Cancelar se < MA50/S1 @60.07",+5.2%,buy,Stage 2 Alta - momentum,63.49,63.1726,64.7598,61.3384,66.4534,60.0672,1.8,64.7433,66.5866,61.6466,68.2,75.0,64.0,64.0,REGULAR,15.7,favoravel,buy
-2026-04-20,ABCB4.SA,"Fechou @26.71
-ABAIXO DO PIVOT: esperar confirmacao @26.81
-setup montado, mas sem entrada agora; so comprar apos fechamento acima do Pivot
-Contexto: S2 Alta ideal
-+5.8% alvo @27.67 (WR 64% / alvo 64%)
-Stop @25.48 (-2.6%)
-Cancelar se < MA50/S1 @26.47",+5.8%,buy,Stage 2 Alta - ideal,26.71,26.1546,26.71,25.4753,27.6691,26.4666,2.2,26.8133,27.0566,26.4666,66.9,76.3,63.95,63.95,REGULAR,15.7,favoravel,hold
-2026-04-20,TIMS3.SA,"Fechou @26.80
-RETOMADA APOS PULLBACK: esperar Pivot @26.92
-contexto bom, mas sem entrada abaixo dele; so comprar apos fechamento acima do Pivot
++8.8% alvo @60.90 (WR 78% / alvo 78%)
+Stop @54.13 (-3.3%)
+Cancelar se < MA50/S1 @55.84",+8.8%,buy,Stage 2 Alta - ideal,57.32,55.9804,57.32,54.1311,60.8996,55.8405,2.7,57.1667,57.9134,56.5734,88.1,83.5,77.55,77.55,49,64.1,87.0,CI [64-87%],HIGH_QUAL,14.5,favoravel,hold
+2026-04-24,ITUB4.SA,"ALTA QUALIDADE
+Fechou @44.37
+PULLBACK EM ALTA: ordem limite @43.49
+recuo controlado acima do Pivot @44.26
 Contexto: S2 Alta pullback
-+7.1% alvo @28.23 (WR 66% / alvo 65%)
-Stop @25.68 (-2.5%)
-Cancelar se < MA200 @23.27",+7.1%,buy,Stage 2 Alta - pullback,26.8,26.3478,26.8,25.6764,28.2316,23.2718,2.8,26.9167,27.2734,26.4434,64.3,70.8,66.3,65.22,REGULAR,14.5,favoravel,hold
-2026-04-20,HGBS11.SA,"Potencial 0.5% < 5% (nao compensa custos)
-Fechou @20.99
-ORDEM LIMITE @20.89
++9.9% alvo @47.81 (WR 74% / alvo 78%)
+Stop @42.46 (-2.4%)
+Cancelar se < MA200 @38.69",+9.9%,buy,Stage 2 Alta - pullback,44.37,43.4871,44.37,42.4635,47.8117,38.6934,4.2,44.26,44.63,44.0,84.2,81.5,74.07,77.78,27,55.3,86.8,CI [55-87%],HIGH_QUAL,2.7,favoravel,hold
+2026-04-24,TAEE11.SA,"ALTA QUALIDADE
+Fechou @44.11
+ABAIXO DO PIVOT: esperar confirmacao @44.19
+setup montado, mas sem entrada agora; so comprar apos fechamento acima do Pivot
+Contexto: S2 Alta ideal
++6.4% alvo @46.03 (WR 79% / alvo 83%)
+Stop @42.17 (-2.5%)
+Cancelar se < MA50/S1 @43.48",+6.4%,buy,Stage 2 Alta - ideal,44.11,43.2551,44.11,42.173,46.0333,43.4828,2.6,44.19,44.72,43.58,82.4,78.7,79.31,82.76,29,61.6,90.2,CI [62-90%],HIGH_QUAL,3.8,favoravel,hold
+2026-04-24,VALE3.SA,"ALTA QUALIDADE
+Fechou @85.87
+ABAIXO DO PIVOT: esperar confirmacao @86.20
+setup montado, mas sem entrada agora; so comprar apos fechamento acima do Pivot
+Contexto: S2 Alta ideal
++6.4% alvo @89.64 (WR 72% / alvo 72%)
+Stop @82.51 (-2.1%)
+Cancelar se < MA50/S1 @83.56",+6.4%,buy,Stage 2 Alta - ideal,85.87,84.2375,85.87,82.5054,89.6398,83.5562,3.1,86.2033,86.6566,85.4166,80.0,78.4,72.41,72.41,29,54.3,85.3,low CI [54-85%],HIGH_QUAL,6.5,favoravel,hold
+2026-04-24,BPAC11.SA,"Fechou @60.88
+ORDEM LIMITE @59.35
 esperar recuo a partir do fechamento
 Contexto: S2 Alta momentum
-+0.5% alvo @20.99 (WR 76% / alvo 79%)
-Stop @20.70 (-0.9%)
-Cancelar se < MA50/S1 @20.23",+0.5%,hold,Stage 2 Alta - momentum,20.99,20.885,20.778,20.6998,20.9879,20.2347,0.6,20.96,21.03,20.92,89.9,84.3,76.32,78.95,PREMIUM,2.6,favoravel,buy
-2026-04-20,HSML11.SA,"Potencial 3.2% < 5% (nao compensa custos)
-Fechou @95.59
-ORDEM LIMITE @95.11
++10.2% alvo @65.38 (WR 60% / alvo 60%)
+Stop @57.58 (-3.0%)
+Cancelar se < MA50/S1 @59.10",+10.2%,buy,Stage 2 Alta - momentum,60.88,59.3466,60.88,57.5759,65.3769,59.0954,3.4,60.7567,61.3634,60.2734,72.8,78.5,60.0,60.0,20,38.7,78.1,low CI [39-78%],REGULAR,10.5,favoravel,hold
+2026-04-24,ALUP11.SA,"Fechou @34.50
+PULLBACK EM ALTA: ordem limite @34.19
+recuo controlado acima do Pivot @34.44
+Contexto: S2 Alta pullback
++8.4% alvo @37.05 (WR 65% / alvo 65%)
+Stop @33.47 (-2.1%)
+Cancelar se < MA200 @32.37",+8.4%,buy,Stage 2 Alta - pullback,34.5,34.19,34.5,33.4653,37.051,32.3681,3.9,34.4433,34.6966,34.2466,70.6,74.7,65.0,65.0,20,43.3,81.9,low CI [43-82%],REGULAR,6.4,favoravel,hold
+2026-04-24,TIMS3.SA,"Fechou @26.10
+PULLBACK EM ALTA: ordem limite @25.64
+recuo controlado acima do Pivot @26.09
+Contexto: S2 Alta pullback
++10.0% alvo @28.22 (WR 66% / alvo 66%)
+Stop @24.97 (-2.6%)
+Cancelar se < MA200 @23.44",+10.0%,buy,Stage 2 Alta - pullback,26.1,25.644,26.1,24.9683,28.2175,23.4401,3.8,26.0867,26.2434,25.9434,70.4,74.4,66.4,65.6,125,57.7,74.1,CI [58-74%],REGULAR,20.7,favoravel,hold
+2026-04-24,ODPV3.SA,"Fechou @14.89
+ABAIXO DO PIVOT: esperar confirmacao @15.01
+setup montado, mas sem entrada agora; so comprar apos fechamento acima do Pivot
+Contexto: S2 Alta momentum
++10.7% alvo @16.16 (WR 63% / alvo 61%)
+Stop @14.11 (-3.3%)
+Cancelar se < MA50/S1 @13.83",+10.7%,buy,Stage 2 Alta - momentum,14.89,14.5981,14.89,14.111,16.1582,13.828,3.2,15.01,15.19,14.71,69.5,75.2,63.41,60.98,41,48.1,76.4,low CI [48-76%],REGULAR,20.2,favoravel,hold
+2026-04-24,CMIG4.SA,"STATS CI95% 53-67% (lower bound < 55% - low confidence)
+Fechou @13.05
+ABAIXO DO PIVOT: esperar confirmacao @13.13
+setup montado, mas sem entrada agora; so comprar apos fechamento acima do Pivot
+Contexto: S2 Alta momentum
++7.9% alvo @13.85 (WR 60% / alvo 60%)
+Stop @12.53 (-2.4%)
+Cancelar se < MA50/S1 @12.36",+7.9%,buy,Stage 2 Alta - momentum,13.05,12.8392,13.05,12.5313,13.8494,12.3574,3.3,13.13,13.28,12.9,67.7,76.2,60.34,59.77,174,52.9,67.3,low CI [53-67%],REGULAR,18.2,favoravel,hold
+2026-04-24,VBBR3.SA,"Potencial 4.9% < 5% (nao compensa custos)
+Fechou @33.30
+ORDEM LIMITE @32.59
 esperar recuo a partir do fechamento
-Contexto: S2 Alta ideal
-+3.2% alvo @98.13 (WR 76% / alvo 90%)
-Stop @93.21 (-2.0%)
-Cancelar se < MA50/S1 @93.41",+3.2%,hold,Stage 2 Alta - ideal,95.59,95.112,95.59,93.2098,98.1329,93.4117,1.6,95.54,95.86,95.27,86.2,83.3,76.19,90.48,HIGH_QUAL,1.1,favoravel,hold
-2026-04-20,ALZR11.SA,"Fechou @10.61
-AGUARDAR ROMPER R1 @10.65
+Contexto: S2 Alta momentum
++4.9% alvo @34.17 (WR 81% / alvo 81%)
+Stop @31.69 (-2.8%)
+Cancelar se < MA50/S1 @31.26",+4.9%,hold,Stage 2 Alta - momentum,33.3,32.5866,33.3,31.6895,34.1677,31.2637,1.8,33.21,33.45,33.06,92.1,84.4,81.25,81.25,32,64.7,91.1,CI [65-91%],PREMIUM,5.3,favoravel,hold
+2026-04-24,PRIO3.SA,"Fechou @62.63
+AGUARDAR ROMPER R1 @63.27
 Contexto: S2 Alta ideal (entre Pivot e R1)
-+3.0% alvo apos breakout
-Cancelar se < Pivot @10.58",+3.0%,hold,Stage 2 Alta - ideal,10.61,10.5569,10.61,10.3458,10.8736,10.5833,1.5,10.5833,10.6466,10.5466,82.1,68.8,100.0,100.0,REGULAR,0.0,favoravel,hold
-2026-04-20,PRIO3.SA,"Fechou @61.66
-AGUARDAR ROMPER R1 @62.57
-Contexto: S2 Alta ideal (entre Pivot e R1)
-+21.4% alvo apos breakout
-Cancelar se < Pivot @60.75",+21.4%,hold,Stage 2 Alta - ideal,61.66,59.9111,61.66,56.2682,72.7186,60.7467,3.5,60.7467,62.5734,59.8334,81.2,85.1,75.0,72.73,REGULAR,21.3,favoravel,hold
-2026-04-20,BCIA11.SA,"Fechou @95.00
-AGUARDAR ROMPER R1 @95.62
-Contexto: S2 Alta ideal (entre Pivot e R1)
-+3.4% alvo apos breakout
-Cancelar se < Pivot @94.38",+3.4%,hold,Stage 2 Alta - ideal,95.0,94.221,95.0,92.3366,97.4707,94.3767,1.7,94.3767,95.6234,93.7534,81.0,66.7,100.0,100.0,REGULAR,0.0,favoravel,hold
-2026-04-20,IGTI11.SA,"Fechou @30.38
-ABAIXO DO PIVOT: sem entrada agora
-Contexto: S2 Alta momentum; so considerar compra se fechar acima do Pivot @30.39
-Cancelar se < MA50/S1 @28.12",+8.3%,hold,Stage 2 Alta - momentum,30.38,29.7545,30.38,28.9353,32.2094,28.1165,3.0,30.3933,30.6066,30.1666,80.1,67.8,100.0,100.0,REGULAR,0.0,favoravel,hold
-2026-04-20,BRSR6.SA,"Fechou @16.65
-AGUARDAR PULLBACK ATE S1 @16.51
-Contexto: S2 Alta pullback (abaixo MA50 @17.75)
-Gatilho = segurar S1 e retomar MA50/Pivot
-Cancelar se < MA200 @13.92",+16.1%,hold,Stage 2 Alta - pullback,16.65,16.31,16.65,15.6529,18.9364,13.9203,4.0,16.7867,16.9234,16.5134,77.9,75.6,73.17,73.17,HIGH_QUAL,15.1,favoravel,hold
-2026-04-20,ASAI3.SA,"Fechou @9.45
-AGUARDAR CONFIRMACAO
-Contexto: S2 Alta cedo (cruzamento MA50/MA200 recente)
-Comprar apos 3+ fechamentos > R1 @9.66
-Cancelar se < MA50/S1 @8.92 ou se MA50 voltar abaixo MA200",+7.7%,hold,Stage 2 Alta - cedo,9.45,9.1688,9.45,8.6631,10.1794,8.9196,2.0,9.5533,9.6566,9.3466,77.2,61.8,100.0,100.0,REGULAR,0.0,favoravel,hold
-2026-04-20,UNIP6.SA,"Fechou @61.56
-AGUARDAR PULLBACK ATE S1 @60.56
-Contexto: S2 Alta pullback (abaixo MA50 @65.41)
-Gatilho = segurar S1 e retomar MA50/Pivot
-Cancelar se < MA200 @60.23",+11.4%,hold,Stage 2 Alta - pullback,61.56,60.2082,61.56,58.0182,67.0896,60.2327,3.1,62.1,63.1,60.56,76.9,74.4,73.85,69.23,HIGH_QUAL,8.4,favoravel,hold
-2026-04-20,CPTS11.SA,"Fechou @8.00
-AGUARDAR ROMPER R1 @8.02
++19.5% alvo apos breakout
+Cancelar se < Pivot @62.20",+19.5%,hold,Stage 2 Alta - ideal,62.63,60.8536,62.63,57.8372,72.7375,62.2,3.9,62.2,63.27,61.56,90.0,85.8,76.92,71.79,39,61.7,87.4,CI [62-87%],HIGH_QUAL,10.2,favoravel,hold
+2026-04-24,HGBS11.SA,"Potencial 3.0% < 5% (nao compensa custos)
+Fechou @20.87
+ABAIXO DO PIVOT: esperar confirmacao @20.92
+setup montado, mas sem entrada agora; so comprar apos fechamento acima do Pivot
+Contexto: S2 Alta ideal
++3.0% alvo @21.39 (WR 76% / alvo 83%)
+Stop @20.35 (-2.0%)
+Cancelar se < MA50/S1 @20.38",+3.0%,hold,Stage 2 Alta - ideal,20.87,20.7657,20.87,20.3504,21.3887,20.3758,1.5,20.9167,20.9634,20.8234,87.5,80.5,76.09,82.61,46,62.1,86.1,CI [62-86%],PREMIUM,1.5,favoravel,hold
+2026-04-24,HSML11.SA,"Potencial 3.2% < 5% (nao compensa custos)
+Fechou @95.79
+ORDEM LIMITE @95.31
+esperar recuo a partir do fechamento
+Contexto: S2 Alta ideal
++3.2% alvo @98.34 (WR 81% / alvo 81%)
+Stop @93.40 (-2.0%)
+Cancelar se < MA50/S1 @93.93",+3.2%,hold,Stage 2 Alta - ideal,95.79,95.3111,95.79,93.4049,98.3405,93.9311,1.6,95.78,96.0,95.57,85.7,82.5,80.95,80.95,21,60.0,92.3,CI [60-92%],HIGH_QUAL,1.3,favoravel,hold
+2026-04-24,CPTS11.SA,"Fechou @7.96
+AGUARDAR ROMPER R1 @7.99
 Contexto: S2 Alta ideal (entre Pivot e R1)
 +3.1% alvo apos breakout
-Cancelar se < Pivot @7.99",+3.1%,hold,Stage 2 Alta - ideal,8.0,7.96,8.0,7.8008,8.2101,7.9933,1.6,7.9933,8.0166,7.9766,76.8,67.7,83.33,83.33,REGULAR,0.9,favoravel,hold
-2026-04-20,ISAE4.SA,"Potencial 2.3% < 5% (nao compensa custos)
-Fechou @30.89
-ABAIXO DO PIVOT: esperar confirmacao @31.18
-setup montado, mas sem entrada agora; so comprar apos fechamento acima do Pivot
-Contexto: S2 Alta momentum
-+2.3% alvo @31.44 (WR 75% / alvo 74%)
-Stop @30.41 (-1.0%)
-Cancelar se < MA50/S1 @28.74",+2.3%,hold,Stage 2 Alta - momentum,30.8887,30.7342,31.1252,30.4141,31.4396,28.7395,2.2,31.1807,31.5026,30.5669,76.6,79.5,75.0,73.96,HIGH_QUAL,15.9,favoravel,buy
-2026-04-20,RENT3.SA,"Potencial 3.2% < 5% (nao compensa custos)
-Fechou @51.14
-ABAIXO DO PIVOT: esperar confirmacao @51.88
-setup montado, mas sem entrada agora; so comprar apos fechamento acima do Pivot
-Contexto: S2 Alta momentum
-+3.2% alvo @52.51 (WR 70% / alvo 70%)
-Stop @50.15 (-1.4%)
-Cancelar se < MA50/S1 @48.21",+3.2%,hold,Stage 2 Alta - momentum,51.14,50.8843,51.9831,50.1514,52.5082,48.2108,2.2,51.8767,52.6134,50.4034,76.2,76.1,69.84,69.84,HIGH_QUAL,9.2,favoravel,buy
-2026-04-20,VBBR3.SA,"Potencial 2.2% < 5% (nao compensa custos)
-Fechou @33.21
-ABAIXO DO PIVOT: esperar confirmacao @33.35
-setup montado, mas sem entrada agora; so comprar apos fechamento acima do Pivot
-Contexto: S2 Alta momentum
-+2.2% alvo @33.78 (WR 72% / alvo 72%)
-Stop @32.55 (-1.5%)
-Cancelar se < MA50/S1 @31.07",+2.2%,hold,Stage 2 Alta - momentum,33.21,33.0439,33.4379,32.5498,33.7757,31.0713,1.5,33.3467,33.8434,32.7134,75.9,79.6,72.22,72.22,HIGH_QUAL,13.3,favoravel,buy
-2026-04-20,LEVE3.SA,"Potencial 4.8% < 5% (nao compensa custos)
-Fechou @36.66
-ABAIXO DO PIVOT: esperar confirmacao @36.71
-setup montado, mas sem entrada agora; so comprar apos fechamento acima do Pivot
-Contexto: S2 Alta momentum
-+4.8% alvo @37.82 (WR 72% / alvo 72%)
-Stop @35.11 (-2.7%)
-Cancelar se < MA50/S1 @35.48",+4.8%,hold,Stage 2 Alta - momentum,36.66,36.0903,36.66,35.1053,37.8246,35.4754,1.8,36.7133,37.1966,36.1766,75.4,78.1,71.88,71.88,HIGH_QUAL,11.8,favoravel,hold
-2026-04-20,RCRB11.SA,"Fechou @141.10
-ABAIXO DO PIVOT: sem entrada agora
-Contexto: S2 Alta ideal; so considerar compra se fechar acima do Pivot @141.14
-Cancelar se < MA50/S1 @140.29",+3.0%,hold,Stage 2 Alta - ideal,141.1,139.7587,141.1,136.9635,143.9515,140.2891,1.5,141.1367,141.7134,140.5234,75.2,63.6,92.31,92.31,REGULAR,1.2,favoravel,hold
-2026-04-20,KNSC11.SA,"Fechou @9.21
-AGUARDAR ROMPER R1 @9.25
+Cancelar se < Pivot @7.96",+3.1%,hold,Stage 2 Alta - ideal,7.96,7.9202,7.96,7.7618,8.1672,7.96,1.6,7.96,7.99,7.93,82.9,68.3,100.0,100.0,5,56.6,100.0,insuf. n<10,REGULAR,0.0,favoravel,hold
+2026-04-24,HGPO11.SA,"Fechou @153.48
+AGUARDAR ROMPER R1 @153.66
+Contexto: S2 Alta ideal (entre Pivot e R1)
++3.0% alvo apos breakout
+Cancelar se < Pivot @153.42",+3.0%,hold,Stage 2 Alta - ideal,153.48,152.3246,153.48,149.2781,156.8943,153.42,1.5,153.42,153.66,153.24,81.9,66.3,100.0,100.0,2,34.2,100.0,insuf. n<10,REGULAR,0.0,favoravel,hold
+2026-04-24,RBRX11.SA,"Fechou @8.82
+AGUARDAR ROMPER R1 @8.89
 Contexto: S2 Alta momentum (entre Pivot e R1)
 +3.0% alvo apos breakout
-Cancelar se < Pivot @9.21",+3.0%,hold,Stage 2 Alta - momentum,9.21,9.1588,9.21,8.9756,9.4336,9.2067,1.5,9.2067,9.2534,9.1634,73.9,69.4,80.0,80.0,REGULAR,1.7,favoravel,hold
-2026-04-20,KNRI11.SA,"Potencial 3.7% < 5% (nao compensa custos)
-Fechou @171.10
-ORDEM LIMITE @170.15
-esperar recuo a partir do fechamento
-Contexto: S2 Alta momentum
-+3.7% alvo @176.40 (WR 67% / alvo 75%)
-Stop @166.75 (-2.0%)
-Cancelar se < MA50/S1 @165.10",+3.7%,hold,Stage 2 Alta - momentum,171.1,170.1508,171.1,166.7478,176.4008,165.1029,1.8,170.63,171.92,169.81,72.3,79.2,66.67,75.0,REGULAR,4.5,favoravel,hold
-2026-04-20,RAIL3.SA,"Fechou @16.55
+Cancelar se < Pivot @8.80",+3.0%,hold,Stage 2 Alta - momentum,8.82,8.7452,8.82,8.5703,9.0114,8.7967,1.5,8.7967,8.8934,8.7234,81.8,70.4,100.0,100.0,1,20.7,100.0,insuf. n<10,REGULAR,0.0,favoravel,hold
+2026-04-24,ISAE4.SA,"Fechou @29.49
 ABAIXO DO PIVOT: sem entrada agora
-Contexto: S2 Alta ideal; so considerar compra se fechar acima do Pivot @16.74
-Cancelar se < MA50/S1 @16.25",+7.2%,hold,Stage 2 Alta - ideal,16.55,16.1515,16.55,15.5479,17.3162,16.247,1.9,16.74,16.94,16.35,72.3,64.5,85.71,71.43,REGULAR,3.5,favoravel,hold
-2026-04-20,CXSE3.SA,"Fechou @18.92
+Contexto: S2 Alta ideal; so considerar compra se fechar acima do Pivot @29.59
+Cancelar se < MA50/S1 @28.86",+10.4%,hold,Stage 2 Alta - ideal,29.49,28.9778,29.49,28.2417,31.9821,28.8614,4.1,29.59,29.89,29.19,79.9,74.6,69.15,70.21,94,59.2,77.6,CI [59-78%],HIGH_QUAL,13.1,favoravel,hold
+2026-04-24,CPFE3.SA,"Fechou @53.32
 ABAIXO DO PIVOT: sem entrada agora
-Contexto: S2 Alta momentum; so considerar compra se fechar acima do Pivot @18.97
-Cancelar se < MA50/S1 @18.22",+7.8%,hold,Stage 2 Alta - momentum,18.92,18.6547,18.92,18.1533,20.1005,18.2242,2.9,18.97,19.12,18.77,71.6,63.7,75.0,75.0,REGULAR,3.3,favoravel,hold
-2026-04-20,SBSP3.SA,"Fechou @168.68
-ABAIXO DO PIVOT: sem entrada agora
-Contexto: S2 Alta momentum; so considerar compra se fechar acima do Pivot @169.39
-Cancelar se < MA50/S1 @153.42",+8.3%,hold,Stage 2 Alta - momentum,168.68,165.4481,168.68,161.0581,179.1747,153.4179,3.1,169.39,170.73,167.34,70.8,64.6,75.0,75.0,REGULAR,6.5,favoravel,hold
-2026-04-20,HGRE11.SA,"Potencial 4.0% < 5% (nao compensa custos)
-Fechou @126.59
-ORDEM LIMITE @125.26
+Contexto: S2 Alta momentum; so considerar compra se fechar acima do Pivot @53.71
+Cancelar se < MA50/S1 @50.21",+9.2%,hold,Stage 2 Alta - momentum,53.32,52.2893,53.32,50.6136,57.1116,50.2064,2.9,53.71,54.21,52.82,77.9,74.8,69.32,69.32,88,59.0,78.0,CI [59-78%],HIGH_QUAL,14.6,favoravel,hold
+2026-04-24,MULT3.SA,"Potencial 2.5% < 5% (nao compensa custos)
+Fechou @32.73
+ORDEM LIMITE @32.13
 esperar recuo a partir do fechamento
 Contexto: S2 Alta ideal
-+4.0% alvo @130.22 (WR 66% / alvo 66%)
-Stop @122.76 (-2.0%)
-Cancelar se < MA50/S1 @124.79",+4.0%,hold,Stage 2 Alta - ideal,126.59,125.2627,126.59,122.7574,130.2227,124.7923,2.0,126.31,127.16,125.74,70.2,77.7,65.62,65.62,REGULAR,7.9,favoravel,hold
-2026-04-20,DIRR3.SA,"Fechou @14.91
-AGUARDAR BREAKOUT R1 @15.15
-Stage 1 Base lateral
-Comprar se romper com volume
-Evitar se perder S1 @14.64",+1.6%,hold,Stage 1 Base - consolidacao,14.91,14.4627,14.91,13.8563,16.0346,14.64,2.6,14.88,15.15,14.64,70.0,78.0,75.38,75.38,PREMIUM,13.5,favoravel,hold
-2026-04-20,POMO4.SA,"Fechou @7.01
-AGUARDAR BREAKOUT R1 @7.10
-Stage 1 Base lateral
-Comprar se romper com volume
-Evitar se perder S1 @6.92",+1.3%,hold,Stage 1 Base - consolidacao,7.01,6.8512,7.01,6.6469,7.4039,6.92,2.7,7.01,7.1,6.92,70.0,74.5,69.7,69.7,HIGH_QUAL,7.7,favoravel,hold
-2026-04-20,SMTO3.SA,"Fechou @16.39
-AGUARDAR PULLBACK ATE S1 @16.01
-Contexto: S2 Alta pullback (abaixo MA50 @17.94)
-Gatilho = segurar S1 e retomar MA50/Pivot
-Cancelar se < S1 @16.01",+25.0%,hold,Stage 2 Alta - pullback,16.39,16.27,16.39,15.3264,20.3375,16.0066,4.3,16.6533,17.0366,16.0066,69.4,71.8,68.99,68.35,REGULAR,33.2,neutro,hold
-2026-04-20,BTLG11.SA,"Fechou @104.08
-AGUARDAR ROMPER R1 @104.20
-Contexto: S2 Alta ideal (entre Pivot e R1)
-+3.0% alvo apos breakout
-Cancelar se < Pivot @103.98",+3.0%,hold,Stage 2 Alta - ideal,104.08,103.5596,104.08,101.4884,106.6664,103.9767,1.5,103.9767,104.2034,103.8534,69.2,66.9,58.33,75.0,REGULAR,1.4,favoravel,hold
-2026-04-20,MULT3.SA,"Potencial 1.6% < 5% (nao compensa custos)
-Fechou @34.79
-ABAIXO DO PIVOT: esperar confirmacao @35.03
-setup montado, mas sem entrada agora; so comprar apos fechamento acima do Pivot
-Contexto: S2 Alta momentum
-+1.6% alvo @35.19 (WR 70% / alvo 70%)
-Stop @34.38 (-0.7%)
-Cancelar se < MA50/S1 @32.50",+1.6%,hold,Stage 2 Alta - momentum,34.79,34.6225,34.841,34.3806,35.1929,32.5038,2.4,35.0267,35.2634,34.5534,69.2,80.4,70.18,70.18,REGULAR,26.5,favoravel,buy
-2026-04-20,CMIG4.SA,"Potencial 2.3% < 5% (nao compensa custos)
-Fechou @13.64
-ORDEM LIMITE @13.41
++2.5% alvo @32.94 (WR 68% / alvo 68%)
+Stop @31.18 (-2.9%)
+Cancelar se < MA50/S1 @32.40",+2.5%,hold,Stage 2 Alta - ideal,32.73,32.1276,32.6112,31.1819,32.9406,32.3966,0.9,32.6733,33.0066,32.3966,76.7,81.1,67.74,67.74,124,59.1,75.3,CI [59-75%],REGULAR,21.9,favoravel,buy
+2026-04-24,UGPA3.SA,"Potencial 2.3% < 5% (nao compensa custos)
+Fechou @29.08
+ORDEM LIMITE @28.53
 esperar recuo a partir do fechamento
 Contexto: S2 Alta momentum
-+2.3% alvo @13.72 (WR 63% / alvo 62%)
-Stop @13.10 (-2.3%)
-Cancelar se < MA50/S1 @12.13",+2.3%,hold,Stage 2 Alta - momentum,13.64,13.414,13.5819,13.1011,13.7191,12.1258,1.0,13.5933,13.7466,13.4866,68.5,80.9,63.16,61.84,REGULAR,17.5,favoravel,buy
-2026-04-20,UGPA3.SA,"Potencial 3.0% < 5% (nao compensa custos)
-Fechou @29.76
-ABAIXO DO PIVOT: esperar confirmacao @30.02
-setup montado, mas sem entrada agora; so comprar apos fechamento acima do Pivot
-Contexto: S2 Alta momentum
-+3.0% alvo @30.49 (WR 71% / alvo 71%)
-Stop @29.08 (-1.8%)
-Cancelar se < MA50/S1 @27.65",+3.0%,hold,Stage 2 Alta - momentum,29.76,29.6112,30.1874,29.0773,30.4923,27.6512,1.7,30.0167,30.5534,29.2234,68.4,83.8,70.77,70.77,REGULAR,22.8,favoravel,buy
-2026-04-20,KLBN11.SA,"Fechou @18.78
-AGUARDAR PULLBACK ATE S1 @18.58
-Contexto: S2 Alta pullback (abaixo MA50 @19.60)
++2.3% alvo @29.19 (WR 68% / alvo 68%)
+Stop @27.74 (-2.8%)
+Cancelar se < MA50/S1 @27.94",+2.3%,hold,Stage 2 Alta - momentum,29.08,28.5315,28.903,27.7422,29.1949,27.9382,0.8,28.9167,29.2534,28.7434,76.0,84.3,67.72,67.72,158,60.1,74.5,CI [60-75%],REGULAR,21.4,favoravel,buy
+2026-04-24,SMTO3.SA,"Fechou @16.64
+AGUARDAR PULLBACK ATE S1 @16.09
+Contexto: S2 Alta pullback (abaixo MA50 @18.12)
 Gatilho = segurar S1 e retomar MA50/Pivot
-Cancelar se < MA200 @17.96",+6.9%,hold,Stage 2 Alta - pullback,18.78,18.4584,18.78,17.9898,19.734,17.9649,2.7,18.9267,19.1234,18.5834,68.2,59.7,82.35,82.35,REGULAR,6.5,favoravel,hold
-2026-04-20,KNHY11.SA,"Fechou @100.69
-AGUARDAR ROMPER R1 @100.99
+Cancelar se < S1 @16.09",+25.0%,hold,Stage 2 Alta - pullback,16.64,16.1796,16.64,15.3796,20.2245,16.0934,5.1,16.5967,17.1434,16.0934,75.3,81.6,70.66,71.26,167,63.4,77.0,CI [63-77%],REGULAR,32.8,neutro,hold
+2026-04-24,LEVE3.SA,"Fechou @36.20
+ABAIXO DO PIVOT: sem entrada agora
+Contexto: S2 Alta ideal; so considerar compra se fechar acima do Pivot @36.29
+Cancelar se < MA50/S1 @35.63",+6.1%,hold,Stage 2 Alta - ideal,36.2,35.6375,36.2,34.6632,37.8156,35.63,2.2,36.2933,36.5866,35.9066,72.8,63.7,84.21,84.21,19,62.4,94.5,low CI [62-94%],REGULAR,5.7,favoravel,hold
+2026-04-24,BCIA11.SA,"Fechou @95.50
+ABAIXO DO PIVOT: sem entrada agora
+Contexto: S2 Alta ideal; so considerar compra se fechar acima do Pivot @95.66
+Cancelar se < MA50/S1 @93.63",+3.5%,hold,Stage 2 Alta - ideal,95.5,94.7081,95.5,92.8139,98.0607,93.6294,1.8,95.66,95.82,95.34,72.2,62.6,75.0,100.0,4,30.1,95.4,insuf. n<10,REGULAR,0.0,favoravel,hold
+2026-04-24,RENT3.SA,"Fechou @49.29
+AGUARDAR ROMPER R1 @49.87
+Contexto: S2 Alta ideal (entre Pivot e R1)
++11.3% alvo apos breakout
+Cancelar se < Pivot @49.13",+11.3%,hold,Stage 2 Alta - ideal,49.29,47.8469,49.29,45.9205,53.2399,49.1333,2.8,49.1333,49.8666,48.5566,72.0,67.9,56.25,56.25,16,33.2,76.9,low CI [33-77%],REGULAR,30.2,favoravel,hold
+2026-04-24,RCRB11.SA,"Fechou @141.04
+AGUARDAR ROMPER R1 @141.27
 Contexto: S2 Alta ideal (entre Pivot e R1)
 +3.0% alvo apos breakout
-Cancelar se < Pivot @100.46",+3.0%,hold,Stage 2 Alta - ideal,100.69,100.1866,100.69,98.1829,103.1922,100.4633,1.5,100.4633,100.9866,100.1666,68.1,67.7,57.14,64.29,REGULAR,1.6,favoravel,hold
-2026-04-20,BPAC11.SA,"Potencial 2.3% < 5% (nao compensa custos)
-Fechou @63.60
-ABAIXO DO PIVOT: esperar confirmacao @64.23
+Cancelar se < Pivot @140.90",+3.0%,hold,Stage 2 Alta - ideal,141.04,139.8436,141.04,137.0467,144.0389,140.8967,1.5,140.8967,141.2734,140.6634,71.8,65.4,71.43,71.43,14,45.4,88.3,low CI [45-88%],REGULAR,2.5,favoravel,hold
+2026-04-24,ALZR11.SA,"Fechou @10.59
+ABAIXO DO PIVOT: sem entrada agora
+Contexto: S2 Alta ideal; so considerar compra se fechar acima do Pivot @10.60
+Cancelar se < MA50/S1 @10.54",+3.0%,hold,Stage 2 Alta - ideal,10.59,10.5371,10.59,10.3264,10.8532,10.5357,1.5,10.6,10.61,10.58,70.7,63.4,75.0,87.5,16,50.5,89.8,low CI [51-90%],REGULAR,1.5,favoravel,hold
+2026-04-24,AXIA3.SA,"Fechou @62.87
+ABAIXO DO PIVOT: sem entrada agora
+Contexto: S2 Alta momentum; so considerar compra se fechar acima do Pivot @62.98
+Cancelar se < MA50/S1 @60.56",+10.2%,hold,Stage 2 Alta - momentum,62.87,61.442,62.87,59.5056,67.712,60.555,3.2,62.9767,63.5834,62.2634,70.4,74.3,68.04,67.01,97,58.2,76.5,CI [58-76%],REGULAR,13.3,favoravel,hold
+2026-04-24,SLCE3.SA,"Fechou @17.37
+AGUARDAR PULLBACK ATE S1 @17.23
+Contexto: S2 Alta pullback (abaixo MA50 @17.56)
+Gatilho = segurar S1 e retomar MA50/Pivot
+Cancelar se < MA200 @15.20",+12.7%,hold,Stage 2 Alta - pullback,17.37,17.25,17.37,16.6857,19.4354,15.2046,3.9,17.3867,17.5234,17.2334,70.2,76.3,74.19,72.58,62,62.1,83.4,CI [62-83%],REGULAR,21.1,neutro,hold
+2026-04-24,BBSE3.SA,"Fechou @34.29
+AGUARDAR PULLBACK ATE S1 @34.02
+Contexto: S2 Alta pullback (abaixo MA50 @34.75)
+Gatilho = segurar S1 e retomar MA50/Pivot
+Cancelar se < MA200 @32.35",+7.2%,hold,Stage 2 Alta - pullback,34.29,33.94,34.29,33.2612,36.3704,32.3504,3.6,34.21,34.48,34.02,70.0,74.7,67.24,67.24,58,54.4,77.9,low CI [54-78%],REGULAR,12.5,favoravel,hold
+2026-04-24,EGIE3.SA,"Potencial 0.9% < 5% (nao compensa custos)
+Fechou @36.67
+ABAIXO DO PIVOT: esperar confirmacao @36.79
 setup montado, mas sem entrada agora; so comprar apos fechamento acima do Pivot
 Contexto: S2 Alta momentum
-+2.3% alvo @64.74 (WR 76% / alvo 76%)
-Stop @62.65 (-1.0%)
-Cancelar se < MA50/S1 @58.84",+2.3%,hold,Stage 2 Alta - momentum,63.6,63.282,64.0895,62.6518,64.7369,58.8416,2.3,64.2333,64.8666,62.9666,67.9,64.6,76.47,76.47,REGULAR,3.8,favoravel,buy
-2026-04-20,USIM5.SA,"Fechou @7.21
++0.9% alvo @36.90 (WR 66% / alvo 66%)
+Stop @36.30 (-0.7%)
+Cancelar se < MA50/S1 @33.76",+0.9%,hold,Stage 2 Alta - momentum,36.67,36.5596,36.5336,36.3042,36.9026,33.758,1.3,36.7933,36.9766,36.4866,69.7,75.7,66.28,66.28,86,55.8,75.4,CI [56-75%],REGULAR,19.2,favoravel,buy
+2026-04-24,KNRI11.SA,"Fechou @167.11
 ABAIXO DO PIVOT: sem entrada agora
-Contexto: S2 Alta momentum; so considerar compra se fechar acima do Pivot @7.29
-Cancelar se < MA50/S1 @6.65",+10.8%,hold,Stage 2 Alta - momentum,7.21,7.0053,7.21,6.7182,7.7645,6.6486,2.6,7.2867,7.3834,7.1134,67.7,72.8,65.22,56.52,REGULAR,15.4,favoravel,hold
-2026-04-17,RBRF11.SA,"Fechou @6.65
+Contexto: S2 Alta ideal; so considerar compra se fechar acima do Pivot @167.45
+Cancelar se < MA50/S1 @165.81",+3.1%,hold,Stage 2 Alta - ideal,167.11,166.141,167.11,162.8182,171.3438,165.8088,1.6,167.4467,167.8634,166.6934,69.5,74.1,66.67,84.62,39,51.0,79.4,low CI [51-79%],REGULAR,4.5,favoravel,hold
+2026-04-24,KNSC11.SA,"Fechou @9.28
+ABAIXO DO PIVOT: sem entrada agora
+Contexto: S2 Alta momentum; so considerar compra se fechar acima do Pivot @9.28
+Cancelar se < MA50/S1 @8.94",+3.0%,hold,Stage 2 Alta - momentum,9.28,9.2258,9.28,9.0413,9.5026,8.9402,1.5,9.2833,9.3366,9.2266,69.5,64.8,66.67,100.0,6,30.0,90.3,insuf. n<10,REGULAR,0.0,favoravel,hold
+2026-04-24,IGTI11.SA,"Fechou @28.65
+ABAIXO DO PIVOT: sem entrada agora
+Contexto: S2 Alta ideal; so considerar compra se fechar acima do Pivot @28.65
+Cancelar se < MA50/S1 @28.18",+8.9%,hold,Stage 2 Alta - ideal,28.65,28.0649,28.65,27.3346,30.5689,28.1799,3.4,28.65,28.92,28.38,68.5,64.6,61.54,61.54,13,35.5,82.3,low CI [36-82%],REGULAR,5.6,favoravel,hold
+2026-04-24,CURY3.SA,"Fechou @32.74
+AGUARDAR PULLBACK ATE S1 @32.28
+Contexto: S2 Alta pullback (abaixo MA50 @36.48)
+Gatilho = segurar S1 e retomar MA50/Pivot
+Cancelar se < S1 @32.28",+16.0%,hold,Stage 2 Alta - pullback,32.74,32.56,32.74,30.9936,37.7834,32.2834,3.3,33.0167,33.4734,32.2834,68.1,60.1,70.59,70.59,17,46.9,86.7,low CI [47-87%],REGULAR,19.2,neutro,hold
+2026-04-24,UNIP6.SA,"Fechou @60.54
+AGUARDAR PULLBACK ATE S1 @59.86
+Contexto: S2 Alta pullback (abaixo MA50 @64.89)
+Gatilho = segurar S1 e retomar MA50/Pivot
+Cancelar se < S1 @59.86",+13.3%,hold,Stage 2 Alta - pullback,60.54,59.2106,60.54,57.2513,67.0696,59.8566,4.0,61.1033,61.7866,59.8566,67.2,70.9,68.75,67.5,80,57.9,77.8,CI [58-78%],REGULAR,15.5,favoravel,hold
+2026-04-24,BTLG11.SA,"Fechou @103.18
+ABAIXO DO PIVOT: sem entrada agora
+Contexto: S2 Alta ideal; so considerar compra se fechar acima do Pivot @103.28
+Cancelar se < MA50/S1 @102.51",+3.0%,hold,Stage 2 Alta - ideal,103.18,102.6641,103.18,100.6108,105.744,102.5135,1.5,103.2833,103.4566,103.0066,67.1,73.5,60.0,76.0,25,40.7,76.6,low CI [41-77%],REGULAR,1.7,favoravel,hold
+2026-04-24,SBSP3.SA,"Fechou @172.31
+ABAIXO DO PIVOT: sem entrada agora
+Contexto: S2 Alta momentum; so considerar compra se fechar acima do Pivot @173.07
+Cancelar se < MA50/S1 @156.06",+4.5%,hold,Stage 2 Alta - momentum,172.31,168.8768,172.31,164.1361,176.4357,156.0598,1.6,173.0667,174.2234,171.1534,66.0,63.4,76.47,76.47,17,52.7,90.4,low CI [53-90%],REGULAR,9.4,favoravel,hold
+2026-04-24,KFOF11.SA,"Fechou @84.10
+ABAIXO DO PIVOT: sem entrada agora
+Contexto: S2 Alta ideal; so considerar compra se fechar acima do Pivot @84.11
+Cancelar se < MA50/S1 @83.10",+3.3%,hold,Stage 2 Alta - ideal,84.1,83.387,84.1,81.7193,86.1244,83.0991,1.6,84.11,84.62,83.59,65.6,61.1,70.0,70.0,10,39.7,89.2,low CI [40-89%],REGULAR,2.4,favoravel,hold
+2026-04-24,JHSF3.SA,"Fechou @13.43
+AGUARDAR PULLBACK
+Contexto: S2 Alta atrasado (esticado ++29.8% MA50)
+Esperar correcao ate S1 @13.17 ou MA50 @10.34
+Cancelar se < MA50/S1 @10.34",+1.3%,hold,Stage 2 Alta - atrasado,13.43,13.3629,13.5819,13.1008,13.7191,10.3433,1.4,13.4833,13.7466,13.1666,65.0,61.6,70.0,66.0,50,56.2,80.9,CI [56-81%],HIGH_QUAL,16.1,favoravel,buy
+2026-04-24,MLAS3.SA,"Fechou @1.60
+AGUARDAR PULLBACK
+Contexto: S2 Alta atrasado (esticado ++17.6% MA50)
+Esperar correcao ate S1 @1.57 ou MA50 @1.36
+Cancelar se < MA50/S1 @1.36",+6.7%,hold,Stage 2 Alta - atrasado,1.6,1.5524,1.6,1.4753,1.76,1.3608,2.7,1.59,1.62,1.57,65.0,55.2,100.0,100.0,5,56.6,100.0,insuf. n<10,REGULAR,0.0,favoravel,hold
+2026-04-24,ABEV3.SA,"Fechou @14.50
+AGUARDAR PULLBACK ATE S1 @14.40
+Contexto: S2 Alta pullback (abaixo MA50 @15.46)
+Gatilho = segurar S1 e retomar MA50/Pivot
+Cancelar se < MA200 @13.03",+13.0%,hold,Stage 2 Alta - pullback,14.5,14.4275,14.5,14.1018,16.3018,13.028,5.8,14.5633,14.6666,14.3966,64.5,69.4,65.79,65.79,38,49.9,78.8,low CI [50-79%],REGULAR,15.8,neutro,hold
+2026-04-24,ITSA4.SA,"Fechou @14.22
+AGUARDAR ROMPER R1 @14.28
+Contexto: S2 Alta ideal (entre Pivot e R1)
++9.4% alvo apos breakout
+Cancelar se < Pivot @14.18",+9.4%,hold,Stage 2 Alta - ideal,14.22,13.9028,14.22,13.5692,15.2133,14.1833,3.9,14.1833,14.2766,14.1266,64.5,53.9,45.45,45.45,11,21.3,72.0,low CI [21-72%],REGULAR,20.3,favoravel,hold
+2026-04-24,ASAI3.SA,"Fechou @9.42
+AGUARDAR CONFIRMACAO
+Contexto: S2 Alta cedo (cruzamento MA50/MA200 recente)
+Comprar apos 3+ fechamentos > R1 @9.63
+Cancelar se < MA50/S1 @8.95 ou se MA50 voltar abaixo MA200",+7.9%,hold,Stage 2 Alta - cedo,9.42,9.1469,9.42,8.7062,10.1789,8.9492,2.3,9.4533,9.6266,9.2466,64.3,58.9,60.0,60.0,5,23.1,88.2,insuf. n<10,REGULAR,7.3,favoravel,hold
+2026-04-24,POMO4.SA,"Fechou @6.69
+AGUARDAR BREAKOUT R1 @6.76
+Stage 1 Base lateral
+Comprar se romper com volume
+Evitar se perder S1 @6.62",+1.1%,hold,Stage 1 Base - consolidacao,6.69,6.5346,6.69,6.3246,7.1279,6.6234,2.8,6.6967,6.7634,6.6234,63.4,57.9,63.64,63.64,11,35.4,84.8,low CI [35-85%],REGULAR,4.2,favoravel,hold
+2026-04-24,PETR4.SA,"Fechou @47.16
+AGUARDAR ROMPER R1 @47.64
+Contexto: S2 Alta momentum (entre Pivot e R1)
++7.5% alvo apos breakout
+Cancelar se < Pivot @47.04",+7.5%,hold,Stage 2 Alta - momentum,47.16,46.4208,47.16,44.686,49.9246,47.0433,2.0,47.0433,47.6366,46.5666,62.5,51.7,54.55,45.45,11,28.0,78.7,low CI [28-79%],REGULAR,20.4,favoravel,hold
+2026-04-24,HFOF11.SA,"Fechou @6.81
+ABAIXO DO PIVOT: sem entrada agora
+Contexto: S2 Alta ideal; so considerar compra se fechar acima do Pivot @6.83
+Cancelar se < MA50/S1 @6.79",+3.7%,hold,Stage 2 Alta - ideal,6.81,6.7603,6.81,6.6251,7.0087,6.7934,1.8,6.8267,6.8434,6.7934,60.4,50.1,50.0,60.0,10,23.7,76.3,low CI [24-76%],REGULAR,2.5,favoravel,hold
+2026-04-24,RAIL3.SA,"Fechou @15.82
+AGUARDAR PULLBACK ATE S1 @15.55
+Contexto: S2 Alta pullback (abaixo MA50 @16.28)
+Gatilho = segurar S1 e retomar MA50/Pivot
+Cancelar se < S1 @15.55",+11.6%,hold,Stage 2 Alta - pullback,15.82,15.5,15.82,14.9157,17.3032,15.5466,3.1,15.9033,16.1766,15.5466,59.5,47.2,50.0,50.0,8,21.5,78.5,insuf. n<10,REGULAR,3.5,favoravel,hold
+2026-04-24,LVBI11.SA,"Fechou @109.02
+AGUARDAR BREAKOUT R1 @109.31
+Stage 1 Base lateral
+Comprar se romper com volume
+Evitar se perder S1 @108.77",+0.3%,hold,Stage 1 Base - consolidacao,109.02,108.4749,109.02,106.3054,111.7291,108.7734,1.5,109.0667,109.3134,108.7734,59.3,55.5,63.64,72.73,11,35.4,84.8,low CI [35-85%],REGULAR,3.1,favoravel,hold
+2026-04-24,XPML11.SA,"Fechou @111.00
+AGUARDAR ROMPER R1 @111.22
+Contexto: S2 Alta ideal (entre Pivot e R1)
++3.0% alvo apos breakout
+Cancelar se < Pivot @110.78",+3.0%,hold,Stage 2 Alta - ideal,111.0,110.4444,111.0,108.2355,113.7577,110.7767,1.5,110.7767,111.2234,110.5534,59.1,55.0,25.0,62.5,8,7.1,59.1,insuf. n<10,REGULAR,1.6,favoravel,hold
+2026-04-24,CXSE3.SA,"Fechou @18.36
+ABAIXO DO PIVOT: sem entrada agora
+Contexto: S2 Alta ideal; so considerar compra se fechar acima do Pivot @18.41
+Cancelar se < MA50/S1 @18.26",+11.0%,hold,Stage 2 Alta - ideal,18.36,18.1025,18.36,17.6818,20.0894,18.26,4.7,18.41,18.51,18.26,57.8,46.6,40.0,40.0,5,11.8,76.9,insuf. n<10,REGULAR,7.0,favoravel,hold
+2026-04-24,EQTL3.SA,"Fechou @44.11
+AGUARDAR ROMPER R1 @44.38
+Contexto: S2 Alta momentum (entre Pivot e R1)
++6.6% alvo apos breakout
+Cancelar se < Pivot @44.08",+6.6%,hold,Stage 2 Alta - momentum,44.11,43.3926,44.11,42.384,46.2615,44.08,2.8,44.08,44.38,43.81,55.8,53.9,55.56,55.56,36,39.6,70.5,low CI [40-70%],REGULAR,18.8,favoravel,hold
+2026-04-24,ABCB4.SA,"Fechou @25.28
+NAO ABRIR
+Stage 3 Topo (MA50 caindo, distribuicao)
+Vender posicoes se perder Pivot @25.20",-2.5%,hold,Stage 3 Topo - evitar,25.28,24.734,25.28,24.1154,27.6407,25.1266,4.7,25.2033,25.3566,25.1266,55.0,74.7,70.59,70.59,34,53.8,83.2,low CI [54-83%],HIGH_QUAL,7.7,favoravel,hold
+2026-04-24,BBAS3.SA,"Fechou @22.70
+NAO ABRIR
+Stage 3 Topo (MA50 caindo, distribuicao)
+Vender posicoes se perder Pivot @22.80",-2.9%,hold,Stage 3 Topo - evitar,22.7,22.32,22.7,21.6814,25.4266,22.5034,4.9,22.7967,22.9934,22.5034,55.0,65.0,63.64,63.64,44,48.9,76.2,low CI [49-76%],REGULAR,12.9,favoravel,hold
+2026-04-24,BBDC4.SA,"Fechou @19.92
+NAO ABRIR
+Stage 3 Topo (MA50 caindo, distribuicao)
+Vender posicoes se perder Pivot @19.96",-2.6%,hold,Stage 3 Topo - evitar,19.92,19.4656,19.92,18.9506,21.5475,19.7866,4.0,19.9633,20.0966,19.7866,55.0,71.3,75.0,75.0,44,60.6,85.4,CI [61-85%],REGULAR,16.7,favoravel,hold
+2026-04-24,BRCO11.SA,"Fechou @117.00
+NAO ABRIR
+Stage 3 Topo (MA50 caindo, distribuicao)
+Vender posicoes se perder Pivot @117.06",-2.0%,hold,Stage 3 Topo - evitar,117.0,116.2312,117.0,113.9066,119.7181,116.65,1.5,117.06,117.41,116.65,55.0,54.2,71.43,78.57,14,45.4,88.3,low CI [45-88%],REGULAR,1.1,favoravel,hold
+2026-04-24,BRCR11.SA,"Fechou @47.58
+NAO ABRIR
+Stage 3 Topo (MA50 caindo, distribuicao)
+Vender posicoes se perder Pivot @47.50",-2.0%,hold,Stage 3 Topo - evitar,47.58,47.196,47.58,46.2521,50.3918,47.3834,3.4,47.4967,47.6934,47.3834,55.0,62.6,88.89,100.0,9,56.5,98.0,insuf. n<10,REGULAR,0.0,favoravel,hold
+2026-04-24,BRKM5.SA,"Fechou @8.58
+NAO ABRIR
+Stage 3 Topo (MA50 caindo, distribuicao)
+Vender posicoes se perder Pivot @8.42",-8.0%,hold,Stage 3 Topo - evitar,8.58,8.3226,8.58,7.6583,10.4032,8.2466,3.1,8.4233,8.7566,8.2466,55.0,70.3,60.0,60.0,20,38.7,78.1,low CI [39-78%],REGULAR,34.3,favoravel,hold
+2026-04-24,BRSR6.SA,"Fechou @15.95
+NAO ABRIR
+Stage 3 Topo (MA50 caindo, distribuicao)
+Vender posicoes se perder Pivot @16.02",-3.8%,hold,Stage 3 Topo - evitar,15.95,15.84,15.95,15.2457,18.927,15.77,5.2,16.02,16.2,15.77,55.0,71.5,73.21,73.21,56,60.4,83.0,CI [60-83%],HIGH_QUAL,9.3,neutro,hold
+2026-04-24,EZTC3.SA,"Fechou @15.51
+NAO ABRIR
+Stage 3 Topo (MA50 caindo, distribuicao)
+Vender posicoes se perder Pivot @15.53",-4.0%,hold,Stage 3 Topo - evitar,15.51,15.0447,15.51,14.4397,16.3043,15.2634,2.1,15.5267,15.7734,15.2634,55.0,66.9,68.29,68.29,123,59.6,75.9,CI [60-76%],REGULAR,17.5,favoravel,hold
+2026-04-24,FLRY3.SA,"Fechou @16.21
+NAO ABRIR
+Stage 3 Topo (MA50 caindo, distribuicao)
+Vender posicoes se perder Pivot @16.25",-2.8%,hold,Stage 3 Topo - evitar,16.21,15.8317,16.21,15.381,17.6822,16.0966,4.1,16.2533,16.3666,16.0966,55.0,64.5,64.52,64.52,31,46.9,78.9,low CI [47-79%],REGULAR,16.0,favoravel,hold
+2026-04-24,GRND3.SA,"Fechou @4.51
+NAO ABRIR
+Stage 3 Topo (MA50 caindo, distribuicao)
+Vender posicoes se perder Pivot @4.54",-2.3%,hold,Stage 3 Topo - evitar,4.51,4.47,4.51,4.3654,4.8161,4.4434,3.3,4.5367,4.6034,4.4434,55.0,64.1,63.73,63.73,102,54.1,72.4,low CI [54-72%],REGULAR,17.3,favoravel,hold
+2026-04-24,IVVB11.SA,"Fechou @403.00
+NAO ABRIR
+Stage 3 Topo (MA50 caindo, distribuicao)
+Vender posicoes se perder Pivot @402.86",-2.0%,hold,Stage 3 Topo - evitar,403.0,399.7901,403.0,391.7943,411.8347,401.4366,1.5,402.8633,404.4266,401.4366,55.0,58.2,56.25,56.25,16,33.2,76.9,low CI [33-77%],REGULAR,6.3,favoravel,hold
+2026-04-24,PVBI11.SA,"Fechou @79.00
+NAO ABRIR
+Stage 3 Topo (MA50 caindo, distribuicao)
+Vender posicoes se perder Pivot @78.79",-2.0%,hold,Stage 3 Topo - evitar,79.0,78.2132,79.0,76.6489,80.5596,78.51,1.5,78.79,79.28,78.51,55.0,58.4,66.67,66.67,3,20.8,93.9,insuf. n<10,REGULAR,2.1,favoravel,hold
+2026-04-24,RADL3.SA,"Fechou @22.52
+NAO ABRIR
+Stage 3 Topo (MA50 caindo, distribuicao)
+Vender posicoes se perder Pivot @22.34",-3.8%,hold,Stage 3 Topo - evitar,22.52,21.896,22.52,21.0624,24.4969,22.0866,3.1,22.3433,22.7766,22.0866,55.0,70.1,65.12,63.95,86,54.6,74.3,low CI [55-74%],REGULAR,27.5,favoravel,hold
+2026-04-24,SAPR11.SA,"Fechou @43.61
+NAO ABRIR
+Stage 3 Topo (MA50 caindo, distribuicao)
+Vender posicoes se perder Pivot @43.68",-3.8%,hold,Stage 3 Topo - evitar,43.61,42.5547,43.61,40.9397,46.9013,42.4666,2.7,43.6833,44.8266,42.4666,55.0,69.5,76.09,76.09,46,62.1,86.1,CI [62-86%],PREMIUM,14.1,favoravel,hold
+2026-04-24,VINO11.SA,"Fechou @5.01
+NAO ABRIR
+Stage 3 Topo (MA50 caindo, distribuicao)
+Vender posicoes se perder Pivot @5.02",-2.0%,hold,Stage 3 Topo - evitar,5.01,4.9594,5.01,4.8602,5.1462,4.97,1.9,5.02,5.06,4.97,55.0,55.3,100.0,100.0,1,20.7,100.0,insuf. n<10,REGULAR,0.0,favoravel,hold
+2026-04-24,WEGE3.SA,"Fechou @47.80
+NAO ABRIR
+Stage 3 Topo (MA50 caindo, distribuicao)
+Vender posicoes se perder Pivot @47.93",-3.3%,hold,Stage 3 Topo - evitar,47.8,46.9053,47.8,45.3717,53.2113,47.2366,4.1,47.9333,48.4966,47.2366,55.0,70.0,73.68,73.68,95,64.0,81.5,CI [64-81%],REGULAR,20.1,neutro,hold
+2026-04-24,WIZC3.SA,"Fechou @9.19
+NAO ABRIR
+Stage 3 Topo (MA50 caindo, distribuicao)
+Vender posicoes se perder Pivot @9.18",-2.3%,hold,Stage 3 Topo - evitar,9.19,9.033,9.19,8.8259,9.6867,9.1,3.2,9.18,9.27,9.1,55.0,71.2,69.33,66.67,75,58.2,78.6,CI [58-79%],REGULAR,10.6,favoravel,hold
+2026-04-24,XPBR31.SA,"Fechou @98.82
+NAO ABRIR
+Stage 3 Topo (MA50 caindo, distribuicao)
+Vender posicoes se perder Pivot @98.13",-4.0%,hold,Stage 3 Topo - evitar,98.82,95.8554,98.82,92.0261,108.0413,97.44,3.2,98.13,99.51,97.44,55.0,61.0,77.78,77.78,9,45.3,93.7,insuf. n<10,REGULAR,1.7,favoravel,hold
+2026-04-24,IRIM11.SA,"Fechou @66.05
+NAO ABRIR
+Stage 3 Topo (MA50 caindo, distribuicao)
+Vender posicoes se perder Pivot @66.15",-2.0%,hold,Stage 3 Topo - evitar,66.05,65.664,66.05,64.3507,68.1077,65.87,1.9,66.15,66.33,65.87,54.6,51.8,55.56,66.67,9,26.7,81.1,insuf. n<10,REGULAR,2.8,favoravel,hold
+2026-04-24,KNHY11.SA,"Fechou @101.16
+ABAIXO DO PIVOT: sem entrada agora
+Contexto: S2 Alta ideal; so considerar compra se fechar acima do Pivot @101.18
+Cancelar se < MA50/S1 @98.95",+3.0%,hold,Stage 2 Alta - ideal,101.16,100.6542,101.16,98.6411,103.6738,98.9457,1.5,101.18,101.36,100.98,54.2,52.0,58.62,79.31,29,40.7,74.5,low CI [41-74%],REGULAR,1.6,favoravel,hold
+2026-04-24,NEOE3.SA,"Fechou @33.75
+AGUARDAR ROMPER R1 @33.78
+Contexto: S2 Alta ideal (entre Pivot e R1)
++4.8% alvo apos breakout
+Cancelar se < Pivot @33.72",+4.8%,hold,Stage 2 Alta - ideal,33.75,33.5812,33.75,32.9096,35.1826,33.7233,2.4,33.7233,33.7766,33.6966,54.0,43.9,54.17,56.25,48,40.3,67.4,low CI [40-67%],REGULAR,8.0,favoravel,hold
+2026-04-24,HGLG11.SA,"Fechou @158.01
+AGUARDAR CONFIRMACAO
+Contexto: S2 Alta cedo (cruzamento MA50/MA200 recente)
+Comprar apos 3+ fechamentos > R1 @158.47
+Cancelar se < MA50/S1 @156.15 ou se MA50 voltar abaixo MA200",+2.1%,hold,Stage 2 Alta - cedo,158.01,157.2199,158.01,154.0755,161.9365,156.1472,1.5,157.7367,158.4734,157.2734,53.8,52.8,55.88,76.47,34,39.5,71.1,low CI [39-71%],REGULAR,3.1,favoravel,hold
+2026-04-24,AXIA6.SA,"Fechou @68.84
+ABAIXO DO PIVOT: sem entrada agora
+Contexto: S2 Alta momentum; so considerar compra se fechar acima do Pivot @69.02
+Cancelar se < MA50/S1 @66.12",+10.5%,hold,Stage 2 Alta - momentum,68.84,67.3015,68.84,65.2208,74.3756,66.1234,3.4,69.0167,69.6334,68.2234,53.6,51.3,58.18,56.36,55,45.0,70.3,low CI [45-70%],REGULAR,18.8,favoravel,hold
+2026-04-24,VISC11.SA,"Fechou @110.37
+AGUARDAR ROMPER R1 @110.67
+Contexto: S2 Alta ideal (entre Pivot e R1)
++3.0% alvo apos breakout
+Cancelar se < Pivot @110.30",+3.0%,hold,Stage 2 Alta - ideal,110.37,109.8182,110.37,107.6218,113.1127,110.2967,1.5,110.2967,110.6734,109.9934,53.1,44.5,53.85,64.1,39,38.6,68.4,low CI [39-68%],REGULAR,7.0,favoravel,hold
+2026-04-24,ENGI11.SA,"Fechou @55.29
+ABAIXO DO PIVOT: sem entrada agora
+Contexto: S2 Alta momentum; so considerar compra se fechar acima do Pivot @55.51
+Cancelar se < MA50/S1 @53.63",+9.0%,hold,Stage 2 Alta - momentum,55.29,54.2825,55.29,52.8939,59.1506,53.631,3.5,55.5067,55.7834,55.0134,52.7,51.3,55.56,55.56,27,37.3,72.4,low CI [37-72%],REGULAR,16.7,favoravel,hold
+2026-04-24,RBRP11.SA,"Fechou @52.35
+NAO ABRIR
+Stage 3 Topo (MA50 caindo, distribuicao)
+Vender posicoes se perder Pivot @52.28",-2.0%,hold,Stage 3 Topo - evitar,52.35,51.86,52.35,50.8228,53.4158,51.8934,1.5,52.2767,52.7334,51.8934,52.3,43.1,54.55,54.55,11,28.0,78.7,low CI [28-79%],REGULAR,7.5,favoravel,hold
+2026-04-24,ECOR3.SA,"Fechou @9.26
+NAO ABRIR
+Stage 3 Topo (MA50 caindo, distribuicao)
+Vender posicoes se perder Pivot @9.23",-4.8%,hold,Stage 3 Topo - evitar,9.26,8.9822,9.26,8.5472,10.4206,9.13,3.3,9.23,9.36,9.13,51.9,49.3,56.41,56.41,39,41.0,70.7,low CI [41-71%],REGULAR,31.5,favoravel,hold
+2026-04-24,MXRF11.SA,"Fechou @9.93
+ABAIXO DO PIVOT: sem entrada agora
+Contexto: S2 Alta ideal; so considerar compra se fechar acima do Pivot @9.94
+Cancelar se < MA50/S1 @9.71",+3.0%,hold,Stage 2 Alta - ideal,9.93,9.8804,9.93,9.6828,10.1768,9.7119,1.5,9.9367,9.9634,9.9034,49.8,43.1,54.55,69.7,33,38.0,70.2,low CI [38-70%],REGULAR,3.9,favoravel,hold
+2026-04-24,HGRE11.SA,"Fechou @125.55
+ABAIXO DO PIVOT: sem entrada agora
+Contexto: S2 Alta ideal; so considerar compra se fechar acima do Pivot @125.59
+Cancelar se < MA50/S1 @125.01",+3.7%,hold,Stage 2 Alta - ideal,125.55,124.3265,125.55,121.84,128.9642,125.0066,1.9,125.5933,126.1366,125.0066,49.0,41.2,53.66,65.85,41,38.7,67.9,low CI [39-68%],REGULAR,8.3,favoravel,hold
+2026-04-24,RBRF11.SA,"Fechou @6.65
 AGUARDAR BREAKOUT R1 @6.65
 Stage 1 Base lateral
 Comprar se romper com volume
-Evitar se perder S1 @6.65",+1.8%,hold,Stage 1 Base - consolidacao,6.65,6.6168,6.65,6.4845,6.861,6.65,1.8,6.65,6.65,6.65,67.4,54.9,87.5,87.5,REGULAR,1.2,favoravel,hold
-2026-04-20,XPML11.SA,"Fechou @111.10
-AGUARDAR ROMPER R1 @111.70
+Evitar se perder S1 @6.65",+1.8%,hold,Stage 1 Base - consolidacao,6.65,6.6168,6.65,6.4845,6.861,6.65,1.8,6.65,6.65,6.65,48.4,37.8,40.0,40.0,5,11.8,76.9,insuf. n<10,REGULAR,2.1,favoravel,hold
+2026-04-24,GGBR4.SA,"Fechou @21.77
+NAO ABRIR
+Stage 3 Topo (MA50 caindo, distribuicao)
+Vender posicoes se perder Pivot @21.79",-2.5%,hold,Stage 3 Topo - evitar,21.77,21.3424,21.77,20.8053,22.2122,21.5566,1.6,21.7933,22.0066,21.5566,43.7,39.7,40.0,40.0,10,16.8,68.7,low CI [17-69%],REGULAR,10.5,favoravel,hold
+2026-04-24,USIM5.SA,"Fechou @7.61
+ABAIXO DO PIVOT: sem entrada agora
+Contexto: S2 Alta momentum; so considerar compra se fechar acima do Pivot @7.71
+Cancelar se < MA50/S1 @6.77",+7.5%,hold,Stage 2 Alta - momentum,7.61,7.4155,7.61,7.0698,7.9687,6.7698,1.6,7.7067,7.8834,7.4334,43.5,35.7,50.0,40.0,20,29.9,70.1,low CI [30-70%],REGULAR,25.3,favoravel,hold
+2026-04-24,KNCR11.SA,"Fechou @107.15
+AGUARDAR ROMPER R1 @107.40
 Contexto: S2 Alta ideal (entre Pivot e R1)
 +3.0% alvo apos breakout
-Cancelar se < Pivot @110.75",+3.0%,hold,Stage 2 Alta - ideal,111.1,110.5445,111.1,108.3336,113.8608,110.75,1.5,110.75,111.7,110.15,67.1,67.1,60.0,60.0,REGULAR,1.6,favoravel,hold
-2026-04-20,KFOF11.SA,"Fechou @83.99
-ABAIXO DO PIVOT: sem entrada agora
-Contexto: S2 Alta ideal; so considerar compra se fechar acima do Pivot @84.05
-Cancelar se < MA50/S1 @82.94",+3.3%,hold,Stage 2 Alta - ideal,83.99,83.278,83.99,81.6124,86.0031,82.9448,1.6,84.0533,84.7566,83.2866,66.7,63.2,72.73,72.73,REGULAR,2.6,favoravel,hold
-2026-04-20,ITUB4.SA,"Fechou @46.80
-ABAIXO DO PIVOT: sem entrada agora
-Contexto: S2 Alta momentum; so considerar compra se fechar acima do Pivot @47.15
-Cancelar se < MA50/S1 @44.93",+4.3%,hold,Stage 2 Alta - momentum,46.8,45.8822,46.8,44.7767,47.8596,44.9301,1.8,47.15,47.55,46.4,66.5,63.8,75.0,75.0,REGULAR,2.9,favoravel,hold
-2026-04-20,LREN3.SA,"Fechou @15.43
-AGUARDAR CONFIRMACAO
-Contexto: S2 Alta cedo (cruzamento MA50/MA200 recente)
-Comprar apos 3+ fechamentos > R1 @15.72
-Cancelar se < MA50/S1 @15.14 ou se MA50 voltar abaixo MA200",+5.7%,hold,Stage 2 Alta - cedo,15.43,14.9797,15.43,14.3183,16.1952,15.1353,1.8,15.4833,15.7166,15.1966,66.5,76.1,71.21,69.7,REGULAR,24.7,favoravel,hold
-2026-04-20,RANI3.SA,"Fechou @8.95
-AGUARDAR PULLBACK ATE S1 @8.85
-Contexto: S2 Alta pullback (abaixo MA50 @9.44)
-Gatilho = segurar S1 e retomar MA50/Pivot
-Cancelar se < MA200 @8.58",+10.4%,hold,Stage 2 Alta - pullback,8.95,8.86,8.95,8.6207,9.7812,8.5792,3.8,8.96,9.06,8.85,65.9,60.1,71.43,64.29,REGULAR,7.2,favoravel,hold
-2026-04-20,VISC11.SA,"Fechou @110.35
-ABAIXO DO PIVOT: sem entrada agora
-Contexto: S2 Alta ideal; so considerar compra se fechar acima do Pivot @110.49
-Cancelar se < MA50/S1 @108.82",+3.0%,hold,Stage 2 Alta - ideal,110.35,109.7982,110.35,107.6022,113.0921,108.8195,1.5,110.4867,110.9734,109.8634,65.8,74.2,65.0,70.0,REGULAR,3.7,favoravel,hold
-2026-04-20,JHSF3.SA,"Fechou @13.82
-AGUARDAR PULLBACK
-Contexto: S2 Alta atrasado (esticado ++39.6% MA50)
-Esperar correcao ate S1 @13.50 ou MA50 @9.90
-Cancelar se < MA50/S1 @9.90",+1.7%,hold,Stage 2 Alta - atrasado,13.82,13.504,13.8125,13.4325,13.952,9.8979,6.3,13.66,13.98,13.5,65.0,63.1,67.11,65.79,HIGH_QUAL,13.2,favoravel,buy
-2026-04-20,EGIE3.SA,"Potencial 3.7% < 5% (nao compensa custos)
-Fechou @37.51
-ABAIXO DO PIVOT: esperar confirmacao @38.09
-setup montado, mas sem entrada agora; so comprar apos fechamento acima do Pivot
-Contexto: S2 Alta momentum
-+3.7% alvo @38.71 (WR 62% / alvo 62%)
-Stop @36.63 (-1.9%)
-Cancelar se < MA50/S1 @33.46",+3.7%,hold,Stage 2 Alta - momentum,37.51,37.3224,38.2602,36.6293,38.7058,33.4564,2.0,38.0867,38.7834,36.8134,64.7,75.1,61.84,61.84,REGULAR,22.0,favoravel,buy
-2026-04-20,XPBR31.SA,"Fechou @104.33
-AGUARDAR BREAKOUT R1 @106.97
-Stage 1 Base lateral
-Comprar se romper com volume
-Evitar se perder S1 @103.01",+2.5%,hold,Stage 1 Base - consolidacao,104.33,101.2001,104.33,96.9872,108.1482,103.01,1.6,105.65,106.97,103.01,63.8,58.9,75.0,75.0,REGULAR,3.7,favoravel,hold
-2026-04-20,ALUP11.SA,"Fechou @36.38
-ABAIXO DO PIVOT: sem entrada agora
-Contexto: S2 Alta momentum; so considerar compra se fechar acima do Pivot @36.55
-Cancelar se < MA50/S1 @35.23",+3.6%,hold,Stage 2 Alta - momentum,36.38,35.8021,36.38,35.0591,37.0832,35.2335,1.7,36.5467,36.7134,36.2134,60.3,61.5,60.0,60.0,REGULAR,6.4,favoravel,hold
-2026-04-20,ODPV3.SA,"Fechou @15.78
-AGUARDAR PULLBACK
-Contexto: S2 Alta atrasado (esticado ++17.3% MA50)
-Esperar correcao ate S1 @15.62 ou MA50 @13.45
-Cancelar se < MA50/S1 @13.45",+1.1%,hold,Stage 2 Alta - atrasado,15.78,15.7011,15.871,15.5453,16.0313,13.449,2.1,15.9067,16.0634,15.6234,58.4,57.6,66.67,66.67,REGULAR,19.0,favoravel,buy
-2026-04-20,VALE3.SA,"Fechou @89.75
-AGUARDAR ROMPER R1 @90.40
-Contexto: S2 Alta momentum (entre Pivot e R1)
-+8.6% alvo apos breakout
-Cancelar se < Pivot @89.10",+8.6%,hold,Stage 2 Alta - momentum,89.75,88.2233,89.75,86.2554,95.8118,89.1,3.9,89.1,90.4,88.45,58.4,55.4,59.46,59.46,REGULAR,7.1,favoravel,hold
-2026-04-20,HFOF11.SA,"Fechou @6.83
-AGUARDAR ROMPER R1 @6.85
-Contexto: S2 Alta ideal (entre Pivot e R1)
-+3.7% alvo apos breakout
-Cancelar se < Pivot @6.82",+3.7%,hold,Stage 2 Alta - ideal,6.83,6.7773,6.83,6.6418,7.0257,6.8233,1.8,6.8233,6.8466,6.8066,57.5,49.5,33.33,33.33,REGULAR,1.9,favoravel,hold
-2026-04-20,RBRX11.SA,"Fechou @8.74
-AGUARDAR ROMPER R1 @8.79
-Contexto: S2 Alta ideal (entre Pivot e R1)
-+3.1% alvo apos breakout
-Cancelar se < Pivot @8.70",+3.1%,hold,Stage 2 Alta - ideal,8.74,8.6499,8.74,8.4769,8.916,8.7,1.5,8.7,8.79,8.65,55.7,51.9,33.33,33.33,REGULAR,2.4,favoravel,hold
-2026-04-20,HGPO11.SA,"Fechou @153.01
-ABAIXO DO PIVOT: sem entrada agora
-Contexto: S2 Alta ideal; so considerar compra se fechar acima do Pivot @153.27
-Cancelar se < MA50/S1 @151.08",+3.0%,hold,Stage 2 Alta - ideal,153.01,152.0686,153.01,149.0272,156.6307,151.0784,1.5,153.2667,153.5334,152.7434,55.6,46.3,50.0,50.0,REGULAR,3.2,favoravel,hold
-2026-04-20,BBDC4.SA,"Fechou @21.26
+Cancelar se < Pivot @106.95",+3.0%,hold,Stage 2 Alta - ideal,107.15,106.6143,107.15,104.482,109.8127,106.95,1.5,106.95,107.4,106.7,40.6,31.9,42.86,71.43,28,26.5,60.9,low CI [27-61%],REGULAR,3.7,favoravel,hold
+2026-04-24,GOAU4.SA,"Fechou @9.49
 NAO ABRIR
 Stage 3 Topo (MA50 caindo, distribuicao)
-Vender posicoes se perder Pivot @21.33",-2.6%,hold,Stage 3 Topo - evitar,21.26,20.7675,21.26,20.236,21.5736,21.0634,1.5,21.3267,21.5234,21.0634,55.0,72.2,75.76,69.7,HIGH_QUAL,8.1,favoravel,hold
-2026-04-20,BRCO11.SA,"Fechou @116.68
-NAO ABRIR
-Stage 3 Topo (MA50 caindo, distribuicao)
-Vender posicoes se perder Pivot @115.99",-2.0%,hold,Stage 3 Topo - evitar,116.68,115.8912,116.68,113.5734,119.6133,115.3,1.6,115.99,117.37,115.3,55.0,71.8,72.73,77.27,HIGH_QUAL,5.0,favoravel,hold
-2026-04-20,BRCR11.SA,"Fechou @47.94
-NAO ABRIR
-Stage 3 Topo (MA50 caindo, distribuicao)
-Vender posicoes se perder Pivot @47.77",-2.0%,hold,Stage 3 Topo - evitar,47.94,47.5615,47.94,46.6103,50.7218,47.5634,3.3,47.7667,48.1434,47.5634,55.0,48.3,46.67,53.33,REGULAR,8.9,favoravel,hold
-2026-04-20,CPFE3.SA,"Fechou @55.01
-NAO ABRIR
-Stage 3 Topo (MA50 caindo, distribuicao)
-Vender posicoes se perder Pivot @55.74",-1.3%,hold,Stage 3 Topo - evitar,55.01,54.7349,55.8,54.0052,56.3636,54.2766,2.2,55.7433,56.4766,54.2766,55.0,48.9,68.0,68.0,HIGH_QUAL,15.6,favoravel,buy
-2026-04-20,CVCB3.SA,"Fechou @2.13
-NAO ABRIR
-Stage 3 Topo (MA50 caindo, distribuicao)
-Vender posicoes se perder Pivot @2.08",-4.8%,hold,Stage 3 Topo - evitar,2.13,2.0661,2.13,1.9661,2.2948,2.03,2.3,2.08,2.18,2.03,55.0,74.0,75.0,75.0,HIGH_QUAL,10.7,favoravel,hold
-2026-04-20,ECOR3.SA,"Fechou @10.25
-NAO ABRIR
-Stage 3 Topo (MA50 caindo, distribuicao)
-Vender posicoes se perder Pivot @10.25",-5.1%,hold,Stage 3 Topo - evitar,10.25,9.9425,10.25,9.4332,11.2166,10.05,2.5,10.25,10.45,10.05,55.0,68.0,61.54,61.54,REGULAR,34.4,favoravel,hold
-2026-04-20,EZTC3.SA,"Fechou @16.02
-NAO ABRIR
-Stage 3 Topo (MA50 caindo, distribuicao)
-Vender posicoes se perder Pivot @15.81",-3.9%,hold,Stage 3 Topo - evitar,16.02,15.5394,16.02,14.9365,17.2632,15.6,2.9,15.81,16.23,15.6,55.0,76.9,71.79,71.79,REGULAR,21.0,favoravel,hold
-2026-04-20,FLRY3.SA,"Fechou @16.65
-NAO ABRIR
-Stage 3 Topo (MA50 caindo, distribuicao)
-Vender posicoes se perder Pivot @16.74",-2.9%,hold,Stage 3 Topo - evitar,16.65,16.2527,16.65,15.7748,17.6907,16.3434,3.0,16.7367,17.0434,16.3434,55.0,73.2,73.91,73.91,HIGH_QUAL,10.2,favoravel,hold
-2026-04-20,GRND3.SA,"Fechou @4.75
-NAO ABRIR
-Stage 3 Topo (MA50 caindo, distribuicao)
-Vender posicoes se perder Pivot @4.77",-2.3%,hold,Stage 3 Topo - evitar,4.75,4.6733,4.75,4.5662,4.9151,4.6766,2.3,4.7733,4.8466,4.6766,55.0,64.2,67.26,66.37,REGULAR,14.5,favoravel,hold
-2026-04-20,LAVV3.SA,"Fechou @15.34
-NAO ABRIR
-Stage 3 Topo (MA50 caindo, distribuicao)
-Vender posicoes se perder Pivot @15.34",-3.3%,hold,Stage 3 Topo - evitar,15.34,15.0248,15.34,14.5355,16.8047,15.08,3.6,15.34,15.6,15.08,55.0,56.5,100.0,100.0,REGULAR,0.0,neutro,hold
-2026-04-20,LVBI11.SA,"Fechou @109.45
-NAO ABRIR
-Stage 3 Topo (MA50 caindo, distribuicao)
-Vender posicoes se perder Pivot @109.46",-2.0%,hold,Stage 3 Topo - evitar,109.45,108.9027,109.45,106.7246,112.1698,109.0634,1.5,109.4567,109.8434,109.0634,55.0,54.1,72.73,72.73,REGULAR,2.5,favoravel,hold
-2026-04-20,MGLU3.SA,"Fechou @9.29
-NAO ABRIR
-Stage 3 Topo (MA50 caindo, distribuicao)
-Vender posicoes se perder Pivot @9.42",-4.7%,hold,Stage 3 Topo - evitar,9.29,9.0113,9.29,8.5856,9.745,9.08,1.7,9.42,9.63,9.08,55.0,70.6,82.35,80.88,PREMIUM,9.7,favoravel,hold
-2026-04-20,MLAS3.SA,"Fechou @1.58
-NAO ABRIR
-Stage 3 Topo (MA50 caindo, distribuicao)
-Vender posicoes se perder Pivot @1.58",-4.8%,hold,Stage 3 Topo - evitar,1.58,1.5326,1.58,1.459,1.7238,1.53,2.6,1.58,1.63,1.53,55.0,46.8,100.0,100.0,REGULAR,0.0,favoravel,hold
-2026-04-20,PVBI11.SA,"Fechou @78.00
-NAO ABRIR
-Stage 3 Topo (MA50 caindo, distribuicao)
-Vender posicoes se perder Pivot @77.90",-2.0%,hold,Stage 3 Topo - evitar,78.0,77.1684,78.0,75.625,80.1296,77.6866,1.9,77.9033,78.2166,77.6866,55.0,58.9,80.0,100.0,REGULAR,0.0,favoravel,hold
-2026-04-20,RADL3.SA,"Fechou @23.14
-NAO ABRIR
-Stage 3 Topo (MA50 caindo, distribuicao)
-Vender posicoes se perder Pivot @23.56",-3.9%,hold,Stage 3 Topo - evitar,23.14,22.5171,23.14,21.6348,24.5093,22.7234,2.3,23.5567,23.9734,22.7234,55.0,66.7,63.51,62.16,REGULAR,25.5,favoravel,hold
-2026-04-20,RBRP11.SA,"Fechou @52.70
-NAO ABRIR
-Stage 3 Topo (MA50 caindo, distribuicao)
-Vender posicoes se perder Pivot @52.54",-2.0%,hold,Stage 3 Topo - evitar,52.7,52.147,52.7,51.1041,53.7114,52.3866,1.5,52.5433,52.8566,52.3866,55.0,56.8,66.67,66.67,REGULAR,3.3,favoravel,hold
-2026-04-20,SANB11.SA,"Fechou @31.59
-NAO ABRIR
-Stage 3 Topo (MA50 caindo, distribuicao)
-Vender posicoes se perder Pivot @31.71",-2.6%,hold,Stage 3 Topo - evitar,31.59,30.8943,31.59,30.0893,32.5267,31.28,2.0,31.71,32.02,31.28,55.0,69.0,71.62,71.62,HIGH_QUAL,12.6,favoravel,hold
-2026-04-20,SAPR11.SA,"Fechou @40.85
-NAO ABRIR
-Stage 3 Topo (MA50 caindo, distribuicao)
-Vender posicoes se perder Pivot @40.99",-3.8%,hold,Stage 3 Topo - evitar,40.85,40.35,40.85,38.8021,46.8572,40.2066,4.2,40.9933,41.6366,40.2066,55.0,69.8,76.92,76.92,HIGH_QUAL,21.0,favoravel,hold
-2026-04-20,VINO11.SA,"Fechou @5.14
-NAO ABRIR
-Stage 3 Topo (MA50 caindo, distribuicao)
-Vender posicoes se perder Pivot @5.11",-2.0%,hold,Stage 3 Topo - evitar,5.14,5.0934,5.14,4.9915,5.2481,5.0866,1.5,5.1133,5.1666,5.0866,55.0,60.7,100.0,100.0,REGULAR,0.0,favoravel,hold
-2026-04-20,WIZC3.SA,"Fechou @9.62
-NAO ABRIR
-Stage 3 Topo (MA50 caindo, distribuicao)
-Vender posicoes se perder Pivot @9.61",-2.6%,hold,Stage 3 Topo - evitar,9.62,9.4578,9.62,9.2099,10.3449,9.52,3.6,9.61,9.71,9.52,55.0,77.4,75.64,74.36,PREMIUM,8.7,favoravel,hold
-2026-04-20,IRIM11.SA,"Fechou @66.02
-NAO ABRIR
-Stage 3 Topo (MA50 caindo, distribuicao)
-Vender posicoes se perder Pivot @66.02",-2.0%,hold,Stage 3 Topo - evitar,66.02,65.5887,66.02,64.2769,67.895,65.8466,1.8,66.0233,66.1966,65.8466,54.0,52.6,55.56,66.67,REGULAR,3.1,favoravel,hold
-2026-04-20,BRKM5.SA,"Fechou @8.85
-AGUARDAR PULLBACK ATE S1 @8.53
-Contexto: S2 Alta pullback (abaixo MA50 @10.19)
-Gatilho = segurar S1 e retomar MA50/Pivot
-Cancelar se < S1 @8.53",+25.0%,hold,Stage 2 Alta - pullback,8.85,8.5845,8.85,7.8759,10.7306,8.53,3.0,9.16,9.48,8.53,53.4,48.9,58.62,55.17,REGULAR,18.4,favoravel,hold
-2026-04-20,ITSA4.SA,"Potencial 2.4% < 5% (nao compensa custos)
-Fechou @14.81
-ABAIXO DO PIVOT: esperar confirmacao @14.93
-setup montado, mas sem entrada agora; so comprar apos fechamento acima do Pivot
-Contexto: S2 Alta momentum
-+2.4% alvo @15.09 (WR 40% / alvo 40%)
-Stop @14.55 (-1.2%)
-Cancelar se < MA50/S1 @14.03",+2.4%,hold,Stage 2 Alta - momentum,14.81,14.736,14.9355,14.5535,15.0864,14.0269,1.9,14.9333,15.1166,14.6266,52.0,48.4,40.0,40.0,REGULAR,20.8,favoravel,buy
-2026-04-20,GGRC11.SA,"Fechou @10.18
-AGUARDAR ROMPER R1 @10.21
+Vender posicoes se perder Pivot @9.52",-2.5%,hold,Stage 3 Topo - evitar,9.49,9.3021,9.49,9.0664,9.692,9.41,1.7,9.52,9.6,9.41,38.6,36.5,53.33,53.33,30,36.1,69.8,low CI [36-70%],REGULAR,15.4,favoravel,hold
+2026-04-24,GGRC11.SA,"Fechou @10.20
+AGUARDAR ROMPER R1 @10.24
 Contexto: S2 Alta ideal (entre Pivot e R1)
 +3.0% alvo apos breakout
-Cancelar se < Pivot @10.17",+3.0%,hold,Stage 2 Alta - ideal,10.18,10.1291,10.18,9.9265,10.433,10.1667,1.5,10.1667,10.2134,10.1334,51.3,42.0,50.0,59.38,REGULAR,4.1,favoravel,hold
-2026-04-20,GGBR4.SA,"Fechou @21.54
-NAO ABRIR
-Stage 3 Topo (MA50 caindo, distribuicao)
-Vender posicoes se perder Pivot @21.77",-3.0%,hold,Stage 3 Topo - evitar,21.54,21.0519,21.54,20.4262,22.2064,21.31,1.8,21.77,22.0,21.31,49.2,43.6,50.0,50.0,REGULAR,15.4,favoravel,hold
-2026-04-20,AXIA6.SA,"WR 53% < 60% (nao operar)
-Fechou @69.97
-ABAIXO DO PIVOT: sem entrada agora
-Contexto: S2 Alta momentum; so considerar compra se fechar acima do Pivot @71.17
-Cancelar se < MA50/S1 @65.33",+8.8%,hold,Stage 2 Alta - momentum,69.97,68.3866,69.97,66.1773,74.3973,65.3348,2.7,71.17,73.32,67.82,48.8,41.0,53.33,48.89,REGULAR,18.9,favoravel,hold
-2026-04-20,EQTL3.SA,"WR 57% < 60% (nao operar)
-Fechou @45.19
-ABAIXO DO PIVOT: sem entrada agora
-Contexto: S2 Alta momentum; so considerar compra se fechar acima do Pivot @45.55
-Cancelar se < MA50/S1 @41.61",+4.1%,hold,Stage 2 Alta - momentum,45.19,44.455,45.19,43.3507,46.2827,41.6136,1.7,45.5467,45.9634,44.7734,46.3,51.8,56.67,53.33,REGULAR,13.2,favoravel,hold
-2026-04-20,ENGI11.SA,"WR 53% < 60% (nao operar)
-Fechou @57.35
-ABAIXO DO PIVOT: sem entrada agora
-Contexto: S2 Alta momentum; so considerar compra se fechar acima do Pivot @57.87
-Cancelar se < MA50/S1 @53.11",+5.1%,hold,Stage 2 Alta - momentum,57.35,56.3162,57.35,54.8298,59.1913,53.114,1.9,57.8733,58.7266,56.4966,45.8,41.5,52.94,52.94,REGULAR,16.5,favoravel,hold
-2026-04-20,GOAU4.SA,"Fechou @9.50
-NAO ABRIR
-Stage 3 Topo (MA50 caindo, distribuicao)
-Vender posicoes se perder Pivot @9.56",-3.0%,hold,Stage 3 Topo - evitar,9.5,9.2918,9.5,9.0125,10.0093,9.4134,2.6,9.5567,9.6434,9.4134,44.5,48.1,57.14,57.14,REGULAR,17.3,favoravel,hold
-2026-04-20,KNCR11.SA,"Fechou @106.48
-ABAIXO DO PIVOT: sem entrada agora
-Contexto: S2 Alta ideal; so considerar compra se fechar acima do Pivot @106.53
-Cancelar se < MA50/S1 @104.51",+3.0%,hold,Stage 2 Alta - ideal,106.48,105.9476,106.48,103.8286,109.126,104.5067,1.5,106.5333,106.7466,106.2666,38.9,32.0,47.83,78.26,REGULAR,2.9,favoravel,hold
-2026-04-20,HGLG11.SA,"Fechou @157.54
-AGUARDAR CONFIRMACAO
-Contexto: S2 Alta cedo (cruzamento MA50/MA200 recente)
-Comprar apos 3+ fechamentos > R1 @157.73
-Cancelar se < MA50/S1 @155.83 ou se MA50 voltar abaixo MA200",+2.1%,hold,Stage 2 Alta - cedo,157.54,156.7523,157.54,153.6173,161.4549,155.8254,1.5,157.4,157.73,157.21,38.5,32.3,48.28,68.97,REGULAR,4.1,favoravel,hold
-2026-04-20,MXRF11.SA,"Fechou @9.87
-ABAIXO DO PIVOT: sem entrada agora
-Contexto: S2 Alta ideal; so considerar compra se fechar acima do Pivot @9.88
-Cancelar se < MA50/S1 @9.66",+3.0%,hold,Stage 2 Alta - ideal,9.87,9.8206,9.87,9.6242,10.1152,9.6581,1.5,9.8833,9.8966,9.8566,36.3,31.7,47.83,69.57,REGULAR,6.6,favoravel,hold
-2026-04-20,XPLG11.SA,"Fechou @101.68
-NAO ABRIR
-Stage 3 Topo (MA50 caindo, distribuicao)
-Vender posicoes se perder Pivot @101.33",-2.0%,hold,Stage 3 Topo - evitar,101.68,101.1716,101.68,99.1482,104.2067,100.85,1.5,101.33,102.16,100.85,35.7,34.0,0.0,0.0,REGULAR,1.3,favoravel,hold
-2026-04-17,IRDM11.SA,"Fechou @58.50
+Cancelar se < Pivot @10.19",+3.0%,hold,Stage 2 Alta - ideal,10.2,10.149,10.2,9.946,10.4535,10.1933,1.5,10.1933,10.2366,10.1566,38.3,31.3,40.0,62.22,45,27.0,54.5,low CI [27-55%],REGULAR,7.1,favoravel,hold
+2026-04-24,IRDM11.SA,"Fechou @58.50
 AGUARDAR BREAKOUT R1 @58.50
 Stage 1 Base lateral
 Comprar se romper com volume
-Evitar se perder S1 @58.50",+2.5%,hold,Stage 1 Base - consolidacao,58.5,58.2075,58.5,57.0434,61.0664,58.5,2.5,58.5,58.5,58.5,34.7,28.4,0.0,0.0,REGULAR,0.0,favoravel,hold
-2026-04-20,AGRO3.SA,"Fechou @20.13
+Evitar se perder S1 @58.50",+2.5%,hold,Stage 1 Base - consolidacao,58.5,58.2075,58.5,57.0434,61.0664,58.5,2.5,58.5,58.5,58.5,35.5,30.0,0.0,0.0,0,0.0,100.0,insuf. n<10,REGULAR,0.0,favoravel,hold
+2026-04-24,XPLG11.SA,"Fechou @101.10
+NAO ABRIR
+Stage 3 Topo (MA50 caindo, distribuicao)
+Vender posicoes se perder Pivot @101.12",-2.0%,hold,Stage 3 Topo - evitar,101.1,100.5945,101.1,98.5826,103.6123,100.9334,1.5,101.1167,101.2834,100.9334,31.8,30.1,0.0,0.0,1,0.0,79.3,insuf. n<10,REGULAR,1.0,favoravel,hold
+2026-04-24,AGRO3.SA,"Fechou @19.85
 VENDER
 Stage 4 Queda
 Abaixo MA200 (tendencia de baixa)
-Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,20.13,20.0293,20.13,19.4972,21.8234,19.9934,3.4,20.1967,20.3334,19.9934,30.0,45.2,55.88,58.82,REGULAR,23.5,neutro,hold
-2026-04-20,BEEF3.SA,"Fechou @4.15
+Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,19.85,19.59,19.85,19.1614,21.5794,19.6734,4.6,19.7667,19.9434,19.6734,30.0,69.2,62.96,64.44,135,54.6,70.6,low CI [55-71%],REGULAR,17.3,neutro,hold
+2026-04-24,BEEF3.SA,"Fechou @4.00
 VENDER
 Stage 4 Queda
 Abaixo MA200 (tendencia de baixa)
-Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,4.15,4.0388,4.15,3.8938,4.3928,4.1134,2.4,4.1667,4.2034,4.1134,30.0,33.7,52.17,52.17,REGULAR,20.5,neutro,hold
-2026-04-20,BTC-USD,"Fechou @73856.35
+Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,4.0,3.95,4.0,3.82,4.391,3.95,3.4,4.0,4.05,3.95,30.0,32.0,50.0,50.0,32,33.6,66.4,low CI [34-66%],REGULAR,21.5,desfavoravel,hold
+2026-04-24,BTC-USD,"Fechou @77372.00
 VENDER
 Stage 4 Queda
 Abaixo MA200 (tendencia de baixa)
-Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,73856.3516,71640.661,73856.3516,69007.766,76151.0451,73024.7916,1.7,74633.9427,75465.5026,73024.7916,30.0,50.3,72.22,66.67,REGULAR,12.6,neutro,hold
-2026-04-20,CSAN3.SA,"Fechou @5.25
+Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,77372.0,75050.84,77372.0,72369.9494,79379.6568,76965.5077,1.6,77729.8359,78136.3281,76965.5077,30.0,49.7,100.0,33.33,3,43.8,100.0,insuf. n<10,REGULAR,0.0,neutro,hold
+2026-04-24,CRO-USD,"Fechou @0.07
 VENDER
 Stage 4 Queda
 Abaixo MA200 (tendencia de baixa)
-Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,5.25,5.0925,5.25,4.8468,5.7074,5.1534,2.5,5.3367,5.4334,5.1534,30.0,61.2,69.51,69.51,HIGH_QUAL,21.2,desfavoravel,hold
-2026-04-20,CSNA3.SA,"Fechou @6.79
+Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,0.0693,0.068,0.0693,0.0661,0.0735,0.0691,2.9,0.0696,0.0699,0.0691,30.0,34.4,50.0,33.33,6,18.8,81.2,insuf. n<10,REGULAR,12.5,neutro,hold
+2026-04-24,CSAN3.SA,"Fechou @5.11
 VENDER
 Stage 4 Queda
 Abaixo MA200 (tendencia de baixa)
-Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,6.79,6.5863,6.79,6.3092,7.2313,6.7166,2.3,6.8233,6.8966,6.7166,30.0,66.3,79.41,79.41,PREMIUM,8.9,neutro,hold
-2026-04-20,CYRE3.SA,"Fechou @27.72
+Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,5.11,5.05,5.11,4.845,5.7066,5.0634,3.2,5.0967,5.1434,5.0634,30.0,67.0,67.44,66.28,86,57.0,76.4,CI [57-76%],REGULAR,18.7,neutro,hold
+2026-04-24,CSNA3.SA,"Fechou @6.43
 VENDER
 Stage 4 Queda
 Abaixo MA200 (tendencia de baixa)
-Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,27.72,26.8884,27.72,25.5527,30.0961,27.3734,2.4,27.8667,28.2134,27.3734,30.0,61.7,64.52,64.52,REGULAR,14.1,neutro,hold
-2026-04-20,DOGE-USD,"Fechou @0.09
+Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,6.43,6.2371,6.43,5.9628,6.9161,6.3,2.5,6.46,6.59,6.3,30.0,29.7,12.5,12.5,8,2.2,47.1,insuf. n<10,REGULAR,23.2,neutro,hold
+2026-04-24,CVCB3.SA,"Fechou @2.00
 VENDER
 Stage 4 Queda
 Abaixo MA200 (tendencia de baixa)
-Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,0.0931,0.0903,0.0931,0.0865,0.0995,0.0918,2.4,0.0939,0.0951,0.0918,30.0,30.1,50.0,0.0,REGULAR,14.2,desfavoravel,hold
-2026-04-20,ETH-USD,"Fechou @2264.92
+Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,2.0,1.94,2.0,1.8429,2.1654,1.9734,2.3,2.0067,2.0334,1.9734,30.0,67.0,77.27,72.73,22,56.6,89.9,CI [57-90%],HIGH_QUAL,10.6,neutro,hold
+2026-04-24,CYRE3.SA,"Fechou @26.60
 VENDER
 Stage 4 Queda
 Abaixo MA200 (tendencia de baixa)
-Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,2264.917,2196.9695,2264.917,2083.0147,2411.1562,2227.8152,1.9,2291.7992,2328.9009,2227.8152,30.0,51.0,75.0,50.0,REGULAR,9.5,neutro,hold
-2026-04-20,HAPV3.SA,"Fechou @12.23
+Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,26.6,25.802,26.6,24.6834,28.6616,26.2266,2.6,26.8233,27.1966,26.2266,30.0,61.7,69.7,69.7,33,52.7,82.6,low CI [53-83%],HIGH_QUAL,10.9,neutro,hold
+2026-04-24,DIRR3.SA,"Fechou @13.70
 VENDER
 Stage 4 Queda
 Abaixo MA200 (tendencia de baixa)
-Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,12.23,11.8631,12.23,10.9874,13.4575,11.99,1.8,12.47,12.71,11.99,30.0,52.2,75.0,75.0,REGULAR,6.6,desfavoravel,hold
-2026-04-20,IVVB11.SA,"Fechou @399.50
+Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,13.7,13.289,13.7,12.7069,15.0834,13.5366,3.1,13.7533,13.9166,13.5366,30.0,63.5,69.16,69.16,107,59.9,77.1,CI [60-77%],HIGH_QUAL,16.3,neutro,hold
+2026-04-24,DOGE-USD,"Fechou @0.10
 VENDER
 Stage 4 Queda
 Abaixo MA200 (tendencia de baixa)
-Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,399.5,396.3028,399.5,388.3767,408.5933,396.1434,1.6,398.8767,402.2334,396.1434,30.0,43.3,50.0,50.0,REGULAR,8.3,favoravel,hold
-2026-04-20,LTC-USD,"Fechou @54.07
+Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,0.0982,0.0952,0.0982,0.0913,0.1019,0.0972,1.7,0.0981,0.0991,0.0972,30.0,36.5,40.0,20.0,5,11.8,76.9,insuf. n<10,REGULAR,14.5,neutro,hold
+2026-04-24,ETH-USD,"Fechou @2314.80
 VENDER
 Stage 4 Queda
 Abaixo MA200 (tendencia de baixa)
-Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,54.0721,52.45,54.0721,50.7265,56.5953,53.4421,2.4,54.6175,55.2477,53.4421,30.0,41.1,66.67,0.0,REGULAR,16.9,neutro,hold
-2026-04-20,MBRF3.SA,"Fechou @19.61
+Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,2314.8,2245.356,2314.8,2135.2924,2460.3949,2299.7188,2.0,2318.0142,2333.0953,2299.7188,30.0,68.6,77.78,62.96,27,59.2,89.4,CI [59-89%],REGULAR,9.8,neutro,hold
+2026-04-24,HAPV3.SA,"Fechou @14.09
 VENDER
 Stage 4 Queda
 Abaixo MA200 (tendencia de baixa)
-Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,19.61,19.0457,19.61,17.8443,22.7347,19.35,3.1,19.65,19.91,19.35,30.0,37.3,47.06,47.06,REGULAR,32.5,neutro,hold
-2026-04-20,MDIA3.SA,"Fechou @23.69
+Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,14.09,13.6673,14.09,12.8037,16.0304,13.5366,2.7,13.8533,14.4066,13.5366,30.0,56.9,77.78,77.78,9,45.3,93.7,insuf. n<10,REGULAR,6.3,desfavoravel,hold
+2026-04-24,KLBN11.SA,"Fechou @17.94
 VENDER
 Stage 4 Queda
 Abaixo MA200 (tendencia de baixa)
-Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,23.69,23.2488,23.69,22.6331,24.5632,23.3166,2.1,23.6533,24.0266,23.3166,30.0,72.1,78.57,78.57,HIGH_QUAL,6.6,favoravel,hold
-2026-04-20,SOL-USD,"Fechou @83.58
+Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,17.94,17.85,17.94,17.3886,19.7218,17.7834,4.1,18.0067,18.1634,17.7834,30.0,45.3,58.33,58.33,24,38.8,75.5,low CI [39-76%],REGULAR,14.7,desfavoravel,hold
+2026-04-24,LAVV3.SA,"Fechou @14.01
 VENDER
 Stage 4 Queda
 Abaixo MA200 (tendencia de baixa)
-Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,83.5809,81.0735,83.5809,76.4673,93.0192,82.144,2.6,84.6098,86.0466,82.144,30.0,66.6,78.12,46.88,REGULAR,10.8,desfavoravel,hold
-2026-04-20,SUZB3.SA,"Fechou @47.93
+Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,14.01,13.68,14.01,13.1421,15.6792,13.8466,3.7,14.1733,14.3366,13.8466,30.0,53.2,84.62,84.62,13,57.8,95.7,low CI [58-96%],REGULAR,6.2,neutro,hold
+2026-04-24,LREN3.SA,"Fechou @14.28
 VENDER
 Stage 4 Queda
 Abaixo MA200 (tendencia de baixa)
-Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,47.93,47.0543,47.93,45.7472,52.2245,47.16,4.0,47.91,48.68,47.16,30.0,31.0,0.0,0.0,REGULAR,0.0,neutro,hold
-2026-04-20,SYNE3.SA,"Fechou @4.20
+Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,14.28,13.97,14.28,13.4121,16.175,14.09,4.0,14.25,14.44,14.09,30.0,66.9,65.94,65.22,138,57.7,73.3,CI [58-73%],REGULAR,27.5,desfavoravel,hold
+2026-04-24,LTC-USD,"Fechou @56.53
 VENDER
 Stage 4 Queda
 Abaixo MA200 (tendencia de baixa)
-Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,4.2,4.1236,4.2,3.9693,4.7375,4.1766,4.0,4.2233,4.2466,4.1766,30.0,37.0,50.0,50.0,REGULAR,6.2,neutro,hold
-2026-04-20,TCSA3.SA,"Fechou @1.40
+Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,56.53,54.8341,56.53,53.2185,57.2888,55.9862,1.5,56.3538,56.8975,55.9862,30.0,37.5,50.0,25.0,4,15.0,85.0,insuf. n<10,REGULAR,12.0,neutro,hold
+2026-04-24,MBRF3.SA,"Fechou @18.10
 VENDER
 Stage 4 Queda
 Abaixo MA200 (tendencia de baixa)
-Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,1.4,1.358,1.4,1.2766,1.6533,1.3834,3.6,1.4167,1.4334,1.3834,30.0,29.7,50.0,50.0,REGULAR,30.7,neutro,hold
-2026-04-20,TGMA3.SA,"Fechou @33.95
+Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,18.1,18.0,18.1,17.0486,22.7138,17.8234,5.0,18.2767,18.5534,17.8234,30.0,67.4,74.58,72.03,118,66.0,81.6,CI [66-82%],REGULAR,23.5,desfavoravel,hold
+2026-04-24,MDIA3.SA,"Fechou @22.79
 VENDER
 Stage 4 Queda
 Abaixo MA200 (tendencia de baixa)
-Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,33.95,33.1861,33.95,32.0597,35.4243,33.5134,2.0,34.0367,34.4734,33.5134,30.0,66.1,71.26,71.26,REGULAR,16.9,desfavoravel,hold
-2026-04-20,TRXF11.SA,"Fechou @91.77
+Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,22.79,22.4225,22.79,21.886,24.5156,22.67,3.9,22.82,22.94,22.67,30.0,67.2,83.67,83.67,49,71.0,91.5,CI [71-91%],PREMIUM,9.8,neutro,hold
+2026-04-24,MGLU3.SA,"Fechou @8.73
 VENDER
 Stage 4 Queda
 Abaixo MA200 (tendencia de baixa)
-Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,91.77,91.3111,91.77,89.4849,94.0504,91.69,1.5,91.83,91.91,91.69,30.0,54.4,100.0,100.0,REGULAR,0.0,favoravel,hold
-2026-04-20,RAIZ4.SA,"Fechou @0.52
+Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,8.73,8.4681,8.73,8.0931,9.7342,8.5866,3.4,8.6733,8.8166,8.5866,30.0,72.9,80.68,79.55,88,71.2,87.6,CI [71-88%],PREMIUM,11.6,neutro,hold
+2026-04-24,RAIZ4.SA,"Fechou @0.52
 VENDER
 Stage 4 Queda
 Abaixo MA200 (tendencia de baixa)
-Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,0.52,0.5044,0.52,0.4637,0.6079,0.5034,2.5,0.5267,0.5434,0.5034,28.6,25.3,0.0,0.0,REGULAR,0.0,desfavoravel,hold
-2026-04-20,CRO-USD,"Fechou @0.07
+Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,0.52,0.5044,0.52,0.4694,0.6079,0.5034,3.0,0.5167,0.5334,0.5034,30.0,31.8,0.0,0.0,0,0.0,100.0,insuf. n<10,REGULAR,0.0,desfavoravel,hold
+2026-04-24,RANI3.SA,"Fechou @8.54
 VENDER
 Stage 4 Queda
 Abaixo MA200 (tendencia de baixa)
-Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,0.0688,0.068,0.0688,0.0661,0.076,0.0681,4.2,0.0691,0.0697,0.0681,27.8,24.2,0.0,0.0,REGULAR,11.2,neutro,hold
-2026-04-20,VULC3.SA,"Fechou @17.30
+Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,8.54,8.4973,8.54,8.2716,9.7739,8.4866,5.7,8.5733,8.6266,8.4866,30.0,54.5,75.0,68.75,16,50.5,89.8,low CI [51-90%],REGULAR,4.7,neutro,hold
+2026-04-24,SANB11.SA,"Fechou @29.68
 VENDER
 Stage 4 Queda
 Abaixo MA200 (tendencia de baixa)
-Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,17.3,16.9283,17.3,16.4283,17.8512,17.1134,1.8,17.3267,17.5134,17.1134,25.9,25.8,20.0,0.0,REGULAR,19.2,neutro,hold
+Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,29.68,28.9961,29.68,28.3208,31.9488,29.4934,4.4,29.7167,29.9034,29.4934,30.0,61.8,65.82,65.82,79,54.8,75.3,low CI [55-75%],REGULAR,16.8,neutro,hold
+2026-04-24,SOL-USD,"Fechou @86.28
+VENDER
+Stage 4 Queda
+Abaixo MA200 (tendencia de baixa)
+Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,86.28,83.6916,86.28,79.7417,90.5302,85.2846,1.7,86.095,87.0904,85.2846,30.0,71.2,76.67,50.0,30,59.1,88.2,CI [59-88%],REGULAR,9.9,neutro,hold
+2026-04-24,SYNE3.SA,"Fechou @4.00
+VENDER
+Stage 4 Queda
+Abaixo MA200 (tendencia de baixa)
+Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,4.0,3.9226,4.0,3.8105,4.2729,3.9666,3.1,4.0133,4.0466,3.9666,30.0,39.1,54.55,54.55,11,28.0,78.7,low CI [28-79%],REGULAR,11.9,neutro,hold
+2026-04-24,TCSA3.SA,"Fechou @1.35
+VENDER
+Stage 4 Queda
+Abaixo MA200 (tendencia de baixa)
+Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,1.35,1.3095,1.35,1.2224,1.4766,1.3066,1.9,1.3433,1.3866,1.3066,30.0,63.9,62.9,62.9,62,50.5,73.8,low CI [50-74%],REGULAR,26.8,desfavoravel,hold
+2026-04-24,TGMA3.SA,"Fechou @32.23
+VENDER
+Stage 4 Queda
+Abaixo MA200 (tendencia de baixa)
+Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,32.23,31.484,32.23,30.3176,35.3903,31.5734,3.3,32.6567,33.3134,31.5734,30.0,67.0,72.62,72.62,168,65.4,78.8,CI [65-79%],HIGH_QUAL,14.7,neutro,hold
+2026-04-24,TRXF11.SA,"Fechou @91.77
+VENDER
+Stage 4 Queda
+Abaixo MA200 (tendencia de baixa)
+Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,91.77,91.3111,91.77,89.4849,94.0504,91.7266,1.5,91.7833,91.8266,91.7266,30.0,50.8,66.67,77.78,9,35.4,87.9,insuf. n<10,REGULAR,2.6,favoravel,hold
+2026-04-24,VULC3.SA,"Fechou @15.94
+VENDER
+Stage 4 Queda
+Abaixo MA200 (tendencia de baixa)
+Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,15.94,15.77,15.94,15.2821,17.828,15.7366,4.2,15.9733,16.1766,15.7366,30.0,66.2,73.44,68.75,64,61.5,82.7,CI [62-83%],REGULAR,17.4,desfavoravel,hold
+2026-04-24,SUZB3.SA,"Fechou @45.64
+VENDER
+Stage 4 Queda
+Abaixo MA200 (tendencia de baixa)
+Sair posicao. Recomprar apos formar nova base acima MA200",-,sell,Stage 4 Queda - evitar,45.64,45.35,45.64,44.1336,52.1904,45.0566,5.6,45.9333,46.5166,45.0566,28.2,25.3,0.0,0.0,0,0.0,100.0,insuf. n<10,REGULAR,0.0,desfavoravel,hold
