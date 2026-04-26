@@ -92,8 +92,10 @@ def run_etl():
 
     # Indices globais + proxies macro (foco Europa/EUA, sem LatAm/Asia que dominava BR)
     global_indices = [
-        # Suecia / Europa (foco da branch)
-        "^OMXS30",
+        # Suecia / Europa (foco da branch). ^OMXS30 esta indisponivel no Yahoo;
+        # usamos ^OMXSPI (OMX Stockholm All-Share) como benchmark primario e
+        # EWD (iShares MSCI Sweden ETF) como fallback liquido.
+        "^OMXSPI", "EWD", "^OMX",
         "^STOXX", "^STOXX50E", "^FTSE", "^GDAXI", "^FCHI",
 
         # EUA (equities)
@@ -1446,10 +1448,11 @@ def run_etl():
     # ============================
     # Pre-compute market reference data for cross-ticker features
     # ============================
-    # Branch SE: benchmark de mercado e ^OMXS30 (no lugar de ^BVSP).
-    # Mantemos os nomes de variavel _ibov_* p/ nao quebrar consumidores downstream.
+    # Branch SE: benchmark de mercado e OMX Stockholm (no lugar de ^BVSP).
+    # ^OMXS30 esta indisponivel no Yahoo; usamos ^OMXSPI como primario e EWD
+    # como fallback. Mantemos nomes _ibov_* p/ nao quebrar consumidores.
     _ibov_sym = None
-    for _try_sym in ['^OMXS30', '^BVSP']:
+    for _try_sym in ['^OMXSPI', 'EWD', '^OMX', '^BVSP']:
         try:
             _ibov_ohlcv = data.xs(_try_sym, level=1, axis=1)
             if 'Close' in _ibov_ohlcv.columns and _ibov_ohlcv['Close'].notna().sum() > 100:

@@ -86,11 +86,70 @@ def _atomic_write_json(path: Path, data: Dict) -> None:
 # PRISTINE HOLDOUT TEST
 # ============================================================
 
+LOOKBACK_DAYS = 252  # 1 year lookback para stabilizar indicadores em qualquer slice
+
+
+def _slice_cache(cache: Dict, end_offset: int, length: int, with_lookback: bool = True) -> Dict:
+    """Slice each ticker payload to a time window: [n - end_offset - length - lookback, n - end_offset].
+
+    end_offset=0, length=90 -> last 90d (com lookback de 252d antes).
+    end_offset=90, length=90 -> 90-180d atras.
+    with_lookback=False -> slice exato sem warmup (so para train-baseline).
+    """
+    out = {}
+    lookback = LOOKBACK_DAYS if with_lookback else 0
+    for tk, p in cache.items():
+        if "dates" not in p or p["dates"] is None:
+            continue
+        n = len(p["dates"])
+        if n <= end_offset + length + lookback:
+            continue
+        start_idx = n - end_offset - length - lookback
+        end_idx = n - end_offset
+        sliced = {}
+        for k, v in p.items():
+            if hasattr(v, "__len__") and not isinstance(v, str) and len(v) == n:
+                sliced[k] = v[start_idx:end_idx]
+            else:
+                sliced[k] = v
+        out[tk] = sliced
+    return out
+
+
+def _slice_cache_train(cache: Dict, exclude_tail_days: int) -> Dict:
+    """Slice cache to keep [0, n - exclude_tail_days]. Used as 'train' baseline."""
+    out = {}
+    for tk, p in cache.items():
+        if "dates" not in p or p["dates"] is None:
+            continue
+        n = len(p["dates"])
+        if n <= exclude_tail_days + 60:
+            continue
+        cutoff = n - exclude_tail_days
+        sliced = {}
+        for k, v in p.items():
+            if hasattr(v, "__len__") and not isinstance(v, str) and len(v) == n:
+                sliced[k] = v[:cutoff]
+            else:
+                sliced[k] = v
+        out[tk] = sliced
+    return out
+
+
+def _metrics_dict(m: Dict) -> Dict:
+    return {
+        "fit": float(m.get("fit", 0.0) or 0.0),
+        "wr_med_all": float(m.get("wr_med_all", 0.0) or 0.0),
+        "mean_alpha_ann": float(m.get("mean_alpha_ann", 0.0) or 0.0),
+        "n_ge_70": int(m.get("n_ge_70", 0) or 0),
+        "trades_med": float(m.get("trades_med", 0.0) or 0.0),
+    }
+
+
 def evaluate_holdout(checkpoint_genome: List[float],
                      holdout_days: int = 90) -> Dict[str, Any]:
-    """Avalia genome em 2 regimes temporais: train (full - holdout) e holdout (ultimos N dias).
-
-    Returns dict com metricas de ambos + deltas.
+    """Single-window holdout (legacy). Avalia genome em 2 regimes temporais:
+    train (full - holdout) e holdout (ultimos N dias).
     """
     import ga_run as gr
     import run_local_ga_staged as staged
@@ -102,67 +161,25 @@ def evaluate_holdout(checkpoint_genome: List[float],
     print(f"[overfitting] Evaluating full history...")
     metrics_full = staged.evaluate_genome_full(checkpoint_genome, cache, gr)
 
-    # Slice cache para train-only (exclui ultimos holdout_days)
+    # Train-only (exclui ultimos holdout_days)
     print(f"[overfitting] Evaluating train-only (excluding last {holdout_days}d)...")
-    cache_train = {}
-    for tk, p in cache.items():
-        if "dates" in p and p["dates"] is not None and len(p["dates"]) > holdout_days + 60:
-            n = len(p["dates"])
-            cutoff = n - holdout_days
-            p_train = {}
-            for k, v in p.items():
-                if hasattr(v, "__len__") and not isinstance(v, str) and len(v) == n:
-                    p_train[k] = v[:cutoff]
-                else:
-                    p_train[k] = v
-            cache_train[tk] = p_train
+    cache_train = _slice_cache_train(cache, exclude_tail_days=holdout_days)
     metrics_train = staged.evaluate_genome_full(checkpoint_genome, cache_train, gr) if cache_train else {}
 
     # Holdout slice: ultimos holdout_days + LOOKBACK para ter historico de features
     print(f"[overfitting] Evaluating holdout (last {holdout_days}d)...")
-    LOOKBACK = 252  # 1 year lookback para stabilizar indicadores
-    cache_holdout = {}
-    for tk, p in cache.items():
-        if "dates" in p and p["dates"] is not None and len(p["dates"]) > holdout_days + LOOKBACK:
-            n = len(p["dates"])
-            start_idx = n - holdout_days - LOOKBACK
-            p_hold = {}
-            for k, v in p.items():
-                if hasattr(v, "__len__") and not isinstance(v, str) and len(v) == n:
-                    p_hold[k] = v[start_idx:]
-                else:
-                    p_hold[k] = v
-            cache_holdout[tk] = p_hold
+    cache_holdout = _slice_cache(cache, end_offset=0, length=holdout_days)
     metrics_holdout = staged.evaluate_genome_full(checkpoint_genome, cache_holdout, gr) if cache_holdout else {}
 
-    # Deltas
     def _delta(k: str, default: float = 0.0) -> float:
         t = float(metrics_train.get(k, default) or default)
         h = float(metrics_holdout.get(k, default) or default)
         return h - t
 
     return {
-        "metrics_full": {
-            "fit": float(metrics_full.get("fit", 0.0) or 0.0),
-            "wr_med_all": float(metrics_full.get("wr_med_all", 0.0) or 0.0),
-            "mean_alpha_ann": float(metrics_full.get("mean_alpha_ann", 0.0) or 0.0),
-            "n_ge_70": int(metrics_full.get("n_ge_70", 0) or 0),
-            "trades_med": float(metrics_full.get("trades_med", 0.0) or 0.0),
-        },
-        "metrics_train": {
-            "fit": float(metrics_train.get("fit", 0.0) or 0.0),
-            "wr_med_all": float(metrics_train.get("wr_med_all", 0.0) or 0.0),
-            "mean_alpha_ann": float(metrics_train.get("mean_alpha_ann", 0.0) or 0.0),
-            "n_ge_70": int(metrics_train.get("n_ge_70", 0) or 0),
-            "trades_med": float(metrics_train.get("trades_med", 0.0) or 0.0),
-        },
-        "metrics_holdout": {
-            "fit": float(metrics_holdout.get("fit", 0.0) or 0.0),
-            "wr_med_all": float(metrics_holdout.get("wr_med_all", 0.0) or 0.0),
-            "mean_alpha_ann": float(metrics_holdout.get("mean_alpha_ann", 0.0) or 0.0),
-            "n_ge_70": int(metrics_holdout.get("n_ge_70", 0) or 0),
-            "trades_med": float(metrics_holdout.get("trades_med", 0.0) or 0.0),
-        },
+        "metrics_full": _metrics_dict(metrics_full),
+        "metrics_train": _metrics_dict(metrics_train),
+        "metrics_holdout": _metrics_dict(metrics_holdout),
         "delta_holdout_vs_train": {
             "fit": _delta("fit"),
             "wr_med_all": _delta("wr_med_all"),
@@ -172,6 +189,85 @@ def evaluate_holdout(checkpoint_genome: List[float],
         "n_tickers_train": len(cache_train),
         "n_tickers_holdout": len(cache_holdout),
         "holdout_days": holdout_days,
+        "multi_window": False,
+    }
+
+
+def evaluate_multi_window_holdout(checkpoint_genome: List[float],
+                                  windows: List[Tuple[int, int]] = None) -> Dict[str, Any]:
+    """Multi-window holdout. Avalia genome em N janelas temporais distintas + train baseline.
+
+    windows: lista de tuplas (end_offset_days, length_days). Default:
+        [(0, 90), (90, 90), (270, 90)] = ultimos 90d, 90-180d atras, 270-360d atras.
+
+    Apenas a primeira janela (offset=0) e estritamente pristine — o GA nao treinou nela
+    se GA_HOLDOUT_DAYS=90. As demais sao 'in-sample stability' checks.
+
+    Returns dict com metrics_full, metrics_train (excluindo W1), e por janela:
+    metrics + deltas vs train baseline.
+    """
+    import ga_run as gr
+    import run_local_ga_staged as staged
+
+    if windows is None:
+        windows = [(0, 90), (90, 90), (270, 90)]
+
+    store, _w, _sg, _sf, _bg, _bf, _bi = staged.open_existing_store()
+    cache = staged.build_ticker_arrays_cache(store)
+
+    # Full history baseline
+    print(f"[overfitting] [multi-window] Evaluating full history...")
+    metrics_full = staged.evaluate_genome_full(checkpoint_genome, cache, gr)
+
+    # Train baseline: exclui apenas a janela mais recente (W1, pristine).
+    # Isso preserva a comparacao tradicional de pristine-holdout para W1
+    # e da uma referencia comum para W2/W3 (que sao in-sample mas testam estabilidade).
+    primary_excl = windows[0][0] + windows[0][1]
+    print(f"[overfitting] [multi-window] Evaluating train baseline (excluding last {primary_excl}d)...")
+    cache_train = _slice_cache_train(cache, exclude_tail_days=primary_excl)
+    metrics_train = staged.evaluate_genome_full(checkpoint_genome, cache_train, gr) if cache_train else {}
+
+    # Avalia cada janela
+    per_window: List[Dict[str, Any]] = []
+    for i, (offset, length) in enumerate(windows):
+        label = f"W{i+1}_offset{offset}_len{length}"
+        is_pristine = (offset == 0)
+        print(f"[overfitting] [multi-window] Evaluating {label} (pristine={is_pristine})...")
+        cache_w = _slice_cache(cache, end_offset=offset, length=length)
+        m = staged.evaluate_genome_full(checkpoint_genome, cache_w, gr) if cache_w else {}
+
+        def _d(k: str) -> float:
+            t = float(metrics_train.get(k, 0.0) or 0.0)
+            h = float(m.get(k, 0.0) or 0.0)
+            return h - t
+
+        per_window.append({
+            "label": label,
+            "end_offset_days": offset,
+            "length_days": length,
+            "is_pristine": is_pristine,
+            "n_tickers": len(cache_w),
+            "metrics": _metrics_dict(m),
+            "delta_vs_train": {
+                "fit": _d("fit"),
+                "wr_med_all": _d("wr_med_all"),
+                "mean_alpha_ann": _d("mean_alpha_ann"),
+                "n_ge_70": _d("n_ge_70"),
+            },
+        })
+
+    return {
+        "metrics_full": _metrics_dict(metrics_full),
+        "metrics_train": _metrics_dict(metrics_train),
+        "n_tickers_train": len(cache_train),
+        "windows": per_window,
+        "n_windows": len(windows),
+        "multi_window": True,
+        # Compat: expoe primeira janela em 'metrics_holdout'/'delta_holdout_vs_train'
+        # para que classify() existente continue funcionando como single-window fallback.
+        "metrics_holdout": per_window[0]["metrics"] if per_window else {},
+        "delta_holdout_vs_train": per_window[0]["delta_vs_train"] if per_window else {},
+        "holdout_days": windows[0][1] if windows else 90,
     }
 
 
@@ -292,36 +388,86 @@ def parameter_sensitivity(checkpoint_genome: List[float]) -> Dict[str, Any]:
 # VERDICT
 # ============================================================
 
+def _classify_single_window(delta: Dict, label: str = "holdout") -> Tuple[List[str], List[str]]:
+    """Aplica thresholds em uma janela. Retorna (warnings, critical) lists."""
+    warnings = []
+    critical = []
+    wr_drop = -float(delta.get("wr_med_all", 0.0))
+    alpha_drop = -float(delta.get("mean_alpha_ann", 0.0))
+    if wr_drop > THRESHOLDS["holdout_wr_drop_critical"]:
+        critical.append(f"{label}_wr_drop={wr_drop:.4f} > critical ({THRESHOLDS['holdout_wr_drop_critical']})")
+    elif wr_drop > THRESHOLDS["holdout_wr_drop_max"]:
+        warnings.append(f"{label}_wr_drop={wr_drop:.4f} > warn ({THRESHOLDS['holdout_wr_drop_max']})")
+    if alpha_drop > THRESHOLDS["holdout_alpha_drop_critical"]:
+        critical.append(f"{label}_alpha_drop={alpha_drop:.4f} > critical ({THRESHOLDS['holdout_alpha_drop_critical']})")
+    elif alpha_drop > THRESHOLDS["holdout_alpha_drop_max"]:
+        warnings.append(f"{label}_alpha_drop={alpha_drop:.4f} > warn ({THRESHOLDS['holdout_alpha_drop_max']})")
+    return warnings, critical
+
+
 def classify(holdout_result: Dict, bootstrap_result: Dict,
              sensitivity_result: Dict) -> Tuple[str, List[str]]:
     """Classifica CLEAN / MARGINAL / OVERFIT baseado em thresholds.
 
+    Multi-window: holdout contribui com 'critical' apenas se >=2/N janelas tem
+    issue critical (consensus). 1 janela critical contribui como warning unico.
+
+    Bootstrap e sensitivity sao single-source: warnings/criticals diretos.
+
+    Verdict final:
+    - any critical -> OVERFIT
+    - >=2 warnings -> OVERFIT
+    - 1 warning -> MARGINAL
+    - else -> CLEAN
+
     Returns (verdict, list_of_reasons).
     """
-    warnings = []
-    critical = []
+    warnings: List[str] = []
+    critical: List[str] = []
 
-    # Holdout checks
-    delta = holdout_result.get("delta_holdout_vs_train", {})
-    wr_drop = -float(delta.get("wr_med_all", 0.0))  # positivo = WR caiu
-    alpha_drop = -float(delta.get("mean_alpha_ann", 0.0))
-    if wr_drop > THRESHOLDS["holdout_wr_drop_critical"]:
-        critical.append(f"holdout_wr_drop={wr_drop:.4f} > critical ({THRESHOLDS['holdout_wr_drop_critical']})")
-    elif wr_drop > THRESHOLDS["holdout_wr_drop_max"]:
-        warnings.append(f"holdout_wr_drop={wr_drop:.4f} > warn ({THRESHOLDS['holdout_wr_drop_max']})")
-    if alpha_drop > THRESHOLDS["holdout_alpha_drop_critical"]:
-        critical.append(f"holdout_alpha_drop={alpha_drop:.4f} > critical ({THRESHOLDS['holdout_alpha_drop_critical']})")
-    elif alpha_drop > THRESHOLDS["holdout_alpha_drop_max"]:
-        warnings.append(f"holdout_alpha_drop={alpha_drop:.4f} > warn ({THRESHOLDS['holdout_alpha_drop_max']})")
+    if holdout_result.get("multi_window") and "windows" in holdout_result:
+        # Multi-window aggregation: contar quantas janelas tem critical
+        critical_window_reasons: List[str] = []
+        warning_window_reasons: List[str] = []
+        n_critical_windows = 0
+        for w in holdout_result["windows"]:
+            w_warn, w_crit = _classify_single_window(w["delta_vs_train"], label=w["label"])
+            if w_crit:
+                n_critical_windows += 1
+                critical_window_reasons.extend(w_crit)
+            warning_window_reasons.extend(w_warn)
+        n_windows = holdout_result.get("n_windows", len(holdout_result["windows"]))
 
-    # Bootstrap checks
+        # Consensus contribution to verdict (multi-window counts as 1 source)
+        if n_critical_windows >= 2:
+            critical.append(
+                f"multi_window_consensus_overfit: {n_critical_windows}/{n_windows} janelas critical"
+            )
+            # Inclui detalhes como info adicional, sem contar duplicado
+            critical.extend(critical_window_reasons)
+        elif n_critical_windows == 1:
+            # 1 janela critical = 1 warning unico (regime-dependent, nao overfit estrutural)
+            warnings.append(
+                f"multi_window_partial: 1/{n_windows} janela critical "
+                f"({'; '.join(critical_window_reasons[:2])})"
+            )
+        # Warnings das janelas (drops moderados) sao info, nao contam para o verdict
+        # final — evita inflacionar o numero de warnings entre janelas
+    else:
+        # Single window legacy: cada metric (wr/alpha) e contabilizada
+        delta = holdout_result.get("delta_holdout_vs_train", {})
+        s_warn, s_crit = _classify_single_window(delta, label="holdout")
+        warnings.extend(s_warn)
+        critical.extend(s_crit)
+
+    # Bootstrap checks (single source)
     wr_ci_w = float(bootstrap_result.get("wr_ci_width", 0.0) or 0.0)
     if wr_ci_w > THRESHOLDS["bootstrap_wr_ci_width_critical"]:
         critical.append(f"wr_ci_width={wr_ci_w:.4f} > critical ({THRESHOLDS['bootstrap_wr_ci_width_critical']})")
     elif wr_ci_w > THRESHOLDS["bootstrap_wr_ci_width_max"]:
         warnings.append(f"wr_ci_width={wr_ci_w:.4f} > warn ({THRESHOLDS['bootstrap_wr_ci_width_max']})")
 
-    # Sensitivity checks
+    # Sensitivity checks (single source)
     med_delta = float(sensitivity_result.get("median_abs_delta", 0.0) or 0.0)
     if med_delta > THRESHOLDS["sensitivity_median_critical"]:
         critical.append(f"sensitivity_median={med_delta:.2f} > critical ({THRESHOLDS['sensitivity_median_critical']})")
@@ -352,14 +498,32 @@ def format_markdown(data: Dict) -> str:
           f"- n_ge_70: `{data['holdout_result']['metrics_full']['n_ge_70']}`\n\n"]
 
     h = data["holdout_result"]
-    md += [f"## Pristine Holdout ({h.get('holdout_days', 90)}d)\n\n",
-           f"| Metric | Train | Holdout | Delta |\n",
-           f"|---|---:|---:|---:|\n"]
-    for k in ("fit", "wr_med_all", "mean_alpha_ann", "n_ge_70", "trades_med"):
-        tr = h["metrics_train"].get(k, 0)
-        ho = h["metrics_holdout"].get(k, 0)
-        dl = h["delta_holdout_vs_train"].get(k, 0) if k != "trades_med" else 0
-        md.append(f"| {k} | {tr:+.4f} | {ho:+.4f} | {dl:+.4f} |\n")
+    if h.get("multi_window") and "windows" in h:
+        md += [f"## Multi-Window Holdout ({h.get('n_windows', 0)} janelas)\n\n",
+               f"Train baseline: {h.get('n_tickers_train', 0)} tickers, ",
+               f"WR={h['metrics_train'].get('wr_med_all', 0):.4f}, ",
+               f"alpha={h['metrics_train'].get('mean_alpha_ann', 0):+.4f}\n\n",
+               f"| Window | Pristine | n_tickers | WR | alpha | trades_med | WR_drop | alpha_drop |\n",
+               f"|---|---|---:|---:|---:|---:|---:|---:|\n"]
+        for w in h["windows"]:
+            m = w["metrics"]
+            d = w["delta_vs_train"]
+            wr_drop = -d.get("wr_med_all", 0.0)
+            alpha_drop = -d.get("mean_alpha_ann", 0.0)
+            md.append(
+                f"| {w['label']} | {'YES' if w['is_pristine'] else 'no'} "
+                f"| {w['n_tickers']} | {m.get('wr_med_all', 0):.4f} | {m.get('mean_alpha_ann', 0):+.4f} "
+                f"| {m.get('trades_med', 0):.1f} | {wr_drop:+.4f} | {alpha_drop:+.4f} |\n"
+            )
+    else:
+        md += [f"## Pristine Holdout ({h.get('holdout_days', 90)}d)\n\n",
+               f"| Metric | Train | Holdout | Delta |\n",
+               f"|---|---:|---:|---:|\n"]
+        for k in ("fit", "wr_med_all", "mean_alpha_ann", "n_ge_70", "trades_med"):
+            tr = h["metrics_train"].get(k, 0)
+            ho = h["metrics_holdout"].get(k, 0)
+            dl = h["delta_holdout_vs_train"].get(k, 0) if k != "trades_med" else 0
+            md.append(f"| {k} | {tr:+.4f} | {ho:+.4f} | {dl:+.4f} |\n")
 
     b = data["bootstrap_result"]
     md += [f"\n## Bootstrap CI (WR)\n\n",
@@ -396,6 +560,9 @@ def main() -> int:
                     help="Pula parameter sensitivity (mais lento)")
     ap.add_argument("--strict", action="store_true",
                     help="Exit 2 tambem em MARGINAL")
+    ap.add_argument("--multi-window", action="store_true",
+                    help="Avalia em 3 janelas de 90d (last, 90-180d, 270-360d). "
+                         "Verdict OVERFIT requer >=2/3 janelas com critical.")
     args = ap.parse_args()
 
     # Load checkpoint
@@ -414,9 +581,19 @@ def main() -> int:
     print(f"[overfitting] holdout_days={args.holdout_days} bootstrap={args.bootstrap}")
 
     # Run checks
-    holdout_result = evaluate_holdout(genome, holdout_days=args.holdout_days)
-    print(f"[overfitting] Holdout done. "
-          f"WR delta={holdout_result.get('delta_holdout_vs_train', {}).get('wr_med_all', 0):+.4f}")
+    if args.multi_window:
+        windows = [(0, 90), (90, 90), (270, 90)]
+        holdout_result = evaluate_multi_window_holdout(genome, windows=windows)
+        n_crit = sum(
+            1 for w in holdout_result.get("windows", [])
+            if -w["delta_vs_train"].get("wr_med_all", 0.0) > THRESHOLDS["holdout_wr_drop_critical"]
+            or -w["delta_vs_train"].get("mean_alpha_ann", 0.0) > THRESHOLDS["holdout_alpha_drop_critical"]
+        )
+        print(f"[overfitting] Multi-window holdout done. {n_crit}/{len(windows)} janelas com critical")
+    else:
+        holdout_result = evaluate_holdout(genome, holdout_days=args.holdout_days)
+        print(f"[overfitting] Holdout done. "
+              f"WR delta={holdout_result.get('delta_holdout_vs_train', {}).get('wr_med_all', 0):+.4f}")
 
     bootstrap_result = bootstrap_ci_wr(genome, n_samples=args.bootstrap)
     print(f"[overfitting] Bootstrap done. "

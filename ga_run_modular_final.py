@@ -1799,15 +1799,37 @@ def run_global_ga_two_stage(
     if seed_genome is not None and len(seed_genome) == len(GLOBAL_PARAM_SPECS):
         sanitized_seed = sanitize_global_genome(seed_genome)
         s1_seed_genomes = [sanitized_seed]
-        # Add small perturbations of the seed
-        n_perturbations = min(7, tune_result.stage1_pop // 8)
+
+        # Multi-seed mode (GA_MULTI_SEED=1): adiciona 4 genomas RANDOM no espaco
+        # de busca para diversificar a populacao inicial alem do warm-start.
+        # Usado em branches experimentais (ex: SE) onde o seed BR pode estar
+        # enviezando exploracao para regioes inadequadas.
+        n_random_seeds = 0
+        if int(os.environ.get("GA_MULTI_SEED", "0")) == 1:
+            n_random_seeds = 4
+            for _ in range(n_random_seeds):
+                random_genome = []
+                for (_, lo, hi, step, is_int) in GLOBAL_PARAM_SPECS:
+                    v = random.uniform(lo, hi)
+                    if is_int:
+                        v = int(round(v))
+                    else:
+                        v = round(v / step) * step if step > 0 else v
+                    v = float(np.clip(v, lo, hi))
+                    random_genome.append(v)
+                s1_seed_genomes.append(sanitize_global_genome(random_genome))
+
+        # Add small perturbations of the seed (reduzido em multi-seed mode)
+        n_perturbations = min(7 - n_random_seeds, tune_result.stage1_pop // 8)
+        n_perturbations = max(0, n_perturbations)
         for _ in range(n_perturbations):
             varied = []
             for g, (_, lo, hi, _, _) in zip(sanitized_seed, GLOBAL_PARAM_SPECS):
                 v = float(np.clip(g + random.gauss(0.0, 0.06 * (hi - lo)), lo, hi))
                 varied.append(v)
             s1_seed_genomes.append(sanitize_global_genome(varied))
-        print(f"[GA] Warm-starting Stage 1 with {len(s1_seed_genomes)} seeds from previous best")
+        seed_mode = "multi-seed (1 BR + 4 random + N perturb)" if n_random_seeds else "warm-start (BR seed + perturb)"
+        print(f"[GA] Warm-starting Stage 1 with {len(s1_seed_genomes)} seeds [{seed_mode}]")
 
     if not s1_done:
         print(f"\n[GA] === STAGE 1: Exploration ===")

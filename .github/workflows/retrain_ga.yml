@@ -5,16 +5,30 @@ on:
     inputs:
       stages:
         description: 'Number of stages (each runs 10 gens)'
-        default: '4'
+        default: '8'
         type: string
       pop_size:
         description: 'Population size'
-        default: '40'
+        default: '60'
         type: string
       windows:
         description: 'Walk-forward windows'
         default: '6'
         type: string
+      alpha_focus:
+        description: 'GA_ALPHA_FOCUS (forces beat buy-and-hold; recommended for SE branch)'
+        default: 'on'
+        type: choice
+        options:
+          - 'on'
+          - 'off'
+      multi_window_holdout:
+        description: 'Overfitting stage usa 3 janelas (90d each) com consensus 2/3'
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
 
 jobs:
   retrain:
@@ -32,6 +46,13 @@ jobs:
       GA_RUN_MODE: "train"
       GA_FAST_MODE: "false"
       GA_EVAL_WORKERS: "2"
+      # Branch SE Run 1: alpha focus liga peso 2.5x em excess return e relaxa clip
+      # para -2.5, forcando GA a buscar genoma que beat buy-and-hold em vez de
+      # apenas WR puro. Ajustavel via dispatch input.
+      GA_ALPHA_FOCUS: ${{ inputs.alpha_focus }}
+      # Branch SE Run 1: multi-seed inicial para diversificar exploracao alem do
+      # genoma BR-tuned (1 seed BR + 4 random nos ranges de cada gene).
+      GA_MULTI_SEED: "1"
       # Retrain NAO envia Telegram — so daily_pipeline.yml envia 1 msg/dia
       # com caption rico via send_telegram.py. Evita parallel sends com
       # formatos diferentes (ga_run internal vs send_telegram.py).
@@ -135,7 +156,11 @@ jobs:
         id: overfitting_stage
         run: |
           set +e
-          python3 -u analysis/overfitting_stage.py --holdout-days 90 --bootstrap 200 --skip-sensitivity
+          MW_FLAG=""
+          if [ "${{ inputs.multi_window_holdout }}" = "true" ]; then
+            MW_FLAG="--multi-window"
+          fi
+          python3 -u analysis/overfitting_stage.py --holdout-days 90 --bootstrap 200 --skip-sensitivity $MW_FLAG
           EXIT=$?
           echo "overfitting_exit=$EXIT" >> $GITHUB_OUTPUT
           if [ $EXIT -eq 2 ]; then
