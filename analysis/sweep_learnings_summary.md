@@ -1,6 +1,6 @@
 # Sweep Learnings Summary
 
-_Generated: 2026-04-25T13:55:11+00:00_
+_Generated: 2026-04-26T06:51:07+00:00_
 
 Aggregates all `local_fullmetric_sweep_result*.json` files plus the
 continuous-improvement state. Use this file to plan the next cycle.
@@ -8,9 +8,9 @@ continuous-improvement state. Use this file to plan the next cycle.
 ## Current snapshot
 
 - Checkpoint fitness: `26.459605239382256`
-- Total sweeps seen: **275**
-- Total promotions: **116** (including 1 from codex log)
-- Promotion rate: **38.8%** (over 299 total attempts)
+- Total sweeps seen: **281**
+- Total promotions: **119** (including 1 from codex log)
+- Promotion rate: **39.0%** (over 305 total attempts)
 - Continuous cycles run: 34
 - Continuous promotions: 14
 - Codex attempts synced: **24** (11 promoted) from `codex_attempts_source.md`
@@ -139,6 +139,9 @@ categoria mais antiga: **D_entry_filter** (ultima vez: 2026-04-20T10:29:24+00:00
 | 2026-04-23 | local | `local_fullmetric_sweep_continuous_D_entry_filter_20260423_112917.json` | `score_percentile_trigger 0.55->0.5` | fit=20.082 WR=66.7% alpha=-8.09% MDD=11.7% |
 | 2026-04-25 | local | `local_fullmetric_sweep_continuous_E_regime_vol_20260425_132007.json` | `momentum_confirm_days 4->5` | fit=19.187 WR=66.7% alpha=-7.99% MDD=12.6% |
 | 2026-04-25 | local | `local_fullmetric_sweep_continuous_D_entry_filter_20260425_132044.json` | `score_percentile_trigger 0.55->0.5` | fit=18.934 WR=66.7% alpha=-8.02% MDD=12.8% |
+| 2026-04-26 | local | `local_fullmetric_sweep_continuous_E_regime_vol_20260426_061324.json` | `volatility_filter_percentile 0.05->0.1` | fit=19.812 WR=66.7% alpha=-8.05% MDD=12.1% |
+| 2026-04-26 | local | `local_fullmetric_sweep_continuous_B_take_profit_20260426_061331.json` | `partial_take_level 1.0->1.25` | fit=17.490 WR=66.7% alpha=-8.06% MDD=12.2% |
+| 2026-04-26 | local | `local_fullmetric_sweep_continuous_C_timing_20260426_061342.json` | `consecutive_loss_cooldown 8->9` | fit=17.952 WR=66.7% alpha=-8.04% MDD=12.1% |
 
 ## Graveyard (genes que falharam multiplas vezes)
 
@@ -147,19 +150,19 @@ Genes tentados >= 2 vezes sem nenhuma promocao. Considere SKIP no proximo ciclo.
 
 | Gene | Attempts | Promotions | (codex) Attempts | (codex) Promotions |
 |---|---:|---:|---:|---:|
-| `reward_risk_ratio` | 48 | 0 | 0 | 0 |
-| `score_strength_scaling` | 46 | 0 | 0 | 0 |
-| `vote_threshold_long` | 46 | 0 | 0 | 0 |
-| `stop_atr_mult` | 45 | 0 | 0 | 0 |
-| `min_signal_strength` | 45 | 0 | 0 | 0 |
-| `volume_confirm_mode` | 44 | 0 | 1 | 0 |
-| `time_stop_bars` | 44 | 0 | 0 | 0 |
-| `entry_confirmation_days` | 44 | 0 | 0 | 0 |
-| `ma_filter_period` | 44 | 0 | 1 | 0 |
-| `vote_threshold_short` | 43 | 0 | 1 | 0 |
-| `stop_tighten_after_bars` | 43 | 0 | 0 | 0 |
-| `z_threshold` | 42 | 0 | 0 | 0 |
-| `entry_aggressiveness` | 25 | 0 | 0 | 0 |
+| `reward_risk_ratio` | 49 | 0 | 0 | 0 |
+| `score_strength_scaling` | 47 | 0 | 0 | 0 |
+| `vote_threshold_long` | 47 | 0 | 0 | 0 |
+| `stop_atr_mult` | 46 | 0 | 0 | 0 |
+| `min_signal_strength` | 46 | 0 | 0 | 0 |
+| `volume_confirm_mode` | 45 | 0 | 1 | 0 |
+| `time_stop_bars` | 45 | 0 | 0 | 0 |
+| `entry_confirmation_days` | 45 | 0 | 0 | 0 |
+| `ma_filter_period` | 45 | 0 | 1 | 0 |
+| `vote_threshold_short` | 44 | 0 | 1 | 0 |
+| `stop_tighten_after_bars` | 44 | 0 | 0 | 0 |
+| `z_threshold` | 43 | 0 | 0 | 0 |
+| `entry_aggressiveness` | 26 | 0 | 0 | 0 |
 
 ## Hot zones (genes que ja promoveram)
 
@@ -167,26 +170,26 @@ Genes onde alguma combinacao funcionou. Vale revisitar com novos vizinhos.
 
 | Gene | Promotions | Attempts | Hit rate | (codex) Promotions |
 |---|---:|---:|---:|---:|
-| `consecutive_loss_cooldown` | 20 | 55 | 36% | 1 |
-| `score_percentile_trigger` | 19 | 48 | 40% | 0 |
-| `momentum_confirm_days` | 18 | 49 | 37% | 0 |
-| `signal_ema_span` | 7 | 47 | 15% | 0 |
-| `partial_take_level` | 7 | 55 | 13% | 1 |
-| `max_loss_per_trade_pct` | 6 | 47 | 13% | 0 |
-| `entry_score_threshold` | 6 | 57 | 11% | 0 |
-| `regime_threshold` | 6 | 64 | 9% | 1 |
-| `equity_drawdown_stop_pct` | 5 | 44 | 11% | 0 |
-| `ma_filter_mode` | 5 | 54 | 9% | 0 |
-| `partial_take_pct` | 4 | 48 | 8% | 0 |
-| `volatility_filter_percentile` | 3 | 54 | 6% | 0 |
-| `support_broken_gate` | 2 | 23 | 9% | 0 |
-| `entry_discount_atr_frac` | 2 | 43 | 5% | 0 |
-| `trailing_stop_mode` | 2 | 45 | 4% | 0 |
-| `partial_take_pct_2` | 2 | 47 | 4% | 0 |
-| `stop_tighten_factor` | 2 | 50 | 4% | 0 |
-| `partial_take_level_2` | 2 | 50 | 4% | 0 |
-| `resistance_overext_gate` | 1 | 23 | 4% | 0 |
-| `vol_regime_mode` | 1 | 46 | 2% | 0 |
+| `consecutive_loss_cooldown` | 21 | 56 | 38% | 1 |
+| `score_percentile_trigger` | 19 | 49 | 39% | 0 |
+| `momentum_confirm_days` | 18 | 50 | 36% | 0 |
+| `partial_take_level` | 8 | 56 | 14% | 1 |
+| `signal_ema_span` | 7 | 48 | 15% | 0 |
+| `max_loss_per_trade_pct` | 6 | 48 | 12% | 0 |
+| `entry_score_threshold` | 6 | 58 | 10% | 0 |
+| `regime_threshold` | 6 | 65 | 9% | 1 |
+| `equity_drawdown_stop_pct` | 5 | 45 | 11% | 0 |
+| `ma_filter_mode` | 5 | 55 | 9% | 0 |
+| `partial_take_pct` | 4 | 49 | 8% | 0 |
+| `volatility_filter_percentile` | 4 | 55 | 7% | 0 |
+| `support_broken_gate` | 2 | 24 | 8% | 0 |
+| `entry_discount_atr_frac` | 2 | 44 | 5% | 0 |
+| `trailing_stop_mode` | 2 | 46 | 4% | 0 |
+| `partial_take_pct_2` | 2 | 48 | 4% | 0 |
+| `stop_tighten_factor` | 2 | 51 | 4% | 0 |
+| `partial_take_level_2` | 2 | 51 | 4% | 0 |
+| `resistance_overext_gate` | 1 | 24 | 4% | 0 |
+| `vol_regime_mode` | 1 | 47 | 2% | 0 |
 
 ## Category rotation status
 
@@ -201,7 +204,7 @@ Genes onde alguma combinacao funcionou. Vale revisitar com novos vizinhos.
 
 ## Codex sync history (latest attempts)
 
-Parsed `codex_attempts_source.md` at 2026-04-25T13:55:11+00:00. Total attempts: **24**, promoted: **11**. Updates via `python analysis/codex_attempts_sync.py` at the start of every continuous cycle (auto) or on demand.
+Parsed `codex_attempts_source.md` at 2026-04-26T06:51:07+00:00. Total attempts: **24**, promoted: **11**. Updates via `python analysis/codex_attempts_sync.py` at the start of every continuous cycle (auto) or on demand.
 
 | Attempt | Timestamp | Promoted | Move(s) | Learning (snippet) |
 |---|---|:-:|---|---|
