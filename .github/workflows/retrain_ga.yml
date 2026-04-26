@@ -262,8 +262,11 @@ jobs:
           echo "::notice::Pushing retrain result to branch: $BRANCH"
           if ! git diff --cached --quiet; then
             git commit -m "Retrain GA staged: fitness=${FITNESS}"
+            # autoStash evita "cannot pull with rebase: unstaged changes" quando
+            # steps anteriores deixam arquivos modificados (output/*.parquet,
+            # ga_memmap/*) na working tree.
             for i in 1 2 3 4 5; do
-              if git pull --rebase origin "$BRANCH" && git push origin "$BRANCH"; then
+              if git -c rebase.autoStash=true pull --rebase origin "$BRANCH" && git push origin "$BRANCH"; then
                 echo "::notice::Push succeeded on attempt $i to $BRANCH"
                 exit 0
               fi
