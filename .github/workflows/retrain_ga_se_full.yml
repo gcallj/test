@@ -1,0 +1,278 @@
+name: Full Retrain GA SE (BIN/REG + Staged)
+
+# Workflow Run 2 (deep) para branch SE: treina BIN/REG models SE-especificos
+# antes do retrain GA. Usado quando retrain_ga.yml comum produz fitness sem
+# ML signals (history_consolidated.parquet incompleto -> GA fitness usa apenas
+# OHLC/indicadores tecnicos sem EV_buy_fund nem ensemble_score).
+#
+# Etapas adicionais vs retrain_ga.yml:
+#   1. Step 1 ETL (~25 min)
+#   2. **Step 2 BIN models (LGBM, HGB, RF, ET) por ticker (~2-3h)**  <-- NOVO
+#   3. **Step 3 REG models (best_entry, best_sale) por ticker (~1-2h)** <-- NOVO
+#   4. Step 4 FINAL consolidation (~10 min)
+#   5. Retrain GA staged
+#   6. Build PayloadStore + Overfitting + Best-ever guard + Commit
+#
+# Total estimado: 8-12h CI. Timeout 720min (12h) — ajustar se passar de 11h.
+
+on:
+  workflow_dispatch:
+    inputs:
+      stages:
+        description: 'Number of stages (each runs 10 gens)'
+        default: '6'
+        type: string
+      pop_size:
+        description: 'Population size'
+        default: '60'
+        type: string
+      windows:
+        description: 'Walk-forward windows'
+        default: '6'
+        type: string
+      alpha_focus:
+        description: 'GA_ALPHA_FOCUS (forces beat buy-and-hold)'
+        default: 'on'
+        type: choice
+        options:
+          - 'on'
+          - 'off'
+      multi_window_holdout:
+        description: 'Overfitting stage usa 3 janelas (90d each) com consensus 2/3'
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+      skip_bin_reg:
+        description: 'PULAR train de BIN/REG (so se ja existem cached)'
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+jobs:
+  retrain_full:
+    runs-on: ubuntu-latest
+    timeout-minutes: 720
+
+    permissions:
+      contents: write
+
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      GA_RUN_MODE: "train"
+      GA_FAST_MODE: "false"
+      GA_EVAL_WORKERS: "2"
+      GA_ALPHA_FOCUS: ${{ inputs.alpha_focus }}
+      GA_MULTI_SEED: "1"
+      GA_DISABLE_TELEGRAM_SEND: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ hashFiles('requirements.txt') }}
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Show current checkpoint
+        run: |
+          echo "Before retrain:"
+          python3 -c "import json; d=json.load(open('global_ga_checkpoint.json')); print(f'  fitness={d[\"fitness\"]:.4f}')"
+          echo "Config: pop=${{ inputs.pop_size }}, stages=${{ inputs.stages }}, windows=${{ inputs.windows }}, skip_bin_reg=${{ inputs.skip_bin_reg }}"
+
+      - name: Step 1 - ETL
+        run: |
+          python -u run_pipeline.py --steps 1
+
+      - name: Step 2 - Train BIN models (SE-specific)
+        if: ${{ inputs.skip_bin_reg != 'true' }}
+        run: |
+          echo "[bin] Training LGBM/HGB/RF/ET binary classifiers per SE ticker..."
+          python -u run_pipeline.py --steps 2 2>&1 | tail -100
+          echo "[bin] Listing generated models..."
+          ls -lh output/data/models/ 2>&1 | head -20 || echo "[WARN] no models dir"
+
+      - name: Step 3 - Train REG models (SE-specific)
+        if: ${{ inputs.skip_bin_reg != 'true' }}
+        run: |
+          echo "[reg] Training regression baseline forecasts per SE ticker..."
+          python -u run_pipeline.py --steps 3 2>&1 | tail -100
+
+      - name: Step 4 - Consolidate signals
+        run: |
+          python -u run_pipeline.py --steps 4 2>&1 | tail -50
+          ls -lh output/history_consolidated.parquet 2>&1 || echo "[WARN] history_consolidated missing"
+
+      - name: Backup pre-retrain checkpoint (rollback se guard rejeitar)
+        run: |
+          cp global_ga_checkpoint.json global_ga_checkpoint_pre_retrain.json.bak
+
+      - name: Retrain GA (staged)
+        run: |
+          python3 -u -c "
+          import os, json, time
+          os.environ['GA_RUN_MODE'] = 'train'
+          os.environ['GA_FAST_MODE'] = 'false'
+          os.environ['GA_EVAL_WORKERS'] = '2'
+
+          import ga_run
+          ga_run.GA_STAGE1_POP_SIZE = int('${{ inputs.pop_size }}')
+          ga_run.GA_STAGE1_NGEN = 10
+          ga_run.GA_MAX_WINDOWS = int('${{ inputs.windows }}')
+          ga_run.GA_MAX_WINDOWS_STAGE2 = min(int('${{ inputs.windows }}'), 6)
+          ga_run.GA_EVAL_WORKERS = 2
+
+          stages = int('${{ inputs.stages }}')
+          for s in range(1, stages + 1):
+              print(f'=== STAGE {s}/{stages} ===')
+              ck = json.load(open('global_ga_checkpoint.json'))
+              print(f'Starting fitness: {ck[\"fitness\"]:.4f}')
+              t0 = time.time()
+              ga_run.run()
+              ck = json.load(open('global_ga_checkpoint.json'))
+              print(f'Stage {s} done: fitness={ck[\"fitness\"]:.4f} ({time.time()-t0:.0f}s)')
+          "
+
+      - name: Show results
+        if: always()
+        run: |
+          echo "After retrain:"
+          python3 -c "import json; d=json.load(open('global_ga_checkpoint.json')); print(f'  fitness={d[\"fitness\"]:.4f}')"
+          ls -lh summary_latest.xlsx apply_last_*d__H*.csv 2>/dev/null
+
+      - name: Build PayloadStore (load mode) for overfitting stage
+        if: success()
+        env:
+          GA_RUN_MODE: "load"
+          GA_FAST_MODE: "true"
+          GA_KEEP_STORE: "1"
+          GA_DISABLE_TELEGRAM_SEND: "1"
+          GA_HOLDOUT_DAYS: "0"
+        run: |
+          python -u ga_run.py 2>&1 | tail -30
+          test -f output/ga_memmap/meta.json && echo "[OK] PayloadStore built" || echo "[WARN] Store missing"
+
+      - name: Overfitting stage (multi-window holdout + bootstrap)
+        if: success()
+        id: overfitting_stage
+        run: |
+          set +e
+          MW_FLAG=""
+          if [ "${{ inputs.multi_window_holdout }}" = "true" ]; then
+            MW_FLAG="--multi-window"
+          fi
+          python3 -u analysis/overfitting_stage.py --holdout-days 90 --bootstrap 200 --skip-sensitivity $MW_FLAG
+          EXIT=$?
+          echo "overfitting_exit=$EXIT" >> $GITHUB_OUTPUT
+          if [ $EXIT -eq 2 ]; then
+            echo "::error::Overfitting stage reportou OVERFIT critico — rollback + abort"
+            cp global_ga_checkpoint_pre_retrain.json.bak global_ga_checkpoint.json
+            echo "[overfitting] Checkpoint restaurado ao pre-retrain state"
+            exit 2
+          elif [ $EXIT -eq 1 ]; then
+            echo "::warning::Overfitting stage reportou MARGINAL — seguindo com warning"
+          fi
+          exit 0
+
+      - name: Upload overfitting report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: overfitting-report-se-${{ github.run_number }}
+          path: |
+            analysis/overfitting_stage_report.json
+            analysis/overfitting_stage_report.md
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Check retrained vs best_ever guard (rollback se pior)
+        if: success()
+        run: |
+          python3 -c "
+          import json, sys, shutil
+          ck = json.load(open('global_ga_checkpoint.json'))
+          c = ck.get('metrics_snapshot', {}).get('candidate', {})
+          if not c.get('fit'):
+              try:
+                  import run_local_ga_staged as staged
+                  import ga_run as gr
+                  store, _w, _sg, _sf, _bg, _bf, _bi = staged.open_existing_store()
+                  cache = staged.build_ticker_arrays_cache(store)
+                  c = staged.evaluate_genome_full(ck['genome'], cache, gr)
+              except Exception as e:
+                  print(f'[WARN] eval falhou: {e}; seguindo sem guard')
+                  sys.exit(0)
+          cand_m = {
+              'fit': float(c.get('fit', ck['fitness']) or 0.0),
+              'wr_med_all': float(c.get('wr_med_all', 0.0) or 0.0),
+              'mean_alpha_ann': float(c.get('mean_alpha_ann', 0.0) or 0.0),
+              'n_ge_70': int(c.get('n_ge_70', 0) or 0),
+          }
+          from analysis.best_ever_guard import check_regression_vs_best, format_best_ever_summary, update_best_ever
+          print('[GUARD]', format_best_ever_summary())
+          ok, reason = check_regression_vs_best(cand_m)
+          if not ok:
+              print(f'[GUARD] REJEITA retrain: {reason}')
+              shutil.copy('global_ga_checkpoint_pre_retrain.json.bak', 'global_ga_checkpoint.json')
+              print('[GUARD] Main preservado em pre-retrain state')
+              sys.exit(2)
+          print(f'[GUARD] Retrain PASSOU: {reason}')
+          update_best_ever(cand_m, ck['genome'], reason='retrain_ga_se_full')
+          "
+
+      - name: Commit retrained checkpoint
+        if: success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add global_ga_checkpoint.json apply_last_5d__H5.csv summary_latest.xlsx analysis/best_ever_tracker.json 2>/dev/null || true
+          FITNESS=$(python3 -c "import json; print(f'{json.load(open(\"global_ga_checkpoint.json\"))[\"fitness\"]:.4f}')")
+          BRANCH="${GITHUB_REF_NAME:-main}"
+          echo "::notice::Pushing retrain SE result to branch: $BRANCH"
+          if ! git diff --cached --quiet; then
+            git commit -m "Retrain GA SE (BIN/REG + staged): fitness=${FITNESS}"
+            for i in 1 2 3 4 5; do
+              if git pull --rebase origin "$BRANCH" && git push origin "$BRANCH"; then
+                echo "::notice::Push succeeded on attempt $i to $BRANCH"
+                exit 0
+              fi
+              sleep $(( (RANDOM % 15) + 5 ))
+            done
+            echo "::error::Push failed after 5 retries"
+            exit 1
+          else
+            echo "No changes (guard rejected ou sem delta)"
+          fi
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: retrain-output-se-${{ github.run_number }}
+          path: |
+            summary_latest.xlsx
+            apply_last_5d__H5.csv
+            global_ga_checkpoint.json
+            output/data/models/
+            output/ensemble_signals_history*.parquet
+            output/forecast_history_wide.parquet
+          retention-days: 30
+          if-no-files-found: ignore
