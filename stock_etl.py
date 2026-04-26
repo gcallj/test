@@ -58,33 +58,39 @@ def run_etl():
     # Branch experimental: substitui universo BR (.SA) por SE (.ST).
     # Mantem indices globais + cripto como contexto macro.
 
-    # Acoes Suecia (OMX Stockholm largecaps + selecionadas mid-caps)
+    # Acoes Suecia (OMX Stockholm) — universo curated do Run 2.
+    # Removidos 8 tickers com WR<50% no Run 2 CLEAN baseline (sangravam alpha):
+    #   ASSA-B (30.8%), BILL (35.7%), TEL2-B (40.0%), AZN (44.4%),
+    #   HOLM-B (45.5%), SHB-A (46.5%), SSAB-A (47.8%), VOLV-A (48.6%).
+    # Removidos 4 delisted no Yahoo (TIETO, ICA, STORA-A, LUNDIN) ja
+    # estavam fora desde Run 1.
     omx_tickers = [
-        # Bancos / financials
-        "SEB-A.ST", "SHB-A.ST", "SWED-A.ST", "NDA-SE.ST",
+        # Bancos / financials (SHB-A removido)
+        "SEB-A.ST", "SWED-A.ST", "NDA-SE.ST",
         "INVE-B.ST", "KINV-B.ST", "EQT.ST",
 
         # Commodities / mining / paper / steel
-        "BOL.ST", "SSAB-A.ST", "SSAB-B.ST", "SCA-B.ST", "STORA-A.ST",
-        "HOLM-B.ST", "BILL.ST", "LUNDIN.ST",
+        # (SSAB-A, BILL, HOLM-B removidos — duplicacao A/B + WR baixo)
+        "BOL.ST", "SSAB-B.ST", "SCA-B.ST",
 
-        # Utilities / telecom / infra
-        "TELIA.ST", "TEL2-B.ST",
+        # Utilities / telecom / infra (TEL2-B removido)
+        "TELIA.ST",
 
         # Domestic cyclicals / consumer / construction
         "HM-B.ST", "ELUX-B.ST", "SKA-B.ST", "BHG.ST", "MTRS.ST",
         "EMBRAC-B.ST",
 
-        # Defensives / health / staples
-        "AZN.ST", "ESSITY-B.ST", "GETI-B.ST", "ICA.ST",
+        # Defensives / health / staples (AZN removida)
+        "ESSITY-B.ST", "GETI-B.ST",
 
         # Industrials / exporters
-        "ABB.ST", "ALFA.ST", "ASSA-B.ST", "ATCO-A.ST", "ATCO-B.ST",
-        "NIBE-B.ST", "SAND.ST", "SKF-B.ST", "VOLV-A.ST", "VOLV-B.ST",
+        # (ASSA-B, VOLV-A removidos — VOLV-B mantem exposure Volvo)
+        "ABB.ST", "ALFA.ST", "ATCO-A.ST", "ATCO-B.ST",
+        "NIBE-B.ST", "SAND.ST", "SKF-B.ST", "VOLV-B.ST",
         "TREL-B.ST", "BEIJ-B.ST", "LIFCO-B.ST", "EPI-A.ST",
 
         # Tech / growth
-        "ERIC-B.ST", "EVO.ST", "HEXA-B.ST", "SINCH.ST", "TIETO.ST",
+        "ERIC-B.ST", "EVO.ST", "HEXA-B.ST", "SINCH.ST",
 
         # Real estate (sem FII suecos; classifica como cyclicals/commodity downstream)
         "SBB-B.ST", "SAGA-B.ST",
@@ -1483,8 +1489,44 @@ def run_etl():
         _vix_pctl_252 = None
         print("[cross-features] WARNING: VIX not found, skipping VIX percentile")
 
-    # ── STRATEGY 3: Market regime features (cross-sectional) ──
-    # These measure overall market conditions, shared across all tickers
+    # ── STRATEGY 3+: Market regime features (cross-sectional + macro) ──
+    # These measure overall market conditions, shared across all tickers.
+
+    # Phase C (Run 3): SE-specific regime features.
+    # 1. SEK volatility (30d std of SEK=X log returns) — proxy de stress macro
+    _sek_vol_30d = None
+    try:
+        _sek_close = data.xs('SEK=X', level=1, axis=1)['Close']
+        if _sek_close.notna().sum() > 100:
+            _sek_log_ret = np.log(_sek_close / _sek_close.shift(1))
+            _sek_vol_30d = _sek_log_ret.rolling(30, min_periods=10).std()
+            print(f"[cross-features] SEK vol 30d: {_sek_vol_30d.notna().sum()} values")
+    except (KeyError, ValueError):
+        pass
+
+    # 2. OMX vs S&P relative strength (60d ret diff) — captura outperformance/underperf
+    _omx_vs_sp_60d = None
+    try:
+        _omx_c = data.xs('^OMXSPI', level=1, axis=1)['Close']
+        _sp_c = data.xs('^GSPC', level=1, axis=1)['Close']
+        _omx_60d = _omx_c.pct_change(60)
+        _sp_60d = _sp_c.pct_change(60)
+        _omx_vs_sp_60d = (_omx_60d - _sp_60d).reindex(_omx_c.index.union(_sp_c.index))
+        print(f"[cross-features] OMX vs S&P 60d RS: {_omx_vs_sp_60d.notna().sum()} values")
+    except (KeyError, ValueError):
+        pass
+
+    # 3. Bear regime flag — ^OMXSPI Close < SMA200, smooth 5d
+    _bear_regime = None
+    try:
+        _omx_c = data.xs('^OMXSPI', level=1, axis=1)['Close']
+        _sma200 = _omx_c.rolling(200, min_periods=100).mean()
+        _bear_raw = (_omx_c < _sma200).astype(float)
+        _bear_regime = _bear_raw.rolling(5, min_periods=1).mean()
+        print(f"[cross-features] Bear regime flag: {_bear_regime.notna().sum()} values")
+    except (KeyError, ValueError):
+        pass
+
     _sa_tickers = [t for t in valid_tickers if t.endswith('.ST') and not any(t.startswith(x) for x in ['^'])]
     _market_breadth = None
     _market_dispersion = None
@@ -1548,6 +1590,14 @@ def run_etl():
             cross_feats['market_breadth'] = _market_breadth.reindex(ohlcv.index)
         if _market_dispersion is not None:
             cross_feats['market_dispersion'] = _market_dispersion.reindex(ohlcv.index)
+
+        # Phase C (Run 3): SE regime features
+        if _sek_vol_30d is not None:
+            cross_feats['sek_vol_30d'] = _sek_vol_30d.reindex(ohlcv.index)
+        if _omx_vs_sp_60d is not None:
+            cross_feats['omx_vs_sp_60d'] = _omx_vs_sp_60d.reindex(ohlcv.index)
+        if _bear_regime is not None:
+            cross_feats['bear_regime'] = _bear_regime.reindex(ohlcv.index)
 
         if shift_features > 0:
             cross_feats = cross_feats.shift(shift_features)

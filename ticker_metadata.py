@@ -11,19 +11,13 @@ para nao quebrar consumidores em ga_run.py / stock_final_output.py.
 SECTOR_MAP = {
     # Commodity Largecap (mining / paper / steel / oil)
     "BOL.ST": "commodity_largecap",
-    "SSAB-A.ST": "commodity_largecap",
     "SSAB-B.ST": "commodity_largecap",
     "SCA-B.ST": "commodity_largecap",
-    "STORA-A.ST": "commodity_largecap",
-    "HOLM-B.ST": "commodity_largecap",
-    "BILL.ST": "commodity_largecap",
-    "LUNDIN.ST": "commodity_largecap",
     "SBB-B.ST": "commodity_largecap",
     "SAGA-B.ST": "commodity_largecap",
 
     # Financials
     "SEB-A.ST": "financials",
-    "SHB-A.ST": "financials",
     "SWED-A.ST": "financials",
     "NDA-SE.ST": "financials",
     "INVE-B.ST": "financials",
@@ -32,7 +26,6 @@ SECTOR_MAP = {
 
     # Utilities / Telecom / Infra
     "TELIA.ST": "utilities_infra",
-    "TEL2-B.ST": "utilities_infra",
 
     # Domestic Cyclicals (consumer / construction / retail)
     "HM-B.ST": "domestic_cyclicals",
@@ -43,21 +36,17 @@ SECTOR_MAP = {
     "EMBRAC-B.ST": "domestic_cyclicals",
 
     # Defensives / Health / Consumer Staples
-    "AZN.ST": "defensives_health",
     "ESSITY-B.ST": "defensives_health",
     "GETI-B.ST": "defensives_health",
-    "ICA.ST": "defensives_health",
 
     # Industrials / Exporters
     "ABB.ST": "industrials_exporters",
     "ALFA.ST": "industrials_exporters",
-    "ASSA-B.ST": "industrials_exporters",
     "ATCO-A.ST": "industrials_exporters",
     "ATCO-B.ST": "industrials_exporters",
     "NIBE-B.ST": "industrials_exporters",
     "SAND.ST": "industrials_exporters",
     "SKF-B.ST": "industrials_exporters",
-    "VOLV-A.ST": "industrials_exporters",
     "VOLV-B.ST": "industrials_exporters",
     "TREL-B.ST": "industrials_exporters",
     "BEIJ-B.ST": "industrials_exporters",
@@ -69,7 +58,6 @@ SECTOR_MAP = {
     "EVO.ST": "tech_growth",
     "HEXA-B.ST": "tech_growth",
     "SINCH.ST": "tech_growth",
-    "TIETO.ST": "tech_growth",
 }
 
 # Sweden has no FII-equivalent listed instruments; keep set empty to disable

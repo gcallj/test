@@ -36,6 +36,33 @@ on:
         options:
           - 'false'
           - 'true'
+      alpha_focus_weight:
+        description: 'Peso de alpha (default 2.5; aumentar para forcar mais alpha positivo)'
+        default: '2.5'
+        type: string
+      min_trades:
+        description: 'Min trades por ticker (default 25; aumentar penaliza estrategias seletivas)'
+        default: '25'
+        type: string
+      wf_train_years:
+        description: 'Walk-forward train years (default 3; aumentar para mais robustez)'
+        default: '3'
+        type: string
+      fitness_sharpe_weight:
+        description: 'Peso Sharpe na fitness (default 0; >0 ativa multi-objective)'
+        default: '0'
+        type: string
+      fitness_mdd_weight:
+        description: 'Peso MDD na fitness (default 0; >0 penaliza drawdown)'
+        default: '0'
+        type: string
+      long_short:
+        description: 'Habilitar shorts (default false; long-only)'
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
 
 jobs:
   retrain:
@@ -60,6 +87,13 @@ jobs:
       # Branch SE Run 1: multi-seed inicial para diversificar exploracao alem do
       # genoma BR-tuned (1 seed BR + 4 random nos ranges de cada gene).
       GA_MULTI_SEED: "1"
+      # Phase A/D/E (Run 3) tunables:
+      GA_ALPHA_FOCUS_WEIGHT: ${{ inputs.alpha_focus_weight }}
+      GA_MIN_TRADES: ${{ inputs.min_trades }}
+      GA_WF_TRAIN_YEARS: ${{ inputs.wf_train_years }}
+      GA_FITNESS_SHARPE_W: ${{ inputs.fitness_sharpe_weight }}
+      GA_FITNESS_MDD_W: ${{ inputs.fitness_mdd_weight }}
+      GA_LONG_SHORT: ${{ inputs.long_short == 'true' && '1' || '0' }}
       # Retrain NAO envia Telegram — so daily_pipeline.yml envia 1 msg/dia
       # com caption rico via send_telegram.py. Evita parallel sends com
       # formatos diferentes (ga_run internal vs send_telegram.py).

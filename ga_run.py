@@ -118,7 +118,8 @@ CLOSE_COL = "close"
 
 ONLY_SA    = False  # replaced by ALLOWED_SUFFIXES
 ALLOWED_SUFFIXES = (".ST", "-USD")  # .ST = Suecia (OMX Stockholm), -USD = crypto
-LONG_ONLY  = True
+# LONG_ONLY pode ser desligado via env GA_LONG_SHORT=1 (definido abaixo).
+LONG_ONLY  = not (int(os.environ.get("GA_LONG_SHORT", "0")) == 1)
 
 APPLY_DAYS = 5
 FWD_H = 5
@@ -165,9 +166,23 @@ GA_STAGE_GATE = os.environ.get("GA_STAGE_GATE", "off").lower()
 
 # Fitness alpha-focus mode (opcional, via env var)
 # "off" (default) = pesos da fitness como antes (1.8 excess, clip -1.0)
-# "on"            = aumenta peso excess para 2.5x, afrouxa clip para -2.5
+# "on"            = aumenta peso excess para GA_ALPHA_FOCUS_WEIGHT (default 2.5),
+#                   relaxa clip para -GA_ALPHA_FOCUS_WEIGHT
 # Objetivo: forcar o GA a buscar genoma que reduz underperformance vs B&H
 GA_ALPHA_FOCUS = os.environ.get("GA_ALPHA_FOCUS", "off").lower() == "on"
+GA_ALPHA_FOCUS_WEIGHT = float(os.environ.get("GA_ALPHA_FOCUS_WEIGHT", "2.5"))
+
+# Multi-objective fitness (opcional, via env var)
+# Adiciona pesos para Sharpe e MDD na fitness function. Default 0.0 = single-objective
+# (excess + WR). Valores positivos premiam Sharpe alto / MDD baixo.
+GA_FITNESS_SHARPE_W = float(os.environ.get("GA_FITNESS_SHARPE_W", "0.0"))
+GA_FITNESS_MDD_W = float(os.environ.get("GA_FITNESS_MDD_W", "0.0"))
+
+# Long-short mode (opcional, via env var)
+# Default 0 = long-only (LONG_ONLY=True permanece). Quando 1, GA pode entrar
+# tambem em short usando os genes vote_threshold_short e cost premium aplicado.
+GA_LONG_SHORT = int(os.environ.get("GA_LONG_SHORT", "0")) == 1
+GA_SHORT_BORROW_COST_PCT_ANNUAL = float(os.environ.get("GA_SHORT_BORROW_COST", "0.025"))  # 2.5%/ano
 MIN_BUY_CONFIDENCE = 38.0 # Lowered from 50 to allow more buy signals while maintaining quality gate
 
 # Friction — custos realistas Suecia (Avanza/Nordnet retail, OMX Stockholm)
@@ -194,9 +209,10 @@ CAP_DAILY_RET = 0.30
 CAP_TRADE_RET = 3.00
 
 ONE_YEAR_DAYS = 252
-GA_WF_TRAIN_YEARS = 3
-GA_WF_TEST_DAYS = 126
-GA_WF_STEP_DAYS = 126
+# Walk-forward tunable via env. Defaults preservam comportamento anterior.
+GA_WF_TRAIN_YEARS = int(os.environ.get("GA_WF_TRAIN_YEARS", "3"))
+GA_WF_TEST_DAYS = int(os.environ.get("GA_WF_TEST_DAYS", "126"))
+GA_WF_STEP_DAYS = int(os.environ.get("GA_WF_STEP_DAYS", "126"))
 LAMBDA_MDD_1Y = 0.70
 MAX_EXPOSURE_1Y = 0.70
 
@@ -254,9 +270,9 @@ SCORE_CROSS_MIN_ABS = 0.05
 ENTRY_SCORE_TRIGGER_ABS = 0.005
 ML_STRONG_SCORE_ABS = 0.08
 
-# Avoid "do nothing" strategies
-GA_MIN_TRADES = 25
-GA_TARGET_TRADES = 40
+# Avoid "do nothing" strategies (tunable via env)
+GA_MIN_TRADES = int(os.environ.get("GA_MIN_TRADES", "25"))
+GA_TARGET_TRADES = int(os.environ.get("GA_TARGET_TRADES", "40"))
 GA_MIN_EXPOSURE = 0.05
 GA_TRADE_BONUS_PER = 0.015
 MAX_TRADES_PER_YEAR = 60
@@ -1886,6 +1902,17 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
         mdd_penalty -
         underperf_penalty
     )
+
+    # Multi-objective additive terms (opt-in via env). Default GA_FITNESS_SHARPE_W=0
+    # e GA_FITNESS_MDD_W=0 mantem fitness original (single-objective).
+    # GA_FITNESS_SHARPE_W>0 premia genomas com sharpe alto.
+    # GA_FITNESS_MDD_W>0 penaliza genomas com MDD profundo (mdd_vals e negativo
+    # entao usamos abs).
+    if GA_FITNESS_SHARPE_W != 0.0:
+        fitness += GA_FITNESS_SHARPE_W * med_sharpe
+    if GA_FITNESS_MDD_W != 0.0:
+        fitness -= GA_FITNESS_MDD_W * abs(median_mdd)
+
     return float(fitness)
 
 
