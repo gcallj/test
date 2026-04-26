@@ -29,6 +29,13 @@ on:
         options:
           - 'true'
           - 'false'
+      train_bin_reg:
+        description: 'Treinar BIN/REG models antes do GA (Run 2 deep, +3-5h CI)'
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
 
 jobs:
   retrain:
@@ -86,10 +93,29 @@ jobs:
           python3 -c "import json; d=json.load(open('global_ga_checkpoint.json')); print(f'  fitness={d[\"fitness\"]:.4f}')"
           echo "Config: pop=${{ inputs.pop_size }}, stages=${{ inputs.stages }}, windows=${{ inputs.windows }}"
 
-      - name: Run ETL + Step 4 (fresh data + history)
+      - name: Step 1 - ETL
         run: |
           python -u run_pipeline.py --steps 1
-          python -u run_pipeline.py --steps 4
+
+      - name: Step 2 - Train BIN models (LGBM/HGB/RF/ET)
+        # Run 2 (deep): treina BIN models por ticker. ~2-3h. Apenas se
+        # train_bin_reg=true; default false preserva budget Run 1.
+        if: ${{ inputs.train_bin_reg == 'true' }}
+        run: |
+          echo "[bin] Training binary classifiers per ticker..."
+          python -u run_pipeline.py --steps 2 2>&1 | tail -100
+          ls -lh output/data/models/ 2>&1 | head -10 || echo "[WARN] no models dir"
+
+      - name: Step 3 - Train REG models (best_entry/best_sale)
+        if: ${{ inputs.train_bin_reg == 'true' }}
+        run: |
+          echo "[reg] Training regression baseline forecasts per ticker..."
+          python -u run_pipeline.py --steps 3 2>&1 | tail -100
+
+      - name: Step 4 - Consolidate signals
+        run: |
+          python -u run_pipeline.py --steps 4 2>&1 | tail -50
+          ls -lh output/history_consolidated.parquet 2>&1 || echo "[WARN] history_consolidated missing"
 
       - name: Backup pre-retrain checkpoint (rollback se guard rejeitar)
         run: |
