@@ -44,6 +44,7 @@ import ga_run_modular_final as ga_run_modular
 import overnight_alpha_until_0600 as overnight_runner
 import payload_store
 import run_local_ga_staged as staged_runner
+from analysis import overfitting_stage
 
 
 def _build_gp():
@@ -78,6 +79,14 @@ def _build_gp():
         momentum_confirm_days=0,
         entry_score_threshold=0.0,
         regime_threshold=0.0,
+        entry_aggressiveness=1.0,
+        resistance_overext_gate=0.0,
+        support_broken_gate=0.0,
+        min_hold_bars=3,
+        early_exit_block_bars=3,
+        profit_take_min_bars=3,
+        early_take_quality_gate=0.0,
+        early_take_score_decay_max=0.35,
     )
 
 
@@ -199,6 +208,112 @@ class TestBacktestMetricHelpers(unittest.TestCase):
         self.assertEqual(recovered["max_drawdown_duration"], 4.0)
         self.assertEqual(unrecovered["max_drawdown_duration"], 9.0)
 
+    def test_holdability_metrics_are_reported(self):
+        stats = ga_run._finalize_backtest_stats(
+            [0.03, 0.02, -0.01, 0.01],
+            ["take", "take", "stop", "time"],
+            [2, 5, 3, 8],
+            0.55,
+            0.05,
+            -0.03,
+            252,
+            4,
+            trade_rets_after_3=[-0.01, 0.02, -0.02, 0.01],
+            trade_target_after_3=[False, True, False, False],
+            early_take_events=1,
+            early_take_dependency_events=1,
+        )
+
+        self.assertAlmostEqual(stats["wr_after_3_bars"], 0.5)
+        self.assertAlmostEqual(stats["target_wr_after_3_bars"], 0.25)
+        self.assertAlmostEqual(stats["early_take_dependency"], 1.0)
+        self.assertAlmostEqual(stats["swing_survival_3d"], 0.75)
+        self.assertIn("expected_hold_score", stats)
+
+
+class TestOperationalSwingPolicy(unittest.TestCase):
+    def test_operational_metrics_filter_premium_and_high_quality_only(self):
+        premium = _sample_stat(
+            win_rate=0.76,
+            win_rate_target=0.73,
+            alpha_ann=0.02,
+            mdd=-0.08,
+            n_trades=35,
+            expectancy=0.012,
+            median_hold_bars=6.0,
+            max_hold_bars=14.0,
+        )
+        high_quality = _sample_stat(
+            win_rate=0.68,
+            win_rate_target=0.66,
+            alpha_ann=-0.05,
+            mdd=-0.12,
+            n_trades=25,
+            expectancy=0.008,
+            median_hold_bars=8.0,
+            max_hold_bars=18.0,
+        )
+        regular = _sample_stat(
+            win_rate=0.80,
+            win_rate_target=0.75,
+            alpha_ann=-0.25,
+            mdd=-0.20,
+            n_trades=50,
+        )
+
+        metrics = ga_run.operational_metrics_from_stats([premium, high_quality, regular])
+
+        self.assertEqual(metrics["n_buy_operable"], 2)
+        self.assertAlmostEqual(metrics["wr_med_operable"], 0.72, places=9)
+        self.assertAlmostEqual(metrics["wr_target_med_operable"], 0.695, places=9)
+        self.assertAlmostEqual(metrics["alpha_ann_mean_operable"], -0.015, places=9)
+        self.assertAlmostEqual(metrics["expectancy_net_med_operable"], 0.010, places=9)
+        self.assertAlmostEqual(metrics["mdd_med_operable"], 0.10, places=9)
+        self.assertAlmostEqual(metrics["hold_med_operable"], 7.0, places=9)
+
+    def test_regular_buy_is_demoted_to_hold_observar(self):
+        sig, reason = ga_run.enforce_operational_buy_gate(
+            "buy",
+            operable=False,
+            stage_num=2,
+            timing_sub="ideal",
+            estagio="Stage 2 Alta ideal",
+            entry_score=90.0,
+            confidence=90.0,
+            rank_score=90.0,
+            net_potential_pct=0.08,
+            close_val=105.0,
+            pivot=100.0,
+            s1=95.0,
+            r1=110.0,
+        )
+
+        self.assertEqual(sig, "hold")
+        self.assertIn("REGULAR", reason)
+
+    def test_low_expected_hold_score_demotes_buy(self):
+        sig, reason = ga_run.enforce_operational_buy_gate(
+            "buy",
+            operable=True,
+            stage_num=2,
+            timing_sub="ideal",
+            estagio="Stage 2 Alta ideal",
+            entry_score=90.0,
+            confidence=90.0,
+            rank_score=90.0,
+            net_potential_pct=0.08,
+            close_val=105.0,
+            pivot=100.0,
+            s1=95.0,
+            r1=110.0,
+            expected_hold_score=55.0,
+            early_take_dependency=0.10,
+            alpha_ann=0.01,
+        )
+
+        self.assertEqual(sig, "hold")
+        self.assertIn("Expected hold score", reason)
+
 
 class TestParityAndFitness(unittest.TestCase):
     def test_metric_helper_parity_between_ga_modules(self):
@@ -239,6 +354,77 @@ class TestParityAndFitness(unittest.TestCase):
         self.assertEqual(set(main_stats.keys()), set(modular_stats.keys()))
         for key in ("total_return", "mdd", "sharpe", "sortino", "profit_factor", "expectancy", "payoff_ratio", "cagr"):
             self.assertAlmostEqual(main_stats[key], modular_stats[key], places=9, msg=key)
+
+    def test_legacy_genomes_keep_neutral_swing_controls_until_promoted(self):
+        legacy_len = len(ga_run.GLOBAL_PARAM_SPECS) - 5
+        legacy = [spec[1] for spec in ga_run.GLOBAL_PARAM_SPECS[:legacy_len]]
+
+        gp = ga_run.decode_global_params(legacy)
+
+        self.assertEqual(gp.min_hold_bars, 0)
+        self.assertEqual(gp.early_exit_block_bars, 0)
+        self.assertEqual(gp.profit_take_min_bars, 0)
+        self.assertEqual(gp.early_take_quality_gate, 0.0)
+        self.assertAlmostEqual(gp.early_take_score_decay_max, 0.35, places=9)
+
+    def test_profit_take_is_blocked_before_minimum_swing_hold(self):
+        n = 90
+        open_ = np.full(n, 100.0, dtype=np.float64)
+        close = np.full(n, 100.0, dtype=np.float64)
+        high = np.full(n, 101.0, dtype=np.float64)
+        low = np.full(n, 99.8, dtype=np.float64)
+        atr = np.full(n, 1.0, dtype=np.float64)
+        score_matrix = np.ones((n, 2), dtype=np.float64)
+        precomputed = {
+            "vol_rank": np.full(n, 0.5),
+            "volume": np.full(n, 1_000_000.0),
+        }
+
+        fast_gp = _build_gp()
+        fast_gp.min_hold_bars = 0
+        fast_gp.early_exit_block_bars = 0
+        fast_gp.profit_take_min_bars = 0
+        swing_gp = _build_gp()
+
+        fast_stats = ga_run.backtest_stats_global_intraday(
+            open_, high, low, close, score_matrix, atr, fast_gp, precomputed=precomputed, stage_gate="off"
+        )
+        swing_stats = ga_run.backtest_stats_global_intraday(
+            open_, high, low, close, score_matrix, atr, swing_gp, precomputed=precomputed, stage_gate="off"
+        )
+
+        self.assertGreater(fast_stats["n_trades"], 0.0)
+        self.assertGreater(swing_stats["n_trades"], 0.0)
+        self.assertLess(fast_stats["median_hold_bars"], 3.0)
+        self.assertGreaterEqual(swing_stats["median_hold_bars"], 3.0)
+        self.assertGreater(fast_stats["pct_exit_early"], 0.0)
+        self.assertEqual(swing_stats["pct_early_exit_take"], 0.0)
+
+    def test_partial_take_before_three_bars_does_not_close_swing_trade(self):
+        n = 90
+        open_ = np.full(n, 100.0, dtype=np.float64)
+        close = np.full(n, 100.0, dtype=np.float64)
+        high = np.full(n, 101.0, dtype=np.float64)
+        low = np.full(n, 99.8, dtype=np.float64)
+        atr = np.full(n, 1.0, dtype=np.float64)
+        score_matrix = np.ones((n, 2), dtype=np.float64)
+        precomputed = {
+            "vol_rank": np.full(n, 0.5),
+            "volume": np.full(n, 1_000_000.0),
+        }
+        gp = _build_gp()
+        gp.partial_take_pct = 0.50
+        gp.partial_take_level = 0.50
+        gp.profit_take_min_bars = 3
+
+        stats = ga_run.backtest_stats_global_intraday(
+            open_, high, low, close, score_matrix, atr, gp, precomputed=precomputed, stage_gate="off"
+        )
+
+        self.assertGreater(stats["n_trades"], 0.0)
+        self.assertGreater(stats["early_take_deferred_events"], 0.0)
+        self.assertGreaterEqual(stats["median_hold_bars"], 3.0)
+        self.assertEqual(stats["pct_early_exit_take"], 0.0)
 
     def test_fitness_rewards_quality_with_positive_alpha(self):
         baseline = [_sample_stat(), _sample_stat(win_rate=0.64, win_rate_target=0.46)]
@@ -363,6 +549,43 @@ class TestParityAndFitness(unittest.TestCase):
             ga_run_modular.global_fitness_from_stats(too_long_profile),
         )
 
+    def test_fitness_penalizes_operable_two_day_holding_profile(self):
+        fast_operable = [
+            _sample_stat(
+                win_rate=0.76,
+                win_rate_target=0.73,
+                alpha_ann=-0.02,
+                mdd=-0.09,
+                n_trades=35,
+                avg_hold_bars=2.2,
+                median_hold_bars=2.0,
+                max_hold_bars=6.0,
+            ),
+            _sample_stat(
+                win_rate=0.70,
+                win_rate_target=0.67,
+                alpha_ann=-0.03,
+                mdd=-0.10,
+                n_trades=25,
+                avg_hold_bars=2.3,
+                median_hold_bars=2.0,
+                max_hold_bars=7.0,
+            ),
+        ]
+        swing_operable = [
+            dict(s, avg_hold_bars=6.0, median_hold_bars=6.0, max_hold_bars=14.0)
+            for s in fast_operable
+        ]
+
+        self.assertGreater(
+            ga_run.global_fitness_from_stats(swing_operable),
+            ga_run.global_fitness_from_stats(fast_operable),
+        )
+        self.assertGreater(
+            ga_run_modular.global_fitness_from_stats(swing_operable),
+            ga_run_modular.global_fitness_from_stats(fast_operable),
+        )
+
 
 class TestPayloadStoreLifecycle(unittest.TestCase):
     def test_close_preserves_store_files_for_reuse(self):
@@ -447,7 +670,7 @@ class TestStagedAcceptance(unittest.TestCase):
             "trades_med": 20.0,
             "avg_hold_bars_med": 9.0,
             "median_hold_bars_med": 7.0,
-            "max_hold_bars_p75": 24.0,
+            "max_hold_bars_p75": 20.0,
         }
         acceptance = staged_runner._compute_acceptance(improved, base)
         self.assertTrue(acceptance["strong_alpha_wr_relax"])
@@ -478,7 +701,7 @@ class TestStagedAcceptance(unittest.TestCase):
             "trades_med": 20.0,
             "avg_hold_bars_med": 9.0,
             "median_hold_bars_med": 7.0,
-            "max_hold_bars_p75": 24.0,
+            "max_hold_bars_p75": 20.0,
         }
         acceptance = staged_runner._compute_acceptance(improved, base)
         self.assertTrue(acceptance["strong_alpha_wr_relax"])
@@ -508,7 +731,7 @@ class TestStagedAcceptance(unittest.TestCase):
             "trades_med": 20.0,
             "avg_hold_bars_med": 9.0,
             "median_hold_bars_med": 7.0,
-            "max_hold_bars_p75": 24.0,
+            "max_hold_bars_p75": 20.0,
         }
         acceptance = staged_runner._compute_acceptance(improved, base)
         self.assertFalse(acceptance["strong_alpha_wr_relax"])
@@ -545,6 +768,81 @@ class TestStagedAcceptance(unittest.TestCase):
         self.assertFalse(acceptance["mdd_duration_not_worse"])
         self.assertFalse(acceptance["swing_hold_ok"])
 
+    def test_acceptance_blocks_fast_two_day_hold_for_swing(self):
+        base = {
+            "wr_med_operable": 0.67,
+            "wr_target_med_operable": 0.60,
+            "mdd_med_operable": 0.10,
+            "mdd_p75": 0.12,
+            "mdd_duration_med": 30.0,
+            "alpha_ann_mean_operable": -0.02,
+            "expectancy_net_med_operable": 0.006,
+            "alpha_ann_pos_rate": 0.18,
+            "trades_med": 18.0,
+        }
+        fast_scalp = {
+            "wr_med_operable": 0.76,
+            "wr_target_med_operable": 0.70,
+            "mdd_med_operable": 0.09,
+            "mdd_p75": 0.11,
+            "mdd_duration_med": 28.0,
+            "alpha_ann_mean_operable": 0.01,
+            "expectancy_net_med_operable": 0.012,
+            "alpha_ann_pos_rate": 0.24,
+            "trades_med": 22.0,
+            "hold_med_operable": 2.0,
+            "max_hold_bars_p75_operable": 6.0,
+        }
+        acceptance = staged_runner._compute_acceptance(fast_scalp, base)
+        self.assertFalse(acceptance["swing_hold_ok"])
+        self.assertFalse(acceptance["all_pass"])
+
+    def test_candidate_with_higher_wr_but_alpha_expectancy_regression_is_rejected(self):
+        base = {
+            "wr_med_operable": 0.62,
+            "wr_target_med_operable": 0.55,
+            "mdd_med_operable": 0.10,
+            "mdd_p75": 0.12,
+            "mdd_duration_med": 30.0,
+            "alpha_ann_mean_operable": -0.02,
+            "expectancy_net_med_operable": 0.005,
+            "alpha_ann_pos_rate": 0.18,
+            "trades_med": 18.0,
+        }
+        incumbent = {
+            "wr_med_operable": 0.70,
+            "wr_target_med_operable": 0.66,
+            "mdd_med_operable": 0.10,
+            "mdd_p75": 0.12,
+            "mdd_duration_med": 30.0,
+            "alpha_ann_mean_operable": 0.020,
+            "expectancy_net_med_operable": 0.012,
+            "alpha_ann_pos_rate": 0.22,
+            "trades_med": 22.0,
+            "hold_med_operable": 6.0,
+            "max_hold_bars_p75_operable": 18.0,
+            "fit": 1.0,
+        }
+        higher_wr_bad_edge = {
+            "wr_med_operable": 0.75,
+            "wr_target_med_operable": 0.70,
+            "mdd_med_operable": 0.10,
+            "mdd_p75": 0.12,
+            "mdd_duration_med": 30.0,
+            "alpha_ann_mean_operable": 0.010,
+            "expectancy_net_med_operable": 0.008,
+            "alpha_ann_pos_rate": 0.25,
+            "trades_med": 22.0,
+            "hold_med_operable": 6.0,
+            "max_hold_bars_p75_operable": 18.0,
+            "fit": 1.2,
+        }
+        decision = staged_runner._candidate_beats_incumbent(higher_wr_bad_edge, base, incumbent)
+        safety = decision["incumbent_safety_guardrail"]
+        self.assertFalse(safety["alpha_not_worse"])
+        self.assertFalse(safety["expectancy_not_worse"])
+        self.assertFalse(decision["promote"])
+
     def test_incumbent_wr_guardrail_blocks_meaningful_wr_regression(self):
         incumbent = {
             "wr_med_all": 0.65,
@@ -576,7 +874,7 @@ class TestStagedAcceptance(unittest.TestCase):
             "trades_med": 20.0,
             "avg_hold_bars_med": 8.0,
             "median_hold_bars_med": 6.0,
-            "max_hold_bars_p75": 28.0,
+            "max_hold_bars_p75": 20.0,
             "mean_alpha_ann": -0.08,
         }
         weaker = {
@@ -588,7 +886,7 @@ class TestStagedAcceptance(unittest.TestCase):
             "trades_med": 19.0,
             "avg_hold_bars_med": 8.0,
             "median_hold_bars_med": 6.0,
-            "max_hold_bars_p75": 30.0,
+            "max_hold_bars_p75": 20.0,
             "mean_alpha_ann": -0.078,
         }
         stronger = {
@@ -600,7 +898,7 @@ class TestStagedAcceptance(unittest.TestCase):
             "trades_med": 19.0,
             "avg_hold_bars_med": 8.0,
             "median_hold_bars_med": 6.0,
-            "max_hold_bars_p75": 30.0,
+            "max_hold_bars_p75": 20.0,
             "mean_alpha_ann": -0.074,
         }
         blocked = staged_runner._compute_incumbent_safety_guardrail(weaker, incumbent)
@@ -633,7 +931,7 @@ class TestStagedAcceptance(unittest.TestCase):
             "trades_med": 20.0,
             "avg_hold_bars_med": 8.0,
             "median_hold_bars_med": 6.0,
-            "max_hold_bars_p75": 28.0,
+            "max_hold_bars_p75": 20.0,
             "fit": 1.0,
         }
         candidate = {
@@ -642,12 +940,12 @@ class TestStagedAcceptance(unittest.TestCase):
             "mdd_med": 0.115,
             "mdd_p75": 0.138,
             "mdd_duration_med": 38.0,
-            "mean_alpha_ann": -0.072,
+            "mean_alpha_ann": -0.078,
             "alpha_ann_pos_rate": 0.21,
             "trades_med": 19.0,
             "avg_hold_bars_med": 8.0,
             "median_hold_bars_med": 6.0,
-            "max_hold_bars_p75": 30.0,
+            "max_hold_bars_p75": 20.0,
             "fit": 1.2,
         }
         decision = staged_runner._candidate_beats_incumbent(candidate, base, incumbent)
@@ -812,6 +1110,41 @@ class TestStagedRunnerProgress(unittest.TestCase):
                 os.chdir(old_cwd)
 
         self.assertEqual(saved_progress["best_so_far"]["fit"], best["fit"])
+
+
+class TestOverfittingGuards(unittest.TestCase):
+    def test_operable_bootstrap_ci_and_wilson_fail_closed(self):
+        holdout = {
+            "delta_holdout_vs_train": {
+                "wr_med_all": 0.0,
+                "mean_alpha_ann": 0.0,
+                "wr_med_operable": 0.0,
+                "alpha_ann_mean_operable": 0.0,
+            }
+        }
+        bootstrap = {
+            "operable_only": True,
+            "n_tickers_in_bootstrap": 5,
+            "wr_ci_width": 0.16,
+            "wr_wilson_lo": 0.54,
+        }
+        rolling = {
+            "median_delta_oos_vs_train": {
+                "wr_med_operable": 0.0,
+                "alpha_ann_mean_operable": 0.0,
+            }
+        }
+
+        verdict, reasons = overfitting_stage.classify(
+            holdout,
+            bootstrap,
+            {"median_abs_delta": 0.0},
+            rolling,
+        )
+
+        self.assertEqual(verdict, "OVERFIT")
+        self.assertTrue(any("operable_wr_wilson_lo" in r for r in reasons))
+        self.assertTrue(any("operable_wr_ci_width" in r for r in reasons))
 
 
 class TestTelegramDailyFile(unittest.TestCase):

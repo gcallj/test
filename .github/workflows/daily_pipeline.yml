@@ -25,6 +25,7 @@ jobs:
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       GA_RUN_MODE: "load"
       GA_FAST_MODE: "true"
+      GA_KEEP_STORE: "1"
 
     steps:
       - name: Checkout
@@ -72,6 +73,19 @@ jobs:
         if: success()
         run: python -u refresh_close.py summary_latest.xlsx || echo "refresh_close non-fatal skip"
 
+      - name: Recent OOS operability diagnostic
+        if: success()
+        env:
+          GA_DISABLE_TELEGRAM_SEND: "1"
+          GA_KEEP_STORE: "1"
+          GA_ALPHA_FOCUS: "on"
+        run: |
+          python -u analysis/holdout_operability_diagnostic.py \
+            --holdout-days 90 \
+            --lookback-days 252 \
+            --output-prefix analysis/holdout_operability_diagnostic_current \
+          || echo "::warning::recent operability diagnostic failed; daily signals preserved"
+
       - name: Send Telegram (enhanced caption, dedup-guarded)
         if: success()
         # Dedup guard (.telegram_last_sent.json) evita duplicata se o cron
@@ -111,4 +125,9 @@ jobs:
             summary_latest.xlsx
             apply_last_5d__H5.csv
             global_ga_checkpoint.json
+            analysis/holdout_operability_diagnostic_current.csv
+            analysis/holdout_operability_diagnostic_current.json
+            analysis/holdout_operability_diagnostic_current.md
+            analysis/overfitting_stage_report.json
+            analysis/overfitting_stage_report.md
           retention-days: 30

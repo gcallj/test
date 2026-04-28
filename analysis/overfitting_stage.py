@@ -67,6 +67,12 @@ THRESHOLDS = {
     # Sensitivity: mediana de |delta_fit| por perturbacao de 1 step
     "sensitivity_median_max": 1.50,      # fit muda mais que 1.5 por step = fragil
     "sensitivity_median_critical": 3.00,
+    # Operational Premium/HQ guardrails for the live swing-trade universe.
+    "operable_oos_wr_drop_critical": 0.03,       # 3pp vs incumbent/OOS reference
+    "operable_oos_alpha_drop_critical": 0.005,   # 0.5pp alpha_ann
+    "operable_wr_wilson_lo_min": 0.55,
+    "operable_bootstrap_ci_width_max": 0.15,
+    "operable_min_tickers": 20,
 }
 
 
@@ -80,6 +86,48 @@ def _atomic_write_json(path: Path, data: Dict) -> None:
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False, default=str)
     os.replace(tmp, path)
+
+
+def _metric_view(metrics: Dict[str, Any]) -> Dict[str, Any]:
+    keys = (
+        "fit",
+        "wr_med_all",
+        "wr_target_med_all",
+        "mean_alpha_ann",
+        "n_ge_70",
+        "trades_med",
+        "wr_med_operable",
+        "wr_target_med_operable",
+        "alpha_ann_mean_operable",
+        "expectancy_net_med_operable",
+        "mdd_med_operable",
+        "hold_med_operable",
+        "max_hold_bars_p75_operable",
+        "expected_hold_score_med_operable",
+        "early_take_dependency_med_operable",
+        "swing_survival_3d_med_operable",
+        "wr_after_3_bars_med_operable",
+        "target_wr_after_3_bars_med_operable",
+        "n_buy_operable",
+    )
+    out: Dict[str, Any] = {}
+    for key in keys:
+        val = metrics.get(key, 0.0)
+        if key in ("n_ge_70", "n_buy_operable"):
+            out[key] = int(val or 0)
+        else:
+            out[key] = float(val or 0.0)
+    return out
+
+
+def _wilson_ci(successes: float, n: float, z: float = 1.96) -> Tuple[float, float]:
+    if n <= 0:
+        return 0.0, 1.0
+    p = float(successes) / float(n)
+    denom = 1.0 + (z * z) / n
+    center = (p + (z * z) / (2.0 * n)) / denom
+    half = (z / denom) * np.sqrt(p * (1.0 - p) / n + (z * z) / (4.0 * n * n))
+    return float(max(0.0, center - half)), float(min(1.0, center + half))
 
 
 # ============================================================
@@ -141,34 +189,12 @@ def evaluate_holdout(checkpoint_genome: List[float],
         h = float(metrics_holdout.get(k, default) or default)
         return h - t
 
+    delta_keys = set(_metric_view(metrics_train)) | set(_metric_view(metrics_holdout))
     return {
-        "metrics_full": {
-            "fit": float(metrics_full.get("fit", 0.0) or 0.0),
-            "wr_med_all": float(metrics_full.get("wr_med_all", 0.0) or 0.0),
-            "mean_alpha_ann": float(metrics_full.get("mean_alpha_ann", 0.0) or 0.0),
-            "n_ge_70": int(metrics_full.get("n_ge_70", 0) or 0),
-            "trades_med": float(metrics_full.get("trades_med", 0.0) or 0.0),
-        },
-        "metrics_train": {
-            "fit": float(metrics_train.get("fit", 0.0) or 0.0),
-            "wr_med_all": float(metrics_train.get("wr_med_all", 0.0) or 0.0),
-            "mean_alpha_ann": float(metrics_train.get("mean_alpha_ann", 0.0) or 0.0),
-            "n_ge_70": int(metrics_train.get("n_ge_70", 0) or 0),
-            "trades_med": float(metrics_train.get("trades_med", 0.0) or 0.0),
-        },
-        "metrics_holdout": {
-            "fit": float(metrics_holdout.get("fit", 0.0) or 0.0),
-            "wr_med_all": float(metrics_holdout.get("wr_med_all", 0.0) or 0.0),
-            "mean_alpha_ann": float(metrics_holdout.get("mean_alpha_ann", 0.0) or 0.0),
-            "n_ge_70": int(metrics_holdout.get("n_ge_70", 0) or 0),
-            "trades_med": float(metrics_holdout.get("trades_med", 0.0) or 0.0),
-        },
-        "delta_holdout_vs_train": {
-            "fit": _delta("fit"),
-            "wr_med_all": _delta("wr_med_all"),
-            "mean_alpha_ann": _delta("mean_alpha_ann"),
-            "n_ge_70": _delta("n_ge_70"),
-        },
+        "metrics_full": _metric_view(metrics_full),
+        "metrics_train": _metric_view(metrics_train),
+        "metrics_holdout": _metric_view(metrics_holdout),
+        "delta_holdout_vs_train": {k: _delta(k) for k in sorted(delta_keys)},
         "n_tickers_train": len(cache_train),
         "n_tickers_holdout": len(cache_holdout),
         "holdout_days": holdout_days,
@@ -181,7 +207,8 @@ def evaluate_holdout(checkpoint_genome: List[float],
 
 def bootstrap_ci_wr(checkpoint_genome: List[float],
                     n_samples: int = 200,
-                    seed: int = 42) -> Dict[str, Any]:
+                    seed: int = 42,
+                    operable_only: bool = False) -> Dict[str, Any]:
     """Bootstrap sobre trade_returns por ticker para estimar CI de metricas."""
     import ga_run as gr
     import run_local_ga_staged as staged
@@ -193,17 +220,23 @@ def bootstrap_ci_wr(checkpoint_genome: List[float],
     gp = gr.decode_global_params(checkpoint_genome)
     per_ticker_wr = []
     per_ticker_trades = []
+    per_ticker_wilson_lo = []
     for tk, p in cache.items():
         try:
             st = gr.backtest_stats_global_intraday(
                 p["open"], p["high"], p["low"], p["close"],
                 p["score_matrix"], p["atr"], gp, precomputed=p,
             )
+            gr._attach_benchmark_stats(st, p["close"])
             n = int(st.get("n_trades", 0) or 0)
             wr = float(st.get("win_rate", 0.0) or 0.0)
+            if operable_only and not gr.is_operational_stat(st):
+                continue
             if n >= 5:  # minimo para incluir no bootstrap
                 per_ticker_wr.append(wr)
                 per_ticker_trades.append(n)
+                lo, _hi = _wilson_ci(wr * n, n)
+                per_ticker_wilson_lo.append(lo)
         except Exception:
             continue
 
@@ -224,15 +257,195 @@ def bootstrap_ci_wr(checkpoint_genome: List[float],
     ci_high = float(np.percentile(wr_samples, 95))
     ci_median = float(np.percentile(wr_samples, 50))
     ci_width = ci_high - ci_low
+    pooled_n = float(np.sum(per_ticker_trades))
+    pooled_successes = float(np.sum(np.asarray(per_ticker_wr) * np.asarray(per_ticker_trades)))
+    wr_wilson_lo, wr_wilson_hi = _wilson_ci(pooled_successes, pooled_n)
 
     return {
         "n_samples": n_samples,
         "n_tickers_in_bootstrap": n_tickers,
+        "operable_only": bool(operable_only),
         "wr_ci_5": ci_low,
         "wr_ci_50": ci_median,
         "wr_ci_95": ci_high,
         "wr_ci_width": ci_width,
+        "wr_wilson_lo": wr_wilson_lo,
+        "wr_wilson_hi": wr_wilson_hi,
+        "wr_wilson_lo_median_ticker": float(np.median(per_ticker_wilson_lo)) if per_ticker_wilson_lo else 0.0,
+        "pooled_trades": int(pooled_n),
         "point_estimate_wr_median": float(np.median(per_ticker_wr)),
+    }
+
+
+# ============================================================
+# ROLLING OOS WITH EMBARGO
+# ============================================================
+
+def evaluate_rolling_oos(checkpoint_genome: List[float],
+                         folds: int = 4,
+                         test_days: int = 90,
+                         embargo_days: int = 5) -> Dict[str, Any]:
+    """Evaluate recent rolling OOS windows with a temporal embargo before each test."""
+    import pandas as pd
+    import ga_run as gr
+    import run_local_ga_staged as staged
+
+    store, _w, _sg, _sf, _bg, _bf, _bi = staged.open_existing_store()
+    cache = staged.build_ticker_arrays_cache(store)
+    all_dates = []
+    for p in cache.values():
+        dates = p.get("dates")
+        if dates is None:
+            continue
+        try:
+            arr = pd.to_datetime(np.asarray(dates), unit="ns")
+        except (TypeError, ValueError):
+            try:
+                arr = pd.to_datetime(np.asarray(dates))
+            except (TypeError, ValueError):
+                continue
+        if len(arr):
+            all_dates.append(arr.max())
+    if not all_dates:
+        return {"error": "no_dates"}
+
+    max_date = pd.Timestamp(max(all_dates)).normalize()
+    fold_results = []
+    for fold in range(int(folds)):
+        test_end = max_date - pd.Timedelta(days=fold * test_days)
+        test_start = test_end - pd.Timedelta(days=test_days - 1)
+        train_end = test_start - pd.Timedelta(days=embargo_days)
+        cache_train = staged.slice_ticker_arrays_cache(cache, end_date=train_end, min_rows=252)
+        cache_test = staged.slice_ticker_arrays_cache(cache, start_date=test_start, end_date=test_end, min_rows=60)
+        if not cache_train or not cache_test:
+            continue
+        train_metrics = staged.evaluate_genome_full(checkpoint_genome, cache_train, gr)
+        test_metrics = staged.evaluate_genome_full(checkpoint_genome, cache_test, gr)
+        fold_results.append({
+            "fold": int(fold),
+            "train_end": str(train_end.date()),
+            "test_start": str(test_start.date()),
+            "test_end": str(test_end.date()),
+            "n_tickers_train": len(cache_train),
+            "n_tickers_test": len(cache_test),
+            "train": _metric_view(train_metrics),
+            "oos": _metric_view(test_metrics),
+            "delta_oos_vs_train": {
+                k: float(_metric_view(test_metrics).get(k, 0.0) - _metric_view(train_metrics).get(k, 0.0))
+                for k in _metric_view(test_metrics)
+            },
+        })
+
+    if not fold_results:
+        return {"error": "no_valid_folds", "folds_requested": int(folds)}
+
+    def _median_delta(key: str) -> float:
+        vals = [f["delta_oos_vs_train"].get(key, 0.0) for f in fold_results]
+        return float(np.median(vals)) if vals else 0.0
+
+    return {
+        "folds_requested": int(folds),
+        "folds_evaluated": len(fold_results),
+        "test_days": int(test_days),
+        "embargo_days": int(embargo_days),
+        "folds": fold_results,
+        "median_delta_oos_vs_train": {
+            "wr_med_operable": _median_delta("wr_med_operable"),
+            "alpha_ann_mean_operable": _median_delta("alpha_ann_mean_operable"),
+            "wr_med_all": _median_delta("wr_med_all"),
+            "mean_alpha_ann": _median_delta("mean_alpha_ann"),
+        },
+    }
+
+
+def evaluate_negative_controls(checkpoint_genome: List[float],
+                               max_tickers: int = 40,
+                               shift_bars: int = 5,
+                               seed: int = 42) -> Dict[str, Any]:
+    """Evaluate shifted/permuted signal matrices to catch obvious leakage."""
+    import ga_run as gr
+    import run_local_ga_staged as staged
+
+    store, _w, _sg, _sf, _bg, _bf, _bi = staged.open_existing_store()
+    cache = staged.build_ticker_arrays_cache(store)
+    items = list(cache.items())[: max(1, int(max_tickers))]
+    if not items:
+        return {"error": "no_tickers"}
+
+    rng = np.random.default_rng(seed)
+
+    def _with_control_matrix(kind: str) -> Dict[str, Dict[str, np.ndarray]]:
+        out: Dict[str, Dict[str, np.ndarray]] = {}
+        for tk, payload in items:
+            pp = dict(payload)
+            sm = np.asarray(payload.get("score_matrix"), dtype=np.float64)
+            if kind == "shifted":
+                shifted = np.roll(sm, int(shift_bars), axis=0)
+                shifted[: int(shift_bars), :] = 0.0
+                pp["score_matrix"] = shifted
+            else:
+                perm = np.array(sm, copy=True)
+                order = rng.permutation(perm.shape[0])
+                pp["score_matrix"] = perm[order, :]
+            out[tk] = pp
+        return out
+
+    shifted_metrics = staged.evaluate_genome_full(
+        checkpoint_genome, _with_control_matrix("shifted"), gr
+    )
+    permuted_metrics = staged.evaluate_genome_full(
+        checkpoint_genome, _with_control_matrix("permuted"), gr
+    )
+    return {
+        "max_tickers": int(max_tickers),
+        "shift_bars": int(shift_bars),
+        "shifted": _metric_view(shifted_metrics),
+        "permuted": _metric_view(permuted_metrics),
+    }
+
+
+def multiple_testing_summary() -> Dict[str, Any]:
+    """Summarize search breadth as a simple PBO/selection-bias risk proxy."""
+    sweep_files = list(ROOT.glob("local_fullmetric_sweep*.json"))
+    promoted = 0
+    for path in sweep_files:
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if data.get("best_promoted"):
+                promoted += 1
+        except Exception:
+            continue
+
+    codex_attempts = 0
+    codex_promoted = 0
+    attempts_path = ROOT / "analysis" / "codex_attempts_history.json"
+    if attempts_path.exists():
+        try:
+            data = json.loads(attempts_path.read_text(encoding="utf-8"))
+            rows = data if isinstance(data, list) else data.get("attempts", [])
+            codex_attempts = len(rows)
+            codex_promoted = sum(1 for row in rows if row.get("promoted") or row.get("Promoted"))
+        except Exception:
+            pass
+
+    total_trials = len(sweep_files) + codex_attempts
+    total_promoted = promoted + codex_promoted
+    promotion_rate = (total_promoted / total_trials) if total_trials else 0.0
+    if total_trials >= 200 or promotion_rate >= 0.30:
+        risk = "HIGH"
+    elif total_trials >= 50 or promotion_rate >= 0.15:
+        risk = "MEDIUM"
+    else:
+        risk = "LOW"
+    return {
+        "sweep_files": len(sweep_files),
+        "sweep_promotions": promoted,
+        "codex_attempts": codex_attempts,
+        "codex_promotions": codex_promoted,
+        "total_trials": total_trials,
+        "total_promotions": total_promoted,
+        "promotion_rate": promotion_rate,
+        "pbo_risk_proxy": risk,
     }
 
 
@@ -293,7 +506,8 @@ def parameter_sensitivity(checkpoint_genome: List[float]) -> Dict[str, Any]:
 # ============================================================
 
 def classify(holdout_result: Dict, bootstrap_result: Dict,
-             sensitivity_result: Dict) -> Tuple[str, List[str]]:
+             sensitivity_result: Dict, rolling_result: Dict | None = None,
+             negative_control_result: Dict | None = None) -> Tuple[str, List[str]]:
     """Classifica CLEAN / MARGINAL / OVERFIT baseado em thresholds.
 
     Returns (verdict, list_of_reasons).
@@ -314,12 +528,71 @@ def classify(holdout_result: Dict, bootstrap_result: Dict,
     elif alpha_drop > THRESHOLDS["holdout_alpha_drop_max"]:
         warnings.append(f"holdout_alpha_drop={alpha_drop:.4f} > warn ({THRESHOLDS['holdout_alpha_drop_max']})")
 
+    operable_delta = holdout_result.get("delta_holdout_vs_train", {})
+    op_wr_drop = -float(operable_delta.get("wr_med_operable", 0.0) or 0.0)
+    op_alpha_drop = -float(operable_delta.get("alpha_ann_mean_operable", 0.0) or 0.0)
+    if op_wr_drop > THRESHOLDS["operable_oos_wr_drop_critical"]:
+        critical.append(
+            f"operable_holdout_wr_drop={op_wr_drop:.4f} > critical "
+            f"({THRESHOLDS['operable_oos_wr_drop_critical']})"
+        )
+    if op_alpha_drop > THRESHOLDS["operable_oos_alpha_drop_critical"]:
+        critical.append(
+            f"operable_holdout_alpha_drop={op_alpha_drop:.4f} > critical "
+            f"({THRESHOLDS['operable_oos_alpha_drop_critical']})"
+        )
+
     # Bootstrap checks
     wr_ci_w = float(bootstrap_result.get("wr_ci_width", 0.0) or 0.0)
     if wr_ci_w > THRESHOLDS["bootstrap_wr_ci_width_critical"]:
         critical.append(f"wr_ci_width={wr_ci_w:.4f} > critical ({THRESHOLDS['bootstrap_wr_ci_width_critical']})")
     elif wr_ci_w > THRESHOLDS["bootstrap_wr_ci_width_max"]:
         warnings.append(f"wr_ci_width={wr_ci_w:.4f} > warn ({THRESHOLDS['bootstrap_wr_ci_width_max']})")
+    if bootstrap_result.get("operable_only"):
+        op_n = int(bootstrap_result.get("n_tickers_in_bootstrap", 0) or 0)
+        op_wilson = float(bootstrap_result.get("wr_wilson_lo", 0.0) or 0.0)
+        if op_n < THRESHOLDS["operable_min_tickers"]:
+            critical.append(f"operable_bootstrap_tickers={op_n} < minimum ({THRESHOLDS['operable_min_tickers']})")
+        if op_wilson < THRESHOLDS["operable_wr_wilson_lo_min"]:
+            critical.append(
+                f"operable_wr_wilson_lo={op_wilson:.4f} < minimum "
+                f"({THRESHOLDS['operable_wr_wilson_lo_min']})"
+            )
+        if wr_ci_w > THRESHOLDS["operable_bootstrap_ci_width_max"]:
+            critical.append(
+                f"operable_wr_ci_width={wr_ci_w:.4f} > maximum "
+                f"({THRESHOLDS['operable_bootstrap_ci_width_max']})"
+            )
+
+    if rolling_result and not rolling_result.get("error"):
+        rd = rolling_result.get("median_delta_oos_vs_train", {})
+        rolling_wr_drop = -float(rd.get("wr_med_operable", 0.0) or 0.0)
+        rolling_alpha_drop = -float(rd.get("alpha_ann_mean_operable", 0.0) or 0.0)
+        if rolling_wr_drop > THRESHOLDS["operable_oos_wr_drop_critical"]:
+            critical.append(f"rolling_operable_wr_drop={rolling_wr_drop:.4f} > critical")
+        if rolling_alpha_drop > THRESHOLDS["operable_oos_alpha_drop_critical"]:
+            critical.append(f"rolling_operable_alpha_drop={rolling_alpha_drop:.4f} > critical")
+    elif rolling_result and rolling_result.get("error"):
+        critical.append(f"rolling_oos_error={rolling_result.get('error')}")
+
+    if negative_control_result and not negative_control_result.get("error"):
+        for kind in ("shifted", "permuted"):
+            m = negative_control_result.get(kind, {}) or {}
+            neg_wr = float(m.get("wr_med_operable", 0.0) or 0.0)
+            neg_n = int(m.get("n_buy_operable", 0) or 0)
+            if neg_n >= THRESHOLDS["operable_min_tickers"] and neg_wr >= 0.60:
+                critical.append(
+                    f"negative_control_{kind}_wr_operable={neg_wr:.4f} "
+                    f"with n={neg_n} suggests leakage/selection artifact"
+                )
+            elif neg_wr >= 0.60 and neg_n > 0:
+                warnings.append(
+                    f"negative_control_{kind}_wr_operable={neg_wr:.4f} "
+                    f"with n={neg_n} below sample minimum "
+                    f"({THRESHOLDS['operable_min_tickers']})"
+                )
+    elif negative_control_result and negative_control_result.get("error"):
+        critical.append(f"negative_control_error={negative_control_result.get('error')}")
 
     # Sensitivity checks
     med_delta = float(sensitivity_result.get("median_abs_delta", 0.0) or 0.0)
@@ -355,17 +628,47 @@ def format_markdown(data: Dict) -> str:
     md += [f"## Pristine Holdout ({h.get('holdout_days', 90)}d)\n\n",
            f"| Metric | Train | Holdout | Delta |\n",
            f"|---|---:|---:|---:|\n"]
-    for k in ("fit", "wr_med_all", "mean_alpha_ann", "n_ge_70", "trades_med"):
+    for k in ("fit", "wr_med_all", "mean_alpha_ann", "wr_med_operable",
+              "alpha_ann_mean_operable", "n_buy_operable", "trades_med"):
         tr = h["metrics_train"].get(k, 0)
         ho = h["metrics_holdout"].get(k, 0)
         dl = h["delta_holdout_vs_train"].get(k, 0) if k != "trades_med" else 0
         md.append(f"| {k} | {tr:+.4f} | {ho:+.4f} | {dl:+.4f} |\n")
 
+    r = data.get("rolling_oos_result", {})
+    md += [f"\n## Rolling OOS + Embargo\n\n"]
+    if r.get("error"):
+        md.append(f"- Error: `{r.get('error')}`\n\n")
+    else:
+        rd = r.get("median_delta_oos_vs_train", {})
+        md += [
+            f"- Folds evaluated: {r.get('folds_evaluated', 0)}\n",
+            f"- Test days: {r.get('test_days', 0)} | Embargo days: {r.get('embargo_days', 0)}\n",
+            f"- Median operable WR delta: `{rd.get('wr_med_operable', 0):+.4f}`\n",
+            f"- Median operable alpha delta: `{rd.get('alpha_ann_mean_operable', 0):+.4f}`\n\n",
+        ]
+
     b = data["bootstrap_result"]
     md += [f"\n## Bootstrap CI (WR)\n\n",
            f"- Samples: {b.get('n_samples', 0)}\n",
            f"- Tickers: {b.get('n_tickers_in_bootstrap', 0)}\n",
-           f"- WR CI 5-95: [{b.get('wr_ci_5', 0):.4f}, {b.get('wr_ci_95', 0):.4f}] (width={b.get('wr_ci_width', 0):.4f})\n\n"]
+           f"- Operable only: {b.get('operable_only', False)}\n",
+           f"- WR CI 5-95: [{b.get('wr_ci_5', 0):.4f}, {b.get('wr_ci_95', 0):.4f}] (width={b.get('wr_ci_width', 0):.4f})\n",
+           f"- Pooled Wilson WR: [{b.get('wr_wilson_lo', 0):.4f}, {b.get('wr_wilson_hi', 0):.4f}]\n\n"]
+
+    nc = data.get("negative_control_result", {})
+    md += [f"## Negative Controls\n\n"]
+    if nc.get("error"):
+        md.append(f"- Error: `{nc.get('error')}`\n\n")
+    else:
+        for kind in ("shifted", "permuted"):
+            m = nc.get(kind, {}) or {}
+            md.append(
+                f"- {kind}: WR_op `{m.get('wr_med_operable', 0):.4f}`, "
+                f"alpha_op `{m.get('alpha_ann_mean_operable', 0):+.4f}`, "
+                f"n_op `{m.get('n_buy_operable', 0)}`\n"
+            )
+        md.append("\n")
 
     s = data["sensitivity_result"]
     md += [f"## Parameter Sensitivity\n\n",
@@ -376,6 +679,13 @@ def format_markdown(data: Dict) -> str:
            f"| Gene | Max delta_fit |\n|---|---:|\n"]
     for g in s.get("top_5_fragile_genes", []):
         md.append(f"| {g['gene']} | {g['max_delta_fit']:.4f} |\n")
+
+    mt = data.get("multiple_testing", {})
+    md += [f"\n## Multiple Testing / PBO Proxy\n\n",
+           f"- Total trials: {mt.get('total_trials', 0)}\n",
+           f"- Total promotions: {mt.get('total_promotions', 0)}\n",
+           f"- Promotion rate: {mt.get('promotion_rate', 0):.1%}\n",
+           f"- Risk proxy: **{mt.get('pbo_risk_proxy', 'UNKNOWN')}**\n"]
 
     md += [f"\n## Reasons\n\n"]
     for r in data.get("reasons", []):
@@ -392,8 +702,12 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--holdout-days", type=int, default=90)
     ap.add_argument("--bootstrap", type=int, default=200)
+    ap.add_argument("--rolling-folds", type=int, default=4)
+    ap.add_argument("--embargo-days", type=int, default=5)
     ap.add_argument("--skip-sensitivity", action="store_true",
                     help="Pula parameter sensitivity (mais lento)")
+    ap.add_argument("--negative-control-tickers", type=int, default=40,
+                    help="Numero maximo de tickers para controles negativos shifted/permuted")
     ap.add_argument("--strict", action="store_true",
                     help="Exit 2 tambem em MARGINAL")
     args = ap.parse_args()
@@ -418,9 +732,36 @@ def main() -> int:
     print(f"[overfitting] Holdout done. "
           f"WR delta={holdout_result.get('delta_holdout_vs_train', {}).get('wr_med_all', 0):+.4f}")
 
-    bootstrap_result = bootstrap_ci_wr(genome, n_samples=args.bootstrap)
+    rolling_result = evaluate_rolling_oos(
+        genome,
+        folds=args.rolling_folds,
+        test_days=args.holdout_days,
+        embargo_days=args.embargo_days,
+    )
+    if rolling_result.get("error"):
+        print(f"[overfitting] Rolling OOS error: {rolling_result.get('error')}")
+    else:
+        rd = rolling_result.get("median_delta_oos_vs_train", {})
+        print(f"[overfitting] Rolling OOS done. "
+              f"operable WR delta={rd.get('wr_med_operable', 0):+.4f}")
+
+    bootstrap_result = bootstrap_ci_wr(genome, n_samples=args.bootstrap, operable_only=True)
     print(f"[overfitting] Bootstrap done. "
           f"WR CI width={bootstrap_result.get('wr_ci_width', 0):.4f}")
+
+    negative_control_result = evaluate_negative_controls(
+        genome, max_tickers=args.negative_control_tickers
+    )
+    if negative_control_result.get("error"):
+        print(f"[overfitting] Negative controls error: {negative_control_result.get('error')}")
+    else:
+        _shift = negative_control_result.get("shifted", {})
+        _perm = negative_control_result.get("permuted", {})
+        print(
+            f"[overfitting] Negative controls done. "
+            f"shifted WR_op={_shift.get('wr_med_operable', 0):.4f}, "
+            f"permuted WR_op={_perm.get('wr_med_operable', 0):.4f}"
+        )
 
     if args.skip_sensitivity:
         sensitivity_result = {"skipped": True, "median_abs_delta": 0.0}
@@ -429,7 +770,14 @@ def main() -> int:
         print(f"[overfitting] Sensitivity done. "
               f"median_abs_delta={sensitivity_result.get('median_abs_delta', 0):.4f}")
 
-    verdict, reasons = classify(holdout_result, bootstrap_result, sensitivity_result)
+    mt_summary = multiple_testing_summary()
+    verdict, reasons = classify(
+        holdout_result,
+        bootstrap_result,
+        sensitivity_result,
+        rolling_result,
+        negative_control_result,
+    )
 
     data = {
         "generated_at": _now_iso(),
@@ -437,8 +785,11 @@ def main() -> int:
         "reasons": reasons,
         "checkpoint_fit": float(ck.get("fitness", 0) or 0),
         "holdout_result": holdout_result,
+        "rolling_oos_result": rolling_result,
         "bootstrap_result": bootstrap_result,
+        "negative_control_result": negative_control_result,
         "sensitivity_result": sensitivity_result,
+        "multiple_testing": mt_summary,
         "thresholds": THRESHOLDS,
     }
 

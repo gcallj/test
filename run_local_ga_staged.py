@@ -25,6 +25,7 @@ Output files (in repo root):
 import os
 import sys
 import json
+import csv
 import time
 import argparse
 import shutil
@@ -71,6 +72,48 @@ def _fmt_pct1(x):
     return f"{x*100:.1f}%"
 
 
+OPERABLE_HOLD_MIN = 3.0
+OPERABLE_HOLD_MAX = 10.0
+OPERABLE_MAX_HOLD_P75 = 20.0
+
+
+def _metric(metrics: Dict[str, float], preferred: str, fallback: str, default: float = 0.0) -> float:
+    value = metrics.get(preferred, None)
+    if value is None:
+        value = metrics.get(fallback, default)
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        value = float(default)
+    if not np.isfinite(value):
+        return float(default)
+    return float(value)
+
+
+def _swing_hold_profile(metrics: Dict[str, float]) -> tuple[float, float, bool]:
+    hold_med = _metric(metrics, "hold_med_operable", "median_hold_bars_med")
+    max_hold_p75 = _metric(metrics, "max_hold_bars_p75_operable", "max_hold_bars_p75")
+    ok = bool(
+        OPERABLE_HOLD_MIN <= hold_med <= OPERABLE_HOLD_MAX
+        and max_hold_p75 <= OPERABLE_MAX_HOLD_P75
+    )
+    return hold_med, max_hold_p75, ok
+
+
+def _swing_hold_score(metrics: Dict[str, float]) -> float:
+    hold_med, max_hold_p75, ok = _swing_hold_profile(metrics)
+    target = (OPERABLE_HOLD_MIN + OPERABLE_HOLD_MAX) / 2.0
+    score = -abs(hold_med - target)
+    if not ok:
+        if hold_med < OPERABLE_HOLD_MIN:
+            score -= (OPERABLE_HOLD_MIN - hold_med) * 3.0
+        elif hold_med > OPERABLE_HOLD_MAX:
+            score -= (hold_med - OPERABLE_HOLD_MAX) * 2.0
+        if max_hold_p75 > OPERABLE_MAX_HOLD_P75:
+            score -= (max_hold_p75 - OPERABLE_MAX_HOLD_P75) * 0.25
+    return float(score)
+
+
 def _atomic_json_dump(path: str, data: Any) -> None:
     """
     Write JSON atomically to avoid corrupting progress/checkpoint artifacts if the
@@ -81,21 +124,38 @@ def _atomic_json_dump(path: str, data: Any) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(tmp_path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
-    os.replace(tmp_path, path)
+    last_exc = None
+    for attempt in range(6):
+        try:
+            os.replace(tmp_path, path)
+            return
+        except PermissionError as exc:
+            last_exc = exc
+            time.sleep(0.25 * (attempt + 1))
+    try:
+        os.remove(tmp_path)
+    except OSError:
+        pass
+    raise last_exc
 
 
 def _compute_acceptance(chunk_metrics, base_metrics):
-    base_wr = float(base_metrics.get("wr_med_all", 0.0) or 0.0)
-    base_wr_target = float(base_metrics.get("wr_target_med_all", 0.0) or 0.0)
+    base_wr = _metric(base_metrics, "wr_med_operable", "wr_med_all")
+    base_wr_target = _metric(base_metrics, "wr_target_med_operable", "wr_target_med_all")
     base_trades = float(base_metrics.get("trades_med", 0.0) or 0.0)
     trades_floor = 0.70 * base_trades if base_trades > 0 else 0.0
-    base_mdd = float(base_metrics.get("mdd_med", 0.0) or 0.0)
+    base_mdd = _metric(base_metrics, "mdd_med_operable", "mdd_med")
     base_mdd_p75 = float(base_metrics.get("mdd_p75", base_mdd) or base_mdd)
     base_mdd_duration = float(base_metrics.get("mdd_duration_med", 0.0) or 0.0)
     base_alpha_pos = float(base_metrics.get("alpha_ann_pos_rate", 0.0) or 0.0)
-    wr_delta = float(chunk_metrics.get("wr_med_all", 0.0) or 0.0) - base_wr
-    wr_target_delta = float(chunk_metrics.get("wr_target_med_all", 0.0) or 0.0) - base_wr_target
-    mean_alpha_delta = float(chunk_metrics.get("mean_alpha_ann", 0.0) or 0.0) - float(base_metrics.get("mean_alpha_ann", 0.0) or 0.0)
+    wr_delta = _metric(chunk_metrics, "wr_med_operable", "wr_med_all") - base_wr
+    wr_target_delta = _metric(chunk_metrics, "wr_target_med_operable", "wr_target_med_all") - base_wr_target
+    base_alpha = _metric(base_metrics, "alpha_ann_mean_operable", "mean_alpha_ann")
+    cand_alpha = _metric(chunk_metrics, "alpha_ann_mean_operable", "mean_alpha_ann")
+    base_expectancy = _metric(base_metrics, "expectancy_net_med_operable", "expectancy_med")
+    cand_expectancy = _metric(chunk_metrics, "expectancy_net_med_operable", "expectancy_med")
+    mean_alpha_delta = cand_alpha - base_alpha
+    expectancy_delta = cand_expectancy - base_expectancy
     alpha_pos_delta = float(chunk_metrics.get("alpha_ann_pos_rate", 0.0) or 0.0) - base_alpha_pos
 
     # Main-baseline guardrails:
@@ -135,38 +195,39 @@ def _compute_acceptance(chunk_metrics, base_metrics):
     mdd_p75_limit = base_mdd_p75 + max(0.05, 0.25 * base_mdd_p75) + min(0.010, mdd_relaxation_bonus)
     mdd_duration_limit = base_mdd_duration + max(16.0, 0.25 * base_mdd_duration)
 
-    avg_hold = float(chunk_metrics.get("avg_hold_bars_med", 0.0) or 0.0)
-    median_hold = float(chunk_metrics.get("median_hold_bars_med", 0.0) or 0.0)
-    max_hold_p75 = float(chunk_metrics.get("max_hold_bars_p75", 0.0) or 0.0)
-    swing_hold_ok = bool(
-        avg_hold <= 25.0
-        and median_hold <= 16.0
-        and max_hold_p75 <= 60.0
-    )
+    hold_med_operable, max_hold_p75_operable, swing_hold_ok = _swing_hold_profile(chunk_metrics)
+    expected_hold_score = _metric(chunk_metrics, "expected_hold_score_med_operable", "expected_hold_score_med", 100.0)
+    early_take_dependency = _metric(chunk_metrics, "early_take_dependency_med_operable", "early_take_dependency_med", 0.0)
+    wr_after_3 = _metric(chunk_metrics, "wr_after_3_bars_med_operable", "wr_after_3_bars_med", _metric(chunk_metrics, "wr_med_operable", "wr_med_all"))
+    base_wr_after_3 = _metric(base_metrics, "wr_after_3_bars_med_operable", "wr_after_3_bars_med", base_wr)
 
     acceptance = {
-        "wr_med_all_up": bool(float(chunk_metrics.get("wr_med_all", 0.0) or 0.0) > base_wr + 1e-9),
-        "wr_target_med_all_up": bool(float(chunk_metrics.get("wr_target_med_all", 0.0) or 0.0) > base_wr_target + 1e-9),
-        "wr_med_all_floor": bool(float(chunk_metrics.get("wr_med_all", 0.0) or 0.0) >= wr_floor - 1e-9),
-        "wr_target_med_all_floor": bool(float(chunk_metrics.get("wr_target_med_all", 0.0) or 0.0) >= wr_target_floor - 1e-9),
-        "mdd_med_not_worse": bool(float(chunk_metrics.get("mdd_med", 0.0) or 0.0) <= mdd_limit + 1e-9),
+        "wr_med_all_up": bool(_metric(chunk_metrics, "wr_med_operable", "wr_med_all") > base_wr + 1e-9),
+        "wr_target_med_all_up": bool(_metric(chunk_metrics, "wr_target_med_operable", "wr_target_med_all") > base_wr_target + 1e-9),
+        "wr_med_all_floor": bool(_metric(chunk_metrics, "wr_med_operable", "wr_med_all") >= wr_floor - 1e-9),
+        "wr_target_med_all_floor": bool(_metric(chunk_metrics, "wr_target_med_operable", "wr_target_med_all") >= wr_target_floor - 1e-9),
+        "mdd_med_not_worse": bool(_metric(chunk_metrics, "mdd_med_operable", "mdd_med") <= mdd_limit + 1e-9),
         "mdd_p75_not_worse": bool(float(chunk_metrics.get("mdd_p75", 0.0) or 0.0) <= mdd_p75_limit + 1e-9),
         "mdd_duration_not_worse": bool(float(chunk_metrics.get("mdd_duration_med", 0.0) or 0.0) <= mdd_duration_limit + 1e-9),
-        "mean_alpha_ann_up": bool(float(chunk_metrics.get("mean_alpha_ann", 0.0) or 0.0) > float(base_metrics.get("mean_alpha_ann", 0.0) or 0.0) + 1e-9),
+        "mean_alpha_ann_up": bool(cand_alpha > base_alpha + 1e-9),
         # B2 (overfitting prevention): no alpha regression vs git:main baseline allowed.
         # Historic tolerance was -0.002 (permitia -0.2pp de piora); com alpha atual
         # ja em -8.29% vs buy-and-hold (subperformance significativa), nao podemos
         # aceitar novas promocoes que piorem alpha, mesmo marginalmente.
         # Override via GA_ALPHA_FLOOR_TOLERANCE_PP (default "0.0" = zero tolerance).
         "mean_alpha_ann_floor": bool(
-            float(chunk_metrics.get("mean_alpha_ann", 0.0) or 0.0)
-            >= float(base_metrics.get("mean_alpha_ann", 0.0) or 0.0)
+            cand_alpha
+            >= base_alpha
                - (float(os.environ.get("GA_ALPHA_FLOOR_TOLERANCE_PP", "0.0")) / 100.0)
         ),
+        "expectancy_net_floor": bool(cand_expectancy >= base_expectancy - 1e-9),
         "alpha_ann_pos_rate_up": bool(float(chunk_metrics.get("alpha_ann_pos_rate", 0.0) or 0.0) >= alpha_pos_target - 1e-9),
         "alpha_ann_pos_rate_floor": bool(float(chunk_metrics.get("alpha_ann_pos_rate", 0.0) or 0.0) >= alpha_pos_floor - 1e-9),
         "trades_med_floor": bool(float(chunk_metrics.get("trades_med", 0.0) or 0.0) >= trades_floor - 1e-9),
         "swing_hold_ok": swing_hold_ok,
+        "expected_hold_score_ok": bool(expected_hold_score >= 70.0 - 1e-9),
+        "early_take_dependency_ok": bool(early_take_dependency <= 0.45 + 1e-9),
+        "wr_after_3_bars_floor": bool(wr_after_3 >= max(0.60, base_wr_after_3 - 0.010) - 1e-9),
     }
     acceptance["wr_med_all_floor_target"] = wr_floor
     acceptance["wr_target_med_all_floor_target"] = wr_target_floor
@@ -177,6 +238,13 @@ def _compute_acceptance(chunk_metrics, base_metrics):
     acceptance["mdd_duration_limit"] = mdd_duration_limit
     acceptance["mdd_relaxation_bonus"] = mdd_relaxation_bonus
     acceptance["strong_alpha_wr_relax"] = strong_alpha_wr_relax
+    acceptance["expectancy_net_delta"] = expectancy_delta
+    acceptance["hold_med_operable"] = hold_med_operable
+    acceptance["max_hold_bars_p75_operable"] = max_hold_p75_operable
+    acceptance["expected_hold_score"] = expected_hold_score
+    acceptance["early_take_dependency"] = early_take_dependency
+    acceptance["wr_after_3_bars"] = wr_after_3
+    acceptance["wr_after_3_bars_floor_target"] = max(0.60, base_wr_after_3 - 0.010)
     acceptance["all_pass"] = all(
         acceptance[key]
         for key in (
@@ -184,8 +252,13 @@ def _compute_acceptance(chunk_metrics, base_metrics):
             "wr_target_med_all_floor",
             "mdd_med_not_worse",
             "mean_alpha_ann_floor",
+            "expectancy_net_floor",
             "alpha_ann_pos_rate_floor",
             "trades_med_floor",
+            "swing_hold_ok",
+            "expected_hold_score_ok",
+            "early_take_dependency_ok",
+            "wr_after_3_bars_floor",
         )
     )
     return acceptance
@@ -194,16 +267,17 @@ def _compute_acceptance(chunk_metrics, base_metrics):
 def _compute_incumbent_safety_guardrail(candidate_metrics, incumbent_metrics):
     incumbent_trades = float(incumbent_metrics.get("trades_med", 0.0) or 0.0)
     trades_floor = max(0.90 * incumbent_trades, incumbent_trades - 2.0) if incumbent_trades > 0 else 0.0
-    incumbent_mdd = float(incumbent_metrics.get("mdd_med", 0.0) or 0.0)
+    incumbent_mdd = _metric(incumbent_metrics, "mdd_med_operable", "mdd_med")
     incumbent_mdd_p75 = float(incumbent_metrics.get("mdd_p75", incumbent_mdd) or incumbent_mdd)
     incumbent_duration = float(incumbent_metrics.get("mdd_duration_med", 0.0) or 0.0)
     incumbent_duration_p75 = float(
         incumbent_metrics.get("mdd_duration_p75", incumbent_duration) or incumbent_duration
     )
 
-    wr_delta = float(candidate_metrics.get("wr_med_all", 0.0) or 0.0) - float(incumbent_metrics.get("wr_med_all", 0.0) or 0.0)
-    wr_target_delta = float(candidate_metrics.get("wr_target_med_all", 0.0) or 0.0) - float(incumbent_metrics.get("wr_target_med_all", 0.0) or 0.0)
-    alpha_delta = float(candidate_metrics.get("mean_alpha_ann", 0.0) or 0.0) - float(incumbent_metrics.get("mean_alpha_ann", 0.0) or 0.0)
+    wr_delta = _metric(candidate_metrics, "wr_med_operable", "wr_med_all") - _metric(incumbent_metrics, "wr_med_operable", "wr_med_all")
+    wr_target_delta = _metric(candidate_metrics, "wr_target_med_operable", "wr_target_med_all") - _metric(incumbent_metrics, "wr_target_med_operable", "wr_target_med_all")
+    alpha_delta = _metric(candidate_metrics, "alpha_ann_mean_operable", "mean_alpha_ann") - _metric(incumbent_metrics, "alpha_ann_mean_operable", "mean_alpha_ann")
+    expectancy_delta = _metric(candidate_metrics, "expectancy_net_med_operable", "expectancy_med") - _metric(incumbent_metrics, "expectancy_net_med_operable", "expectancy_med")
 
     risk_relax = 0.0
     if wr_delta >= 0.010 and wr_target_delta >= 0.010 and alpha_delta >= 0.003:
@@ -218,23 +292,25 @@ def _compute_incumbent_safety_guardrail(candidate_metrics, incumbent_metrics):
         6.0 if risk_relax > 0.0 else 0.0
     )
 
-    avg_hold = float(candidate_metrics.get("avg_hold_bars_med", 0.0) or 0.0)
-    median_hold = float(candidate_metrics.get("median_hold_bars_med", 0.0) or 0.0)
-    max_hold_p75 = float(candidate_metrics.get("max_hold_bars_p75", 0.0) or 0.0)
+    hold_med_operable, max_hold_p75_operable, swing_hold_ok = _swing_hold_profile(candidate_metrics)
+    expected_hold_score = _metric(candidate_metrics, "expected_hold_score_med_operable", "expected_hold_score_med", 100.0)
+    early_take_dependency = _metric(candidate_metrics, "early_take_dependency_med_operable", "early_take_dependency_med", 0.0)
+    wr_after_3 = _metric(candidate_metrics, "wr_after_3_bars_med_operable", "wr_after_3_bars_med", _metric(candidate_metrics, "wr_med_operable", "wr_med_all"))
+    incumbent_wr_after_3 = _metric(incumbent_metrics, "wr_after_3_bars_med_operable", "wr_after_3_bars_med", _metric(incumbent_metrics, "wr_med_operable", "wr_med_all"))
     safety = {
         "trades_ok": bool(float(candidate_metrics.get("trades_med", 0.0) or 0.0) >= trades_floor - 1e-9),
-        "mdd_ok": bool(float(candidate_metrics.get("mdd_med", 0.0) or 0.0) <= mdd_limit + 1e-9),
+        "mdd_ok": bool(_metric(candidate_metrics, "mdd_med_operable", "mdd_med") <= mdd_limit + 1e-9),
         "mdd_p75_ok": bool(float(candidate_metrics.get("mdd_p75", 0.0) or 0.0) <= mdd_p75_limit + 1e-9),
         "mdd_duration_ok": bool(float(candidate_metrics.get("mdd_duration_med", 0.0) or 0.0) <= duration_limit + 1e-9),
         "mdd_duration_p75_ok": bool(
             float(candidate_metrics.get("mdd_duration_p75", 0.0) or 0.0) <= duration_p75_limit + 1e-9
         ),
-        "swing_hold_ok": bool(
-            # Only cap extremes: holding profile is a priority tie-breaker, not a hard gate.
-            avg_hold <= 25.0
-            and median_hold <= 16.0
-            and max_hold_p75 <= 60.0
-        ),
+        "alpha_not_worse": bool(alpha_delta >= -1e-9),
+        "expectancy_not_worse": bool(expectancy_delta >= -1e-9),
+        "swing_hold_ok": swing_hold_ok,
+        "expected_hold_score_ok": bool(expected_hold_score >= 70.0 - 1e-9),
+        "early_take_dependency_ok": bool(early_take_dependency <= 0.45 + 1e-9),
+        "wr_after_3_bars_ok": bool(wr_after_3 >= max(0.60, incumbent_wr_after_3 - 0.010) - 1e-9),
     }
     safety["trades_floor"] = trades_floor
     safety["mdd_limit"] = mdd_limit
@@ -242,6 +318,13 @@ def _compute_incumbent_safety_guardrail(candidate_metrics, incumbent_metrics):
     safety["mdd_duration_limit"] = duration_limit
     safety["mdd_duration_p75_limit"] = duration_p75_limit
     safety["risk_relax"] = risk_relax
+    safety["alpha_delta"] = alpha_delta
+    safety["expectancy_net_delta"] = expectancy_delta
+    safety["hold_med_operable"] = hold_med_operable
+    safety["max_hold_bars_p75_operable"] = max_hold_p75_operable
+    safety["expected_hold_score"] = expected_hold_score
+    safety["early_take_dependency"] = early_take_dependency
+    safety["wr_after_3_bars"] = wr_after_3
     safety["all_pass"] = all(
         safety[key]
         for key in (
@@ -250,7 +333,12 @@ def _compute_incumbent_safety_guardrail(candidate_metrics, incumbent_metrics):
             "mdd_p75_ok",
             "mdd_duration_ok",
             "mdd_duration_p75_ok",
+            "alpha_not_worse",
+            "expectancy_not_worse",
             "swing_hold_ok",
+            "expected_hold_score_ok",
+            "early_take_dependency_ok",
+            "wr_after_3_bars_ok",
         )
     )
     return safety
@@ -391,20 +479,26 @@ def _candidate_beats_incumbent(candidate_metrics, base_metrics, incumbent_metric
 
 
 def _compute_incumbent_wr_guardrail(candidate_metrics, incumbent_metrics):
-    incumbent_wr = float(incumbent_metrics.get("wr_med_all", 0.0) or 0.0)
-    incumbent_wr_target = float(incumbent_metrics.get("wr_target_med_all", 0.0) or 0.0)
+    incumbent_wr = _metric(incumbent_metrics, "wr_med_operable", "wr_med_all")
+    incumbent_wr_target = _metric(incumbent_metrics, "wr_target_med_operable", "wr_target_med_all")
+    alpha_delta = _metric(candidate_metrics, "alpha_ann_mean_operable", "mean_alpha_ann") - _metric(incumbent_metrics, "alpha_ann_mean_operable", "mean_alpha_ann")
+    expectancy_delta = _metric(candidate_metrics, "expectancy_net_med_operable", "expectancy_med") - _metric(incumbent_metrics, "expectancy_net_med_operable", "expectancy_med")
+    wr_tolerance = 0.010 if (alpha_delta >= 0.005 and expectancy_delta >= -1e-9) else 0.0025
+    wr_target_tolerance = 0.010 if (alpha_delta >= 0.005 and expectancy_delta >= -1e-9) else 0.005
     # Guardrail: prioritize hit-rate stability. Allow only small regressions vs incumbent.
     # Tolerances are in absolute rate units (e.g., 0.0025 == 0.25pp).
-    wr_floor = max(incumbent_wr - 0.0025, 0.62 if incumbent_wr >= 0.62 else max(0.50, incumbent_wr - 0.005))
+    wr_floor = max(incumbent_wr - wr_tolerance, 0.62 if incumbent_wr >= 0.62 else max(0.50, incumbent_wr - 0.005))
     wr_target_floor = max(
-        incumbent_wr_target - 0.005,
+        incumbent_wr_target - wr_target_tolerance,
         0.55 if incumbent_wr_target >= 0.55 else max(0.45, incumbent_wr_target - 0.010),
     )
-    wr_ok = bool(float(candidate_metrics.get("wr_med_all", 0.0) or 0.0) >= wr_floor - 1e-9)
-    wr_target_ok = bool(float(candidate_metrics.get("wr_target_med_all", 0.0) or 0.0) >= wr_target_floor - 1e-9)
+    wr_ok = bool(_metric(candidate_metrics, "wr_med_operable", "wr_med_all") >= wr_floor - 1e-9)
+    wr_target_ok = bool(_metric(candidate_metrics, "wr_target_med_operable", "wr_target_med_all") >= wr_target_floor - 1e-9)
     return {
         "wr_floor": wr_floor,
         "wr_target_floor": wr_target_floor,
+        "wr_tolerance": wr_tolerance,
+        "wr_target_tolerance": wr_target_tolerance,
         "wr_ok": wr_ok,
         "wr_target_ok": wr_target_ok,
         "all_pass": bool(wr_ok and wr_target_ok),
@@ -414,27 +508,34 @@ def _compute_incumbent_wr_guardrail(candidate_metrics, incumbent_metrics):
 def _priority_tuple(metrics: Dict[str, float]) -> tuple:
     """
     Lexicographic ranking aligned with swing usefulness priorities:
-      1) hit rate (WR)
-      2) target-hit rate (WR_target)
-      3) annualized alpha
-      4) manageable drawdown (lower is better)
-      5) swing holding profile (median hold closer to ~5 bars)
+      1) valid swing holding profile
+      2) hit rate (WR)
+      3) target-hit rate (WR_target)
+      4) annualized alpha / expectancy
+      5) manageable drawdown and holdability
       6) fitness (tie-breaker)
 
     Values are rounded to reduce churn on tiny differences.
     """
-    wr = float(metrics.get("wr_med_all", 0.0) or 0.0)
-    wr_target = float(metrics.get("wr_target_med_all", 0.0) or 0.0)
-    alpha_ann = float(metrics.get("mean_alpha_ann", -1e9) or -1e9)
-    mdd = float(metrics.get("mdd_med", 1e9) or 1e9)  # lower is better
-    hold_med = float(metrics.get("median_hold_bars_med", 0.0) or 0.0)
-    hold_score = -abs(hold_med - 5.0)
+    wr = _metric(metrics, "wr_med_operable", "wr_med_all")
+    wr_target = _metric(metrics, "wr_target_med_operable", "wr_target_med_all")
+    alpha_ann = _metric(metrics, "alpha_ann_mean_operable", "mean_alpha_ann", -1e9)
+    expectancy = _metric(metrics, "expectancy_net_med_operable", "expectancy_med", -1e9)
+    mdd = _metric(metrics, "mdd_med_operable", "mdd_med", 1e9)  # lower is better
+    hold_score = _swing_hold_score(metrics)
+    _hold_med, _max_hold_p75, swing_hold_ok = _swing_hold_profile(metrics)
+    expected_hold_score = _metric(metrics, "expected_hold_score_med_operable", "expected_hold_score_med", 0.0)
+    early_take_dependency = _metric(metrics, "early_take_dependency_med_operable", "early_take_dependency_med", 1.0)
     fit = float(metrics.get("fit", -1e18) or -1e18)
     return (
+        int(bool(swing_hold_ok)),
         round(wr, 6),
         round(wr_target, 6),
         round(alpha_ann, 6),
+        round(expectancy, 6),
         round(-mdd, 6),
+        round(expected_hold_score / 100.0, 6),
+        round(-early_take_dependency, 6),
         round(hold_score, 6),
         round(fit, 6),
     )
@@ -452,41 +553,53 @@ def _is_better_by_priority(candidate: Dict[str, float], incumbent: Dict[str, flo
     mdd_tol = 0.0025
     hold_tol = 0.5
 
-    c_wr = float(candidate.get("wr_med_all", 0.0) or 0.0)
-    i_wr = float(incumbent.get("wr_med_all", 0.0) or 0.0)
+    _c_hold_med, _c_max_hold, c_swing_ok = _swing_hold_profile(candidate)
+    _i_hold_med, _i_max_hold, i_swing_ok = _swing_hold_profile(incumbent)
+    if c_swing_ok and not i_swing_ok:
+        return True
+    if i_swing_ok and not c_swing_ok:
+        return False
+
+    c_wr = _metric(candidate, "wr_med_operable", "wr_med_all")
+    i_wr = _metric(incumbent, "wr_med_operable", "wr_med_all")
     if c_wr > i_wr + wr_tol:
         return True
     if c_wr < i_wr - wr_tol:
         return False
 
-    c_wrt = float(candidate.get("wr_target_med_all", 0.0) or 0.0)
-    i_wrt = float(incumbent.get("wr_target_med_all", 0.0) or 0.0)
+    c_wrt = _metric(candidate, "wr_target_med_operable", "wr_target_med_all")
+    i_wrt = _metric(incumbent, "wr_target_med_operable", "wr_target_med_all")
     if c_wrt > i_wrt + wr_target_tol:
         return True
     if c_wrt < i_wrt - wr_target_tol:
         return False
 
-    c_alpha = float(candidate.get("mean_alpha_ann", -1e9) or -1e9)
-    i_alpha = float(incumbent.get("mean_alpha_ann", -1e9) or -1e9)
+    c_alpha = _metric(candidate, "alpha_ann_mean_operable", "mean_alpha_ann", -1e9)
+    i_alpha = _metric(incumbent, "alpha_ann_mean_operable", "mean_alpha_ann", -1e9)
     if c_alpha > i_alpha + alpha_tol:
         return True
     if c_alpha < i_alpha - alpha_tol:
         return False
 
-    c_mdd = float(candidate.get("mdd_med", 1e9) or 1e9)
-    i_mdd = float(incumbent.get("mdd_med", 1e9) or 1e9)
+    c_exp = _metric(candidate, "expectancy_net_med_operable", "expectancy_med", -1e9)
+    i_exp = _metric(incumbent, "expectancy_net_med_operable", "expectancy_med", -1e9)
+    if c_exp > i_exp + 1e-4:
+        return True
+    if c_exp < i_exp - 1e-4:
+        return False
+
+    c_mdd = _metric(candidate, "mdd_med_operable", "mdd_med", 1e9)
+    i_mdd = _metric(incumbent, "mdd_med_operable", "mdd_med", 1e9)
     if c_mdd < i_mdd - mdd_tol:
         return True
     if c_mdd > i_mdd + mdd_tol:
         return False
 
-    c_hold = float(candidate.get("median_hold_bars_med", 0.0) or 0.0)
-    i_hold = float(incumbent.get("median_hold_bars_med", 0.0) or 0.0)
-    c_hold_dist = abs(c_hold - 5.0)
-    i_hold_dist = abs(i_hold - 5.0)
-    if c_hold_dist < i_hold_dist - hold_tol:
+    c_hold_score = _swing_hold_score(candidate)
+    i_hold_score = _swing_hold_score(incumbent)
+    if c_hold_score > i_hold_score + hold_tol:
         return True
-    if c_hold_dist > i_hold_dist + hold_tol:
+    if c_hold_score < i_hold_score - hold_tol:
         return False
 
     c_fit = float(candidate.get("fit", -1e18) or -1e18)
@@ -767,7 +880,79 @@ def open_existing_store():
     }
 
 
-def evaluate_genome_full(genome, ticker_arrays_cache, gr):
+def _write_early_exit_report(stats, report_path: str, gr) -> None:
+    rows = []
+    for st in stats:
+        ticker = st.get("ticker", "")
+        wr = float(st.get("win_rate", 0.0) or 0.0)
+        wr_tgt = float(st.get("win_rate_target", 0.0) or 0.0)
+        alpha = float(st.get("alpha_ann", st.get("excess_return", 0.0)) or 0.0)
+        mdd_abs = abs(float(st.get("mdd", 0.0) or 0.0))
+        n_trades = int(st.get("n_trades", 0) or 0)
+        universe = gr.classify_operational_universe_tier(wr, wr_tgt, alpha, mdd_abs, n_trades)
+        early = float(st.get("pct_exit_early", 0.0) or 0.0)
+        early_take = float(st.get("pct_early_exit_take", 0.0) or 0.0)
+        holdability = float(st.get("expected_hold_score", gr.expected_hold_score_from_stat(st)) or 0.0)
+        early_dep = float(st.get("early_take_dependency", 0.0) or 0.0)
+        rows.append({
+            "ticker": ticker,
+            "universe": universe,
+            "operable": universe in ("PREMIUM", "HIGH_QUAL"),
+            "n_trades": n_trades,
+            "win_rate": wr,
+            "win_rate_target": wr_tgt,
+            "alpha_ann": alpha,
+            "expectancy": float(st.get("expectancy", 0.0) or 0.0),
+            "mdd_abs": mdd_abs,
+            "median_hold_bars": float(st.get("median_hold_bars", 0.0) or 0.0),
+            "max_hold_bars": float(st.get("max_hold_bars", 0.0) or 0.0),
+            "expected_hold_score": holdability,
+            "wr_after_3_bars": float(st.get("wr_after_3_bars", 0.0) or 0.0),
+            "target_wr_after_3_bars": float(st.get("target_wr_after_3_bars", 0.0) or 0.0),
+            "alpha_after_3_bars": float(st.get("alpha_after_3_bars", 0.0) or 0.0),
+            "early_take_dependency": early_dep,
+            "swing_survival_3d": float(st.get("swing_survival_3d", 0.0) or 0.0),
+            "pct_exit_early": early,
+            "pct_early_exit_take": early_take,
+            "pct_early_exit_trailing": float(st.get("pct_early_exit_trailing", 0.0) or 0.0),
+            "pct_early_exit_stop": float(st.get("pct_early_exit_stop", 0.0) or 0.0),
+            "pct_exit_take": float(st.get("pct_exit_take", 0.0) or 0.0),
+            "pct_exit_trailing": float(st.get("pct_exit_trailing", 0.0) or 0.0),
+            "pct_exit_stop": float(st.get("pct_exit_stop", 0.0) or 0.0),
+            "pct_exit_time": float(st.get("pct_exit_time", 0.0) or 0.0),
+            "early_take_defer_per_trade": float(st.get("early_take_defer_per_trade", 0.0) or 0.0),
+            "fast_edge": bool(holdability < 70.0 or early_dep > 0.45),
+            "early_exit_pressure": early * max(1.0, float(n_trades)) + early_take * 2.0 + early_dep * 5.0,
+        })
+    rows.sort(
+        key=lambda r: (
+            bool(r["operable"]),
+            float(r["early_exit_pressure"]),
+            float(r["pct_early_exit_take"]),
+            float(r["win_rate"]),
+        ),
+        reverse=True,
+    )
+    path = Path(report_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fieldnames = [
+        "ticker", "universe", "operable", "n_trades", "win_rate",
+        "win_rate_target", "alpha_ann", "expectancy", "mdd_abs",
+        "median_hold_bars", "max_hold_bars", "expected_hold_score",
+        "wr_after_3_bars", "target_wr_after_3_bars", "alpha_after_3_bars",
+        "early_take_dependency", "swing_survival_3d", "fast_edge", "pct_exit_early",
+        "pct_early_exit_take", "pct_early_exit_trailing",
+        "pct_early_exit_stop", "pct_exit_take", "pct_exit_trailing",
+        "pct_exit_stop", "pct_exit_time", "early_take_defer_per_trade",
+        "early_exit_pressure",
+    ]
+    with path.open("w", encoding="utf-8", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def evaluate_genome_full(genome, ticker_arrays_cache, gr, report_path: str | None = None):
     """
     Run full backtest of a genome across all tickers (single process).
     Returns dict with WR_med, WR_mean, MDD_med, ret_med, sharpe_med, fit, and
@@ -783,6 +968,7 @@ def evaluate_genome_full(genome, ticker_arrays_cache, gr):
         )
         gr._attach_benchmark_stats(st, p["close"])
         st["excess_return"] = st["total_return"] - st["buy_hold_return"]
+        st["ticker"] = tk
         stats.append(st)
 
     # Overall fitness uses ALL stats (same as training)
@@ -805,6 +991,18 @@ def evaluate_genome_full(genome, ticker_arrays_cache, gr):
     avg_hold_bars = [s.get("avg_hold_bars", 0.0) for s in active]
     median_hold_bars = [s.get("median_hold_bars", 0.0) for s in active]
     max_hold_bars = [s.get("max_hold_bars", 0.0) for s in active]
+    pct_exit_early = [s.get("pct_exit_early", 0.0) for s in active]
+    pct_exit_take = [s.get("pct_exit_take", 0.0) for s in active]
+    pct_exit_stop = [s.get("pct_exit_stop", 0.0) for s in active]
+    pct_exit_trailing = [s.get("pct_exit_trailing", 0.0) for s in active]
+    pct_exit_time = [s.get("pct_exit_time", 0.0) for s in active]
+    early_take_defer_per_trade = [s.get("early_take_defer_per_trade", 0.0) for s in active]
+    expected_hold_scores = [s.get("expected_hold_score", gr.expected_hold_score_from_stat(s)) for s in active]
+    wr_after_3_bars = [s.get("wr_after_3_bars", 0.0) for s in active]
+    target_wr_after_3_bars = [s.get("target_wr_after_3_bars", 0.0) for s in active]
+    alpha_after_3_bars = [s.get("alpha_after_3_bars", 0.0) for s in active]
+    early_take_dependency = [s.get("early_take_dependency", 0.0) for s in active]
+    swing_survival_3d = [s.get("swing_survival_3d", 0.0) for s in active]
     trades = [s["n_trades"] for s in active]
 
     all_wrs = [s["win_rate"] for s in all_stats]
@@ -814,8 +1012,10 @@ def evaluate_genome_full(genome, ticker_arrays_cache, gr):
     active_alpha_ann = [s.get("alpha_ann", 0.0) for s in active]
     active_bh_cagrs = [s.get("buy_hold_cagr", 0.0) for s in active]
 
+    operable_metrics = gr.operational_metrics_from_stats(all_stats)
+
     # Also unfiltered median (matches what summary shows: no n_trades > 5 filter)
-    return {
+    metrics = {
         "fit": float(fit),
         "n_tickers_total": len(all_stats),
         "n_tickers_active": len(active),
@@ -847,12 +1047,29 @@ def evaluate_genome_full(genome, ticker_arrays_cache, gr):
         "avg_hold_bars_med": float(np.median(avg_hold_bars)) if avg_hold_bars else 0,
         "median_hold_bars_med": float(np.median(median_hold_bars)) if median_hold_bars else 0,
         "max_hold_bars_p75": float(np.percentile(max_hold_bars, 75)) if max_hold_bars else 0,
+        "pct_exit_early_med": float(np.median(pct_exit_early)) if pct_exit_early else 0,
+        "pct_exit_take_med": float(np.median(pct_exit_take)) if pct_exit_take else 0,
+        "pct_exit_stop_med": float(np.median(pct_exit_stop)) if pct_exit_stop else 0,
+        "pct_exit_trailing_med": float(np.median(pct_exit_trailing)) if pct_exit_trailing else 0,
+        "pct_exit_time_med": float(np.median(pct_exit_time)) if pct_exit_time else 0,
+        "early_take_defer_per_trade_med": float(np.median(early_take_defer_per_trade)) if early_take_defer_per_trade else 0,
+        "expected_hold_score_med": float(np.median(expected_hold_scores)) if expected_hold_scores else 0,
+        "wr_after_3_bars_med": float(np.median(wr_after_3_bars)) if wr_after_3_bars else 0,
+        "target_wr_after_3_bars_med": float(np.median(target_wr_after_3_bars)) if target_wr_after_3_bars else 0,
+        "alpha_after_3_bars_med": float(np.median(alpha_after_3_bars)) if alpha_after_3_bars else 0,
+        "early_take_dependency_med": float(np.median(early_take_dependency)) if early_take_dependency else 0,
+        "swing_survival_3d_med": float(np.median(swing_survival_3d)) if swing_survival_3d else 0,
         "alpha_ann_med_active": float(np.median(active_alpha_ann)) if active_alpha_ann else 0,
         "buy_hold_cagr_med": float(np.median(active_bh_cagrs)) if active_bh_cagrs else 0,
         "trades_med": float(np.median(trades)) if trades else 0,
         "n_ge_70": int(sum(1 for w in all_wrs if w >= 0.70)),
         "n_ge_50_target": int(sum(1 for w in all_wr_targets if w >= 0.50)),  # v8
     }
+    metrics.update(operable_metrics)
+    if report_path:
+        _write_early_exit_report(stats, report_path, gr)
+        metrics["early_exit_report_path"] = str(Path(report_path).resolve())
+    return metrics
 
 
 def build_ticker_arrays_cache(store):
@@ -1139,7 +1356,12 @@ def main():
     print("\n[SEED] Evaluating current accepted worktree checkpoint...",
           flush=True)
     t0 = time.time()
-    seed_metrics = evaluate_genome_full(seed_genome, cache, gr)
+    seed_metrics = evaluate_genome_full(
+        seed_genome,
+        cache,
+        gr,
+        report_path=str(Path("analysis") / "early_exit_report_current.csv"),
+    )
     seed_metrics["eval_time_s"] = round(time.time() - t0, 1)
     print(f"[SEED] fit={seed_metrics['fit']:.4f} "
           f"WR_med_all={_fmt_pct1(seed_metrics['wr_med_all'])} "
@@ -1149,6 +1371,8 @@ def main():
           f"ret={seed_metrics['ret_med']:.2f} "
           f"#>=70%={seed_metrics['n_ge_70']}/{seed_metrics['n_tickers_total']} "
           f"({time.time()-t0:.0f}s)", flush=True)
+    if seed_metrics.get("early_exit_report_path"):
+        print(f"[SEED] early-exit report: {seed_metrics['early_exit_report_path']}", flush=True)
 
     progress = _load_progress()
     # Always refresh baseline + seed metrics under the current fitness code,

@@ -22,6 +22,13 @@ def _load_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _m(metrics: dict, key: str, default: float = 0.0) -> float:
+    try:
+        return float(metrics.get(key, default) or default)
+    except (TypeError, ValueError):
+        return float(default)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Apply the best candidate from a fullmetric sweep JSON result.")
     parser.add_argument("--sweep", type=str, required=True, help="Path to local_fullmetric_sweep_result_*.json")
@@ -130,58 +137,75 @@ def main() -> None:
         print(f"[GUARD] WARN: long-term guard falhou: {_e} — seguindo sem guard")
 
     # ================================================================
-    # HOLDOUT GUARD — pristine 90d test
+    # FAIL-CLOSED OVERFIT GUARD: holdout + rolling OOS + operable CI.
     # ================================================================
-    # Avalia candidato em ultimos 90 dias e compara com train regime.
-    # Diagnostico (2026-04-24): main esta OVERFIT (alpha drop -19pp em
-    # holdout). Sem este guard, sweeps continuariam cavando o mesmo
-    # over-fitted optimum. Com este guard, so promove se candidato
-    # mantem performance no regime mais recente.
-    #
-    # Pode ser desligado via GA_DISABLE_HOLDOUT_GUARD=1 (ex: durante
-    # cold-start ou quando best_ever ainda imaturo).
-    if str(os.environ.get("GA_DISABLE_HOLDOUT_GUARD", "")).lower() not in ("1", "true", "yes"):
-        try:
-            from analysis.overfitting_stage import (
-                evaluate_holdout, classify, THRESHOLDS as _OF_THR
-            )
-            print(f"[HOLDOUT] Evaluating candidate on pristine holdout (90d)...")
-            holdout_data = evaluate_holdout(candidate_genome, holdout_days=90)
-            delta = holdout_data.get("delta_holdout_vs_train", {})
-            wr_drop = -float(delta.get("wr_med_all", 0.0))
-            alpha_drop = -float(delta.get("mean_alpha_ann", 0.0))
-            print(f"[HOLDOUT] WR drop = {wr_drop:+.4f} (warn={_OF_THR['holdout_wr_drop_max']}, "
-                  f"critical={_OF_THR['holdout_wr_drop_critical']})")
-            print(f"[HOLDOUT] alpha drop = {alpha_drop:+.4f} (warn={_OF_THR['holdout_alpha_drop_max']}, "
-                  f"critical={_OF_THR['holdout_alpha_drop_critical']})")
-            # Critical drop = REJEITA. Warn-only = log e continua.
-            critical = []
-            if wr_drop > _OF_THR["holdout_wr_drop_critical"]:
-                critical.append(f"wr_drop={wr_drop:.4f} > critical")
-            if alpha_drop > _OF_THR["holdout_alpha_drop_critical"]:
-                critical.append(f"alpha_drop={alpha_drop:.4f} > critical")
-            if critical:
-                print(f"[HOLDOUT] REJEITA: {'; '.join(critical)}")
-                raise SystemExit(
-                    f"Holdout guard: candidato falha no regime recente. "
-                    f"{'; '.join(critical)}"
-                )
-            # Warn-only thresholds (nao bloqueia mas registra)
-            warns = []
-            if wr_drop > _OF_THR["holdout_wr_drop_max"]:
-                warns.append(f"wr_drop={wr_drop:.4f} > warn")
-            if alpha_drop > _OF_THR["holdout_alpha_drop_max"]:
-                warns.append(f"alpha_drop={alpha_drop:.4f} > warn")
-            if warns:
-                print(f"[HOLDOUT] WARNING: {'; '.join(warns)}")
-            else:
-                print(f"[HOLDOUT] PASSA: holdout estavel")
-        except SystemExit:
-            raise
-        except Exception as _e:
-            print(f"[HOLDOUT] WARN: holdout guard falhou: {_e} — seguindo sem guard")
-    else:
-        print("[HOLDOUT] SKIP — GA_DISABLE_HOLDOUT_GUARD ativo")
+    # Promotion is blocked if any test/report fails or if the candidate
+    # regresses against the incumbent in the Premium/HQ operational universe.
+    try:
+        from analysis.overfitting_stage import (
+            THRESHOLDS as _OF_THR,
+            bootstrap_ci_wr,
+            classify,
+            evaluate_holdout,
+            evaluate_rolling_oos,
+            multiple_testing_summary,
+        )
+
+        print("[OVERFIT] Evaluating candidate holdout (90d)...")
+        holdout_data = evaluate_holdout(candidate_genome, holdout_days=90)
+        print("[OVERFIT] Evaluating incumbent holdout (90d)...")
+        incumbent_holdout = evaluate_holdout(seed_genome_store, holdout_days=90)
+        print("[OVERFIT] Evaluating rolling OOS (4 folds, 5d embargo)...")
+        rolling_data = evaluate_rolling_oos(candidate_genome, folds=4, test_days=90, embargo_days=5)
+        print("[OVERFIT] Bootstrapping operable WR CI...")
+        bootstrap_data = bootstrap_ci_wr(candidate_genome, n_samples=200, operable_only=True)
+        mt_summary = multiple_testing_summary()
+        verdict, reasons = classify(
+            holdout_data,
+            bootstrap_data,
+            {"skipped": True, "median_abs_delta": 0.0},
+            rolling_data,
+        )
+
+        cand_ho = holdout_data.get("metrics_holdout", {})
+        inc_ho = incumbent_holdout.get("metrics_holdout", {})
+        oos_wr_delta = _m(cand_ho, "wr_med_operable") - _m(inc_ho, "wr_med_operable")
+        oos_alpha_delta = _m(cand_ho, "alpha_ann_mean_operable") - _m(inc_ho, "alpha_ann_mean_operable")
+        ci_width = _m(bootstrap_data, "wr_ci_width")
+        wilson_lo = _m(bootstrap_data, "wr_wilson_lo")
+        op_n = int(bootstrap_data.get("n_tickers_in_bootstrap", 0) or 0)
+
+        print(
+            f"[OVERFIT] verdict={verdict} "
+            f"operable_oos_wr_delta={oos_wr_delta:+.4f} "
+            f"operable_oos_alpha_delta={oos_alpha_delta:+.4f} "
+            f"wilson_lo={wilson_lo:.4f} ci_width={ci_width:.4f} "
+            f"trials={mt_summary.get('total_trials', 0)} "
+            f"pbo_risk={mt_summary.get('pbo_risk_proxy', 'UNKNOWN')}"
+        )
+
+        critical = []
+        if verdict == "OVERFIT":
+            critical.extend(reasons)
+        if oos_wr_delta < -_OF_THR["operable_oos_wr_drop_critical"]:
+            critical.append(f"operable OOS WR delta {oos_wr_delta:+.4f} < -3pp vs incumbent")
+        if oos_alpha_delta < -_OF_THR["operable_oos_alpha_drop_critical"]:
+            critical.append(f"operable OOS alpha delta {oos_alpha_delta:+.4f} < -0.5pp vs incumbent")
+        if op_n < _OF_THR["operable_min_tickers"]:
+            critical.append(f"operable bootstrap tickers {op_n} < {_OF_THR['operable_min_tickers']}")
+        if wilson_lo < _OF_THR["operable_wr_wilson_lo_min"]:
+            critical.append(f"operable Wilson lower {wilson_lo:.4f} < 55%")
+        if ci_width > _OF_THR["operable_bootstrap_ci_width_max"]:
+            critical.append(f"operable bootstrap WR CI width {ci_width:.4f} > 15pp")
+
+        if critical:
+            print(f"[OVERFIT] REJEITA: {'; '.join(critical)}")
+            raise SystemExit("Overfitting guard failed; refusing to apply candidate.")
+        print("[OVERFIT] PASSA: holdout, rolling OOS and operable CI stable")
+    except SystemExit:
+        raise
+    except Exception as _e:
+        raise SystemExit(f"Overfitting guard failed closed: {_e}") from _e
 
     if args.dry_run:
         print("[DRY] Not writing checkpoint files.")

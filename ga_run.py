@@ -422,6 +422,18 @@ GLOBAL_PARAM_SPECS = [
     # Valor anterior [0.0, 0.20] era percentual de R1 — nunca acionava.
     ("resistance_overext_gate", 0.0, 2.0, 0.25, False),
     ("support_broken_gate", 0.0, 2.0, 0.25, False),
+    # -- NEW v10 genes: swing holding controls (3-10 pregões target) --
+    # min_hold_bars: diagnostic/guardrail floor for soft exits.
+    # early_exit_block_bars: blocks trailing/time exits before the trade has had
+    #   time to develop; hard_loss and original stop remain always active.
+    # profit_take_min_bars: blocks full/partial take-profit before the swing window.
+    ("min_hold_bars", 0.0, 5.0, 1.0, True),
+    ("early_exit_block_bars", 0.0, 5.0, 1.0, True),
+    ("profit_take_min_bars", 0.0, 5.0, 1.0, True),
+    # Conditional early take-profit hold: if profit_take_min_bars is active,
+    # defer early target exits only while score/trend/support remain healthy.
+    ("early_take_quality_gate", 0.0, 1.0, 0.10, False),
+    ("early_take_score_decay_max", 0.0, 1.0, 0.05, False),
 ]
 
 # Backward-compat default para genomas antigos (30 genes, sem entry_aggressiveness).
@@ -432,6 +444,11 @@ _LEGACY_GENE_DEFAULTS: Dict[str, float] = {
     "entry_aggressiveness": 1.0,
     "resistance_overext_gate": 0.0,
     "support_broken_gate": 0.0,
+    "min_hold_bars": 0.0,
+    "early_exit_block_bars": 0.0,
+    "profit_take_min_bars": 0.0,
+    "early_take_quality_gate": 0.0,
+    "early_take_score_decay_max": 0.35,
 }
 
 
@@ -474,6 +491,12 @@ class GlobalParams:
     # -- NEW v7 genes (Fase 2: Woodie R1/S1 gates) --
     resistance_overext_gate: float  # 0.0=off, 0.20=bloqueia se close>R1*1.20
     support_broken_gate: float      # 0.0=off, 0.20=bloqueia se close<S1*0.80
+    # -- NEW v10 genes (swing holding controls) --
+    min_hold_bars: int
+    early_exit_block_bars: int
+    profit_take_min_bars: int
+    early_take_quality_gate: float
+    early_take_score_decay_max: float
 
 
 def sanitize_global_genome(genome: List[float]) -> List[float]:
@@ -1020,12 +1043,185 @@ def _extract_alpha_ann(stat: Dict[str, float]) -> float:
     return float(stat.get("excess_return", stat.get("total_return", 0.0)))
 
 
+def classify_operational_universe_tier(
+    win_rate: float,
+    win_rate_target: float,
+    alpha_ann: float,
+    mdd_abs: float,
+    n_trades: int,
+) -> str:
+    """Classify the current model/ticker into the live-trading universe tier."""
+    wr = float(win_rate or 0.0)
+    wr_tgt = float(win_rate_target or 0.0)
+    alpha = float(alpha_ann or 0.0)
+    mdd = abs(float(mdd_abs or 0.0))
+    trades = int(n_trades or 0)
+    if (
+        trades >= 30
+        and wr >= 0.74
+        and wr_tgt >= 0.72
+        and alpha >= -0.12
+        and mdd <= 0.13
+    ):
+        return "PREMIUM"
+    if (
+        trades >= 20
+        and wr >= 0.67
+        and wr_tgt >= 0.65
+        and alpha >= -0.20
+        and mdd <= 0.16
+    ):
+        return "HIGH_QUAL"
+    return "REGULAR"
+
+
+def is_operational_stat(stat: Dict[str, float]) -> bool:
+    """True when a per-ticker backtest stat belongs to the operable universe."""
+    tier = classify_operational_universe_tier(
+        stat.get("win_rate", 0.0),
+        stat.get("win_rate_target", 0.0),
+        _extract_alpha_ann(stat),
+        abs(float(stat.get("mdd", 0.0) or 0.0)),
+        int(stat.get("n_trades", 0) or 0),
+    )
+    return tier in ("PREMIUM", "HIGH_QUAL")
+
+
+def expected_hold_score_from_stat(stat: Dict[str, float]) -> float:
+    """0-100 score for whether a ticker's edge survives a 3+ day swing hold."""
+    wr3 = float(stat.get("wr_after_3_bars", stat.get("win_rate", 0.0)) or 0.0)
+    tgt3 = float(stat.get("target_wr_after_3_bars", stat.get("win_rate_target", 0.0)) or 0.0)
+    survival = float(stat.get("swing_survival_3d", 0.0) or 0.0)
+    if "swing_survival_3d" not in stat:
+        survival = 1.0 if float(stat.get("median_hold_bars", 0.0) or 0.0) >= 3.0 else 0.0
+    early_dep = float(stat.get("early_take_dependency", stat.get("pct_early_exit_take", 0.0)) or 0.0)
+    alpha3 = float(stat.get("alpha_after_3_bars", stat.get("alpha_ann", 0.0)) or 0.0)
+    hold_med = float(stat.get("median_hold_bars", 0.0) or 0.0)
+    hold_fit = 1.0 - min(abs(hold_med - 6.5) / 6.5, 1.0) if hold_med > 0.0 else 0.0
+    alpha_component = float(np.clip((alpha3 + 0.08) / 0.16, 0.0, 1.0))
+    score = (
+        32.0 * np.clip(wr3, 0.0, 1.0)
+        + 18.0 * np.clip(tgt3, 0.0, 1.0)
+        + 18.0 * np.clip(survival, 0.0, 1.0)
+        + 14.0 * (1.0 - np.clip(early_dep, 0.0, 1.0))
+        + 10.0 * alpha_component
+        + 8.0 * hold_fit
+    )
+    return float(np.clip(score, 0.0, 100.0))
+
+
+def operational_metrics_from_stats(per_ticker_stats: List[Dict[str, float]]) -> Dict[str, float]:
+    """Aggregate metrics only for tickers that are eligible for live operation.
+
+    Backtest trade returns are already net of modeled round-trip costs and taxes
+    where applicable, so `expectancy_net_med_operable` intentionally uses the
+    existing net expectancy field.
+    """
+    operable = [s for s in per_ticker_stats if is_operational_stat(s)]
+    if not operable:
+        return {
+            "wr_med_operable": 0.0,
+            "wr_target_med_operable": 0.0,
+            "alpha_ann_mean_operable": 0.0,
+            "expectancy_net_med_operable": 0.0,
+            "mdd_med_operable": 1.0,
+            "hold_med_operable": 0.0,
+            "max_hold_bars_p75_operable": 0.0,
+            "expected_hold_score_med_operable": 0.0,
+            "early_take_dependency_med_operable": 1.0,
+            "swing_survival_3d_med_operable": 0.0,
+            "wr_after_3_bars_med_operable": 0.0,
+            "target_wr_after_3_bars_med_operable": 0.0,
+            "n_buy_operable": 0,
+        }
+
+    wr = np.asarray([s.get("win_rate", 0.0) for s in operable], dtype=np.float64)
+    wr_tgt = np.asarray([s.get("win_rate_target", 0.0) for s in operable], dtype=np.float64)
+    alpha = np.asarray([_extract_alpha_ann(s) for s in operable], dtype=np.float64)
+    exp = np.asarray([s.get("expectancy", 0.0) for s in operable], dtype=np.float64)
+    mdd = np.asarray([abs(float(s.get("mdd", 0.0) or 0.0)) for s in operable], dtype=np.float64)
+    hold = np.asarray([s.get("median_hold_bars", 0.0) for s in operable], dtype=np.float64)
+    max_hold = np.asarray([s.get("max_hold_bars", 0.0) for s in operable], dtype=np.float64)
+    hold_score = np.asarray([expected_hold_score_from_stat(s) for s in operable], dtype=np.float64)
+    early_dep = np.asarray([s.get("early_take_dependency", 1.0) for s in operable], dtype=np.float64)
+    survival_3d = np.asarray([s.get("swing_survival_3d", 0.0) for s in operable], dtype=np.float64)
+    wr_after_3 = np.asarray([s.get("wr_after_3_bars", 0.0) for s in operable], dtype=np.float64)
+    tgt_after_3 = np.asarray([s.get("target_wr_after_3_bars", 0.0) for s in operable], dtype=np.float64)
+    return {
+        "wr_med_operable": float(np.median(wr)),
+        "wr_target_med_operable": float(np.median(wr_tgt)),
+        "alpha_ann_mean_operable": float(np.mean(alpha)),
+        "expectancy_net_med_operable": float(np.median(exp)),
+        "mdd_med_operable": float(np.median(mdd)),
+        "hold_med_operable": float(np.median(hold)),
+        "max_hold_bars_p75_operable": float(np.percentile(max_hold, 75)),
+        "expected_hold_score_med_operable": float(np.median(hold_score)),
+        "early_take_dependency_med_operable": float(np.median(early_dep)),
+        "swing_survival_3d_med_operable": float(np.median(survival_3d)),
+        "wr_after_3_bars_med_operable": float(np.median(wr_after_3)),
+        "target_wr_after_3_bars_med_operable": float(np.median(tgt_after_3)),
+        "n_buy_operable": int(len(operable)),
+    }
+
+
+def enforce_operational_buy_gate(
+    sig: str,
+    *,
+    operable: bool,
+    stage_num: int,
+    timing_sub: str,
+    estagio: str,
+    entry_score: float,
+    confidence: float,
+    rank_score: float,
+    net_potential_pct: float,
+    close_val: float,
+    pivot: float,
+    s1: float,
+    r1: float,
+    expected_hold_score: float = 100.0,
+    early_take_dependency: float = 0.0,
+    alpha_ann: float = 0.0,
+) -> Tuple[str, str]:
+    """Demote BUYs that are not executable under the Premium/HQ swing policy."""
+    if sig != "buy":
+        return sig, ""
+    if net_potential_pct < 0.05:
+        return "hold", f"Potencial liquido {net_potential_pct*100:.1f}% < 5% (nao compensa custos)"
+    if not operable:
+        return "hold", "REGULAR: fora do universo operacional Premium/HQ"
+    if not (stage_num == 2 and timing_sub in ("ideal", "momentum", "pullback")):
+        return "hold", f"Timing {estagio}: aguardar Stage 2 ideal/momentum/pullback"
+    if entry_score < 75.0:
+        return "hold", f"Entry score {entry_score:.1f} < 75"
+    if expected_hold_score < 70.0:
+        return "hold", f"Expected hold score {expected_hold_score:.1f} < 70"
+    if early_take_dependency > 0.45:
+        return "hold", f"Fast-edge: early take dependency {early_take_dependency*100:.0f}% > 45%"
+    if alpha_ann < -0.10 and expected_hold_score < 80.0:
+        return "hold", f"Alpha operacional {alpha_ann*100:.1f}% e holdability insuficiente"
+    if confidence < 75.0:
+        return "hold", f"Confidence {confidence:.1f} < 75"
+    if rank_score < 80.0:
+        return "hold", f"Rank {rank_score:.1f} < 80"
+    if np.isfinite(pivot) and close_val < pivot:
+        return "hold", f"Abaixo do Pivot @{pivot:.2f}: aguardar confirmacao"
+    if np.isfinite(s1) and close_val <= s1:
+        return "hold", f"Suporte S1 @{s1:.2f} rompido/nao intacto"
+    if np.isfinite(r1) and close_val > r1:
+        return "hold", f"Esticado acima de R1 @{r1:.2f}: aguardar pullback"
+    return sig, ""
+
+
 def _attach_benchmark_stats(stats: Dict[str, float], close: np.ndarray) -> Dict[str, float]:
     buy_hold_return = buyhold_capped(close)
     buy_hold_cagr = _compute_cagr(buy_hold_return, len(close))
     stats["buy_hold_return"] = float(buy_hold_return)
     stats["buy_hold_cagr"] = float(buy_hold_cagr)
     stats["alpha_ann"] = float(stats.get("cagr", _compute_cagr(stats.get("total_return", 0.0), len(close))) - buy_hold_cagr)
+    if "alpha_after_3_bars" in stats:
+        stats["alpha_after_3_bars"] = float(stats.get("alpha_after_3_bars", 0.0) - buy_hold_cagr)
+        stats["expected_hold_score"] = expected_hold_score_from_stat(stats)
     return stats
 
 
@@ -1038,6 +1234,11 @@ def _finalize_backtest_stats(
     mdd: float,
     n_bars: int,
     max_drawdown_duration: int,
+    early_take_deferred_events: int = 0,
+    trade_rets_after_3: Optional[List[float]] = None,
+    trade_target_after_3: Optional[List[bool]] = None,
+    early_take_events: int = 0,
+    early_take_dependency_events: int = 0,
 ) -> Dict[str, float]:
     base_stats = {
         "total_return": float(total_return),
@@ -1055,7 +1256,25 @@ def _finalize_backtest_stats(
         "win_rate_target_robust": 0.0,
         "pct_exit_take": 0.0,
         "pct_exit_stop": 0.0,
+        "pct_exit_trailing": 0.0,
         "pct_exit_time": 0.0,
+        "pct_exit_hard_loss": 0.0,
+        "pct_exit_early": 0.0,
+        "pct_early_exit_take": 0.0,
+        "pct_early_exit_stop": 0.0,
+        "pct_early_exit_trailing": 0.0,
+        "pct_early_exit_time": 0.0,
+        "pct_early_exit_hard_loss": 0.0,
+        "early_take_deferred_events": float(early_take_deferred_events),
+        "early_take_defer_per_trade": 0.0,
+        "wr_after_3_bars": 0.0,
+        "target_wr_after_3_bars": 0.0,
+        "expectancy_after_3_bars": 0.0,
+        "alpha_after_3_bars": 0.0,
+        "early_take_events": float(early_take_events),
+        "early_take_dependency": 0.0,
+        "swing_survival_3d": 0.0,
+        "expected_hold_score": 0.0,
         "avg_trade": 0.0,
         "trade_std": 0.0,
         "avg_hold_bars": 0.0,
@@ -1083,6 +1302,9 @@ def _finalize_backtest_stats(
     hold_arr = np.asarray(trade_hold_bars, dtype=np.float64) if len(trade_hold_bars) > 0 else np.zeros(len(tr), dtype=np.float64)
     if hold_arr.shape[0] != tr.shape[0]:
         hold_arr = np.resize(hold_arr, tr.shape[0])
+    after3_arr = np.asarray(trade_rets_after_3 or [], dtype=np.float64)
+    after3_arr = after3_arr[np.isfinite(after3_arr)]
+    target3_arr = np.asarray(trade_target_after_3 or [], dtype=bool)
     n_years = max(float(n_bars) / 252.0, 0.1)
     trades_per_year = len(tr) / n_years
     ann_factor = np.sqrt(min(trades_per_year, 252.0))
@@ -1093,10 +1315,28 @@ def _finalize_backtest_stats(
 
     pct_exit_take = float((exit_arr == "take").mean()) if len(exit_arr) > 0 else 0.0
     pct_exit_stop = float(((exit_arr == "stop") | (exit_arr == "hard_loss")).mean()) if len(exit_arr) > 0 else 0.0
+    pct_exit_trailing = float((exit_arr == "trailing").mean()) if len(exit_arr) > 0 else 0.0
     pct_exit_time = float((exit_arr == "time").mean()) if len(exit_arr) > 0 else 0.0
+    pct_exit_hard_loss = float((exit_arr == "hard_loss").mean()) if len(exit_arr) > 0 else 0.0
+    early_exit_mask = hold_arr < 3.0
+    swing_survival_3d = float((hold_arr >= 3.0).mean()) if len(hold_arr) > 0 else 0.0
+    pct_exit_early = float(early_exit_mask.mean()) if len(hold_arr) > 0 else 0.0
+    pct_early_exit_take = float(((exit_arr == "take") & early_exit_mask).mean()) if len(exit_arr) > 0 else 0.0
+    pct_early_exit_stop = float((((exit_arr == "stop") | (exit_arr == "hard_loss")) & early_exit_mask).mean()) if len(exit_arr) > 0 else 0.0
+    pct_early_exit_trailing = float(((exit_arr == "trailing") & early_exit_mask).mean()) if len(exit_arr) > 0 else 0.0
+    pct_early_exit_time = float(((exit_arr == "time") & early_exit_mask).mean()) if len(exit_arr) > 0 else 0.0
+    pct_early_exit_hard_loss = float(((exit_arr == "hard_loss") & early_exit_mask).mean()) if len(exit_arr) > 0 else 0.0
     take_mask = (exit_arr == "take")
     time_pos_mask = (exit_arr == "time") & (tr > 0)
     wr_target_robust = float((take_mask | time_pos_mask).mean()) if len(exit_arr) > 0 else 0.0
+    wr_after_3 = float((after3_arr > 0.0).mean()) if len(after3_arr) > 0 else 0.0
+    target_wr_after_3 = float(target3_arr.mean()) if len(target3_arr) > 0 else 0.0
+    expectancy_after_3 = float(np.mean(after3_arr)) if len(after3_arr) > 0 else 0.0
+    alpha_after_3 = float(np.clip(expectancy_after_3 * (252.0 / 3.0), -1.0, 1.0))
+    early_take_dependency = (
+        float(early_take_dependency_events) / max(1.0, float(early_take_events))
+        if early_take_events > 0 else 0.0
+    )
 
     wins = tr[tr > 0]
     losses = tr[tr < 0]
@@ -1136,7 +1376,24 @@ def _finalize_backtest_stats(
         "win_rate_target_robust": wr_target_robust,
         "pct_exit_take": pct_exit_take,
         "pct_exit_stop": pct_exit_stop,
+        "pct_exit_trailing": pct_exit_trailing,
         "pct_exit_time": pct_exit_time,
+        "pct_exit_hard_loss": pct_exit_hard_loss,
+        "pct_exit_early": pct_exit_early,
+        "pct_early_exit_take": pct_early_exit_take,
+        "pct_early_exit_stop": pct_early_exit_stop,
+        "pct_early_exit_trailing": pct_early_exit_trailing,
+        "pct_early_exit_time": pct_early_exit_time,
+        "pct_early_exit_hard_loss": pct_early_exit_hard_loss,
+        "early_take_deferred_events": float(early_take_deferred_events),
+        "early_take_defer_per_trade": float(early_take_deferred_events) / max(1.0, float(len(tr))),
+        "wr_after_3_bars": wr_after_3,
+        "target_wr_after_3_bars": target_wr_after_3,
+        "expectancy_after_3_bars": expectancy_after_3,
+        "alpha_after_3_bars": alpha_after_3,
+        "early_take_events": float(early_take_events),
+        "early_take_dependency": early_take_dependency,
+        "swing_survival_3d": swing_survival_3d,
         "avg_trade": mean_tr,
         "trade_std": std_tr,
         "avg_hold_bars": float(np.mean(hold_arr)) if len(hold_arr) > 0 else 0.0,
@@ -1155,6 +1412,7 @@ def _finalize_backtest_stats(
         "big_wins_pct": big_wins,
         "big_losses_pct": big_losses,
     })
+    base_stats["expected_hold_score"] = expected_hold_score_from_stat(base_stats)
     return base_stats
 
 
@@ -1191,6 +1449,7 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
     score95 = max(score95, ATR_EPS)
 
     # Regime score (multi-factor bull/bear detection)
+    ma50_exit = rolling_mean_np(c, 50, 20)
     ma200 = rolling_mean_np(c, 200, 50)
     regime_score = compute_regime_score(c, ma200, vol_rank)
 
@@ -1220,18 +1479,34 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
         r1_prev[1:] = 2.0 * pivot_prev[1:] - l[:-1]
         s1_prev[1:] = 2.0 * pivot_prev[1:] - h[:-1]
 
+    min_hold_bars = int(max(0, getattr(gp, "min_hold_bars", 3)))
+    early_exit_block_bars = int(max(min_hold_bars, getattr(gp, "early_exit_block_bars", min_hold_bars)))
+    profit_take_min_bars = int(max(min_hold_bars, getattr(gp, "profit_take_min_bars", min_hold_bars)))
+    early_take_quality_gate = float(np.clip(getattr(gp, "early_take_quality_gate", 0.0), 0.0, 1.0))
+    early_take_score_decay_max = float(np.clip(getattr(gp, "early_take_score_decay_max", 0.35), 0.0, 1.0))
+
     equity = 1.0
     peak = 1.0
     mdd = 0.0
     trade_rets = []
     trade_exit_types = []  # "stop", "take", "time", "hard_loss"
     trade_hold_bars = []
+    trade_rets_after_3 = []
+    trade_target_after_3 = []
     pos = 0
     entry_px = np.nan
+    entry_bar_idx = -1
+    entry_side = 0
+    entry_take_abs = 0.0
+    realized_partial_ret = 0.0
     bars = 0
     partial_taken = False
     partial_taken_2 = False
     max_fav = 0.0  # track maximum favorable excursion for trailing stop
+    entry_score_strength = 0.0
+    early_take_deferred_events = 0
+    early_take_events = 0
+    early_take_dependency_events = 0
     consec_long = 0
     consec_short = 0
     consec_stops = 0
@@ -1239,6 +1514,38 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
     exposure_acc = 0.0
     current_drawdown_duration = 0
     max_drawdown_duration = 0
+
+    def _after_3_snapshot_ret() -> Tuple[Optional[float], bool]:
+        if entry_bar_idx < 0 or entry_px <= 0.0 or entry_side == 0:
+            return None, False
+        idx3 = entry_bar_idx + 3
+        if idx3 >= n:
+            return None, False
+        gross = (float(c[idx3]) / max(entry_px, ATR_EPS) - 1.0) * float(entry_side)
+        net = gross - COST_PER_TRADE_PCT
+        if net > 0.0:
+            net *= (1.0 - IR_SWING_PCT)
+        lo = min(n, idx3 + 1)
+        if entry_side > 0:
+            max_fav_3 = float(np.nanmax(h[entry_bar_idx + 1:lo] - entry_px)) if lo > entry_bar_idx + 1 else 0.0
+        else:
+            max_fav_3 = float(np.nanmax(entry_px - l[entry_bar_idx + 1:lo])) if lo > entry_bar_idx + 1 else 0.0
+        target_hit_3 = bool(max_fav_3 >= max(entry_take_abs, ATR_EPS))
+        return float(net), target_hit_3
+
+    def _record_trade(ret: float, exit_type: str, hold_bars: float) -> None:
+        nonlocal early_take_events, early_take_dependency_events
+        after3_ret, target_hit_3 = _after_3_snapshot_ret()
+        if after3_ret is not None:
+            trade_rets_after_3.append(after3_ret)
+            trade_target_after_3.append(target_hit_3)
+        if exit_type == "take" and hold_bars < 3.0:
+            early_take_events += 1
+            if after3_ret is not None and after3_ret <= 0.0:
+                early_take_dependency_events += 1
+        trade_rets.append(float(ret))
+        trade_exit_types.append(str(exit_type))
+        trade_hold_bars.append(float(max(1.0, hold_bars)))
 
     for i in range(1, n):
         if cooldown > 0:
@@ -1250,9 +1557,9 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
             bars += 1
             # -- Dynamic stop tightening --
             tighten = 1.0
-            if bars >= gp.stop_tighten_after_bars:
+            if bars >= max(int(gp.stop_tighten_after_bars), min_hold_bars):
                 tighten = gp.stop_tighten_factor
-            elif bars >= 3:
+            elif bars >= max(3, min_hold_bars):
                 # Early P&L: tighten if underwater after 3+ bars
                 early_pnl = (c[i - 1] / max(entry_px, ATR_EPS) - 1.0) * np.sign(pos)
                 if early_pnl < -0.002:
@@ -1270,21 +1577,53 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
             hard_loss = abs(o[i] / max(entry_px, ATR_EPS) - 1.0)
 
             if hard_loss > gp.max_loss_per_trade_pct:
-                ret = (o[i] / entry_px - 1.0) * pos - COST_PER_TRADE_PCT
-                equity *= (1.0 + ret)
-                trade_rets.append(ret)
-                trade_exit_types.append("hard_loss")
-                trade_hold_bars.append(float(max(1, bars)))
-                consec_stops += 1 if ret < 0 else 0
-                if ret > 0:
+                final_leg_ret = (o[i] / entry_px - 1.0) * pos - COST_PER_TRADE_PCT
+                trade_ret = float(realized_partial_ret + final_leg_ret)
+                equity *= (1.0 + final_leg_ret)
+                _record_trade(trade_ret, "hard_loss", float(max(1, bars)))
+                consec_stops += 1 if trade_ret < 0 else 0
+                if trade_ret > 0:
                     consec_stops = 0
                 pos = 0
+                entry_bar_idx = -1
+                entry_side = 0
+                entry_take_abs = 0.0
+                realized_partial_ret = 0.0
+                bars = 0
+                partial_taken = False
+                partial_taken_2 = False
                 max_fav = 0.0
+                entry_score_strength = 0.0
                 continue
 
             fav = ((h[i] - entry_px) if pos > 0 else (entry_px - l[i]))
             adv = ((entry_px - l[i]) if pos > 0 else (h[i] - entry_px))
             max_fav = max(max_fav, fav)
+
+            def _should_defer_early_take() -> bool:
+                if profit_take_min_bars <= 0 or bars >= profit_take_min_bars:
+                    return False
+                if early_take_quality_gate <= 1e-12:
+                    return True
+                if pos < 0:
+                    return False
+                idx_prev = max(0, i - 1)
+                signed_score = float(score_ev[idx_prev]) * float(np.sign(pos))
+                score_strength_now = float(np.clip(signed_score / score95, 0.0, 1.0)) if np.isfinite(signed_score) else 0.0
+                score_decay = max(0.0, float(entry_score_strength) - score_strength_now)
+                pivot_ok = (not np.isfinite(pivot_prev[idx_prev])) or (c[idx_prev] >= pivot_prev[idx_prev])
+                support_ok = (not np.isfinite(s1_prev[idx_prev])) or (c[idx_prev] >= s1_prev[idx_prev])
+                trend_ok = True
+                if np.isfinite(ma50_exit[idx_prev]) and np.isfinite(ma200[idx_prev]):
+                    ma50_rising = idx_prev < 5 or ma50_exit[idx_prev] >= ma50_exit[max(0, idx_prev - 5)]
+                    trend_ok = c[idx_prev] >= ma200[idx_prev] and (ma50_exit[idx_prev] >= ma200[idx_prev] or ma50_rising)
+                return bool(
+                    score_strength_now >= early_take_quality_gate
+                    and score_decay <= early_take_score_decay_max
+                    and pivot_ok
+                    and support_ok
+                    and trend_ok
+                )
 
             # -- Trailing stop logic --
             effective_stop = stop_abs
@@ -1295,30 +1634,50 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
                     # Mode 2: trail at 50% of max favorable excursion
                     effective_stop = 0.5 * max_fav
 
-            if gp.partial_take_pct > 0 and (not partial_taken) and fav >= gp.partial_take_level * stop_abs:
+            early_profit_threshold = take_abs
+            if gp.partial_take_pct > 0:
+                early_profit_threshold = min(early_profit_threshold, gp.partial_take_level * stop_abs)
+            if gp.partial_take_pct_2 > 0 and partial_taken:
+                early_profit_threshold = min(early_profit_threshold, gp.partial_take_level_2 * stop_abs)
+            defer_early_take = _should_defer_early_take() if fav >= early_profit_threshold else False
+            profit_take_allowed = (bars >= profit_take_min_bars) or (not defer_early_take)
+            if defer_early_take:
+                early_take_deferred_events += 1
+
+            partial_take_allowed = profit_take_allowed or (defer_early_take and bars < profit_take_min_bars)
+
+            if partial_take_allowed and gp.partial_take_pct > 0 and (not partial_taken) and fav >= gp.partial_take_level * stop_abs:
                 part_ret = gp.partial_take_pct * gp.partial_take_level * stop_abs / max(entry_px, ATR_EPS)
-                equity *= (1.0 + part_ret - 0.0003)
+                net_part_ret = part_ret - 0.0003
+                equity *= (1.0 + net_part_ret)
+                realized_partial_ret += float(net_part_ret)
                 pos = pos * (1.0 - gp.partial_take_pct)
                 partial_taken = True
 
             # 2nd partial take at higher level
-            if gp.partial_take_pct_2 > 0 and partial_taken and (not partial_taken_2) and fav >= gp.partial_take_level_2 * stop_abs:
+            if partial_take_allowed and gp.partial_take_pct_2 > 0 and partial_taken and (not partial_taken_2) and fav >= gp.partial_take_level_2 * stop_abs:
                 part_ret2 = gp.partial_take_pct_2 * gp.partial_take_level_2 * stop_abs / max(entry_px, ATR_EPS)
-                equity *= (1.0 + part_ret2 - 0.0003)
+                net_part_ret2 = part_ret2 - 0.0003
+                equity *= (1.0 + net_part_ret2)
+                realized_partial_ret += float(net_part_ret2)
                 pos = pos * (1.0 - gp.partial_take_pct_2)
                 partial_taken_2 = True
 
             # Use effective_stop for trailing, but original stop_abs for take/time
             trail_adv = max_fav - fav  # how far price pulled back from best
-            stop_hit = (adv >= stop_abs) if gp.trailing_stop_mode == 0 else (trail_adv >= effective_stop if max_fav > stop_abs else adv >= stop_abs)
-            take_hit = fav >= take_abs
-            time_stop = (bars >= gp.time_stop_bars) and (fav < 0.5 * stop_abs)
+            trailing_active = gp.trailing_stop_mode > 0 and max_fav > stop_abs
+            base_stop_hit = (adv >= stop_abs) if gp.trailing_stop_mode == 0 else ((not trailing_active) and adv >= stop_abs)
+            trailing_stop_hit = trailing_active and trail_adv >= effective_stop
+            stop_hit = bool(base_stop_hit or (bars >= early_exit_block_bars and trailing_stop_hit))
+            exit_reason = "stop" if base_stop_hit else ("trailing" if (bars >= early_exit_block_bars and trailing_stop_hit) else "")
+            take_hit = profit_take_allowed and (fav >= take_abs)
+            time_stop = (bars >= max(int(gp.time_stop_bars), min_hold_bars)) and (fav < 0.5 * stop_abs)
 
             if stop_hit or take_hit or time_stop:
                 exit_px = c[i]
                 if stop_hit:
                     # For trailing stop: exit at trailed level, not original stop
-                    if gp.trailing_stop_mode > 0 and max_fav > stop_abs:
+                    if exit_reason == "trailing":
                         trail_stop_px = entry_px + np.sign(pos) * (max_fav - effective_stop)
                         ideal_exit = trail_stop_px
                     else:
@@ -1343,26 +1702,32 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
                 # IR: 15% sobre lucro (swing trade, isenção mensal ignorada por conservadorismo)
                 if net_ret > 0:
                     net_ret = net_ret * (1.0 - IR_SWING_PCT)
-                ret = net_ret
-                equity *= (1.0 + ret)
-                trade_rets.append(ret)
+                trade_ret = float(realized_partial_ret + net_ret)
+                equity *= (1.0 + net_ret)
                 # Track exit type for win_rate_target metric
                 if take_hit:
-                    trade_exit_types.append("take")
+                    _exit_type = "take"
+                elif exit_reason == "trailing":
+                    _exit_type = "trailing"
                 elif stop_hit:
-                    trade_exit_types.append("stop")
+                    _exit_type = "stop"
                 else:
-                    trade_exit_types.append("time")
-                trade_hold_bars.append(float(max(1, bars)))
-                if stop_hit and ret < 0:
+                    _exit_type = "time"
+                _record_trade(trade_ret, _exit_type, float(max(1, bars)))
+                if exit_reason == "stop" and trade_ret < 0:
                     consec_stops += 1
-                elif ret > 0:
+                elif trade_ret > 0:
                     consec_stops = 0
                 pos = 0
+                entry_bar_idx = -1
+                entry_side = 0
+                entry_take_abs = 0.0
+                realized_partial_ret = 0.0
                 bars = 0
                 partial_taken = False
                 partial_taken_2 = False
                 max_fav = 0.0
+                entry_score_strength = 0.0
                 if gp.consecutive_loss_cooldown > 0 and consec_stops >= 2:
                     cooldown = gp.consecutive_loss_cooldown
                 continue
@@ -1460,17 +1825,27 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
                 if fill and limit_px > 0:
                     pos = side
                     entry_px = float(limit_px)
+                    entry_bar_idx = i
+                    entry_side = int(side)
+                    entry_take_abs = float(gp.reward_risk_ratio * max(ATR_EPS, gp.stop_atr_mult * max(atr[i], ATR_EPS)))
+                    realized_partial_ret = 0.0
                     bars = 0
                     partial_taken = False
                     partial_taken_2 = False
                     max_fav = 0.0
+                    entry_score_strength = strength
                 elif np.isfinite(o[i]) and o[i] > 0:
                     pos = side
                     entry_px = float(o[i])
+                    entry_bar_idx = i
+                    entry_side = int(side)
+                    entry_take_abs = float(gp.reward_risk_ratio * max(ATR_EPS, gp.stop_atr_mult * max(atr[i], ATR_EPS)))
+                    realized_partial_ret = 0.0
                     bars = 0
                     partial_taken = False
                     partial_taken_2 = False
                     max_fav = 0.0
+                    entry_score_strength = strength
 
         peak = max(peak, equity)
         drawdown = (equity / max(peak, ATR_EPS)) - 1.0
@@ -1494,6 +1869,11 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
         mdd=float(mdd),
         n_bars=n,
         max_drawdown_duration=max_drawdown_duration,
+        early_take_deferred_events=early_take_deferred_events,
+        trade_rets_after_3=trade_rets_after_3,
+        trade_target_after_3=trade_target_after_3,
+        early_take_events=early_take_events,
+        early_take_dependency_events=early_take_dependency_events,
     )
 
 
@@ -1567,6 +1947,17 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
     mean_mdd          = float(np.mean(mdd_vals))   # negative
     median_mdd        = float(np.median(mdd_vals)) # negative
     alpha_pos_floor   = 0.22 if GA_ALPHA_FOCUS else 0.18
+    op_metrics = operational_metrics_from_stats(per_ticker_stats)
+    op_count = int(op_metrics.get("n_buy_operable", 0) or 0)
+    op_hold_med = float(op_metrics.get("hold_med_operable", 0.0) or 0.0) if op_count >= 5 else med_hold_med
+    op_hold_p75_max = (
+        float(op_metrics.get("max_hold_bars_p75_operable", 0.0) or 0.0)
+        if op_count >= 5 else p75_hold_max
+    )
+    op_expected_hold_score = float(op_metrics.get("expected_hold_score_med_operable", 0.0) or 0.0)
+    op_early_take_dependency = float(op_metrics.get("early_take_dependency_med_operable", 1.0))
+    op_swing_survival_3d = float(op_metrics.get("swing_survival_3d_med_operable", 0.0) or 0.0)
+    op_wr_after_3 = float(op_metrics.get("wr_after_3_bars_med_operable", 0.0) or 0.0)
 
     # -- Activity bonus/penalty --------------------------------------------
     # Target: 15-80 trades per year per ticker. Penalise extremes.
@@ -1824,20 +2215,27 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
         drawdown_duration_penalty += (mean_mdd_duration_years - 0.20) * 1.5
 
     swing_bonus = 0.0
-    if mean_hold_avg < 2.0:
-        swing_bonus -= (2.0 - mean_hold_avg) * 0.40
-    elif mean_hold_avg <= 18.0:
-        swing_bonus += min(mean_hold_avg - 2.0, 8.0) * 0.10
-    elif mean_hold_avg > 30.0:
-        swing_bonus -= (mean_hold_avg - 30.0) * 0.08
-    if med_hold_med >= 3.0 and med_hold_med <= 15.0:
-        swing_bonus += 0.90
-    elif med_hold_med > 22.0:
-        swing_bonus -= (med_hold_med - 22.0) * 0.07
-    elif med_hold_med < 2.0:
-        swing_bonus -= (2.0 - med_hold_med) * 0.20
-    if p75_hold_max > 45.0:
-        swing_bonus -= (p75_hold_max - 45.0) * 0.03
+    if op_hold_med < 3.0:
+        swing_bonus -= (3.0 - op_hold_med) * 6.0
+    elif op_hold_med <= 10.0:
+        swing_bonus += 2.0 - min(abs(op_hold_med - 6.5) * 0.18, 1.2)
+    else:
+        swing_bonus -= (op_hold_med - 10.0) * 2.0
+    if op_hold_p75_max > 20.0:
+        swing_bonus -= (op_hold_p75_max - 20.0) * 0.35
+    if op_count >= 5 and not (3.0 <= op_hold_med <= 10.0 and op_hold_p75_max <= 20.0):
+        swing_bonus -= 3.0
+    if op_count >= 5:
+        if op_expected_hold_score < 70.0:
+            swing_bonus -= (70.0 - op_expected_hold_score) * 0.10
+        else:
+            swing_bonus += min((op_expected_hold_score - 70.0) * 0.04, 1.2)
+        if op_early_take_dependency > 0.35:
+            swing_bonus -= (op_early_take_dependency - 0.35) * 8.0
+        if op_swing_survival_3d < 0.55:
+            swing_bonus -= (0.55 - op_swing_survival_3d) * 5.0
+        if op_wr_after_3 < 0.60:
+            swing_bonus -= (0.60 - op_wr_after_3) * 8.0
 
     quality_bonus = sortino_bonus + profit_factor_bonus + expectancy_bonus
     alpha_quality_scale = 1.0
@@ -2055,7 +2453,7 @@ def run_global_ga_20params(
     # -- Warm-start: seed population with previous best genome ------------
     # Even if the model or features changed, the GA trading parameters are
     # model-agnostic, so we can always continue from the last known optimum.
-    if seed_genome is not None and len(seed_genome) == len(GLOBAL_PARAM_SPECS):
+    if seed_genome is not None:
         sanitized_seed = sanitize_global_genome(seed_genome)
         # Seed first individual as exact copy
         pop[0][:] = sanitized_seed
@@ -3590,15 +3988,16 @@ def run():
             prev_genome = ck.get("genome", None)
             n_specs = len(GLOBAL_PARAM_SPECS)
             if prev_genome:
+                prev_genome_original_len = len(prev_genome)
                 if len(prev_genome) < n_specs:
                     for idx in range(len(prev_genome), n_specs):
-                        _, lo, hi, step, is_int = GLOBAL_PARAM_SPECS[idx]
-                        default_val = (lo + hi) / 2.0
+                        name, lo, hi, step, is_int = GLOBAL_PARAM_SPECS[idx]
+                        default_val = _LEGACY_GENE_DEFAULTS.get(name, (lo + hi) / 2.0)
                         default_val = round(default_val / step) * step
                         if is_int:
                             default_val = int(round(default_val))
                         prev_genome.append(default_val)
-                    print(f"[GLOBAL_GA] padded checkpoint genome from {len(ck.get('genome',[]))} to {n_specs} genes")
+                    print(f"[GLOBAL_GA] padded checkpoint genome from {prev_genome_original_len} to {n_specs} genes")
                 elif len(prev_genome) > n_specs:
                     prev_genome = prev_genome[:n_specs]
                 if len(prev_genome) == n_specs:
@@ -3697,6 +4096,44 @@ def run():
     # FASE 3: apply rápido sem GA por ticker
     results_summary: List[Dict[str, Any]] = []
     results_apply: List[Dict[str, Any]] = []
+    _overfit_meta = {
+        "overfit_verdict": "UNKNOWN",
+        "oos_wr_ci_lo": None,
+        "oos_alpha_delta": None,
+    }
+    try:
+        _of_path = os.path.join("analysis", "overfitting_stage_report.json")
+        if os.path.exists(_of_path):
+            with open(_of_path, "r", encoding="utf-8") as _f:
+                _of = json.load(_f)
+            _overfit_meta["overfit_verdict"] = str(_of.get("verdict", "UNKNOWN"))
+            _boot = _of.get("bootstrap_result", {}) or {}
+            _hold = _of.get("holdout_result", {}) or {}
+            _delta = _hold.get("delta_holdout_vs_train", {}) or {}
+            _overfit_meta["oos_wr_ci_lo"] = _boot.get("wr_wilson_lo", _boot.get("wr_ci_5"))
+            _overfit_meta["oos_alpha_delta"] = _delta.get("alpha_ann_mean_operable", _delta.get("mean_alpha_ann"))
+    except Exception:
+        pass
+
+    _recent_diag_map: Dict[str, Dict[str, Any]] = {}
+    try:
+        _recent_path = os.path.join("analysis", "holdout_operability_diagnostic_current.csv")
+        if os.path.exists(_recent_path):
+            _recent_df = pd.read_csv(_recent_path)
+            for _row in _recent_df.to_dict(orient="records"):
+                _ticker_key = str(_row.get("ticker", "") or "").strip()
+                if not _ticker_key:
+                    continue
+                _recent_diag_map[_ticker_key] = {
+                    "recent_operability_score": _row.get("holdout_recent_operability_score"),
+                    "recent_operability_tier": _row.get("holdout_recent_operability_tier", "UNKNOWN"),
+                    "recent_operability_blockers": _row.get("holdout_recent_operability_blockers", ""),
+                }
+    except Exception:
+        _recent_diag_map = {}
+
+    def _recent_diag_for_ticker(_ticker: str) -> Dict[str, Any]:
+        return _recent_diag_map.get(str(_ticker), {})
 
     # Dynamic operational tiers based on CURRENT model snapshot
     # (swing-trade usability), not on stale offline JSON. Ported from codex branch.
@@ -3708,23 +4145,7 @@ def run():
         only on beating buy&hold, because the user prioritizes hit rate and
         operational safety.
         """
-        if (
-            _n_trades >= 30
-            and _wr >= 0.74
-            and _wr_tgt >= 0.72
-            and _alpha_ann >= -0.12
-            and _mdd_abs <= 0.13
-        ):
-            return "PREMIUM"
-        if (
-            _n_trades >= 20
-            and _wr >= 0.67
-            and _wr_tgt >= 0.65
-            and _alpha_ann >= -0.20
-            and _mdd_abs <= 0.16
-        ):
-            return "HIGH_QUAL"
-        return "REGULAR"
+        return classify_operational_universe_tier(_wr, _wr_tgt, _alpha_ann, _mdd_abs, _n_trades)
 
     n_tickers_phase3 = len(store.tickers)
     for ix_tkr, tkr in enumerate(store.tickers, 1):
@@ -4211,10 +4632,13 @@ def run():
             tighten_days = int(global_params.stop_tighten_after_bars)
             tighten_factor = global_params.stop_tighten_factor
             time_stop = int(global_params.time_stop_bars)
+            min_hold = int(getattr(global_params, "min_hold_bars", 3))
+            profit_take_min = int(getattr(global_params, "profit_take_min_bars", min_hold))
             hard_stop_pct = global_params.max_loss_per_trade_pct * 100
             exit_rules = (
                 f"Stop: -{stop_pct_val:.1f}% ({global_params.stop_atr_mult:.1f}xATR, breakeven); "
                 f"Take: +{alvo_pct_val:.1f}% (R:R {rr_display}:1); "
+                f"MinHold: {min_hold}d; TakeMin: {profit_take_min}d; "
                 f"Tight: {tighten_factor:.1f}xATR apos {tighten_days}d; "
                 f"TimeStop: {time_stop}d; "
                 f"HardStop: {hard_stop_pct:.0f}% gap"
@@ -4256,6 +4680,22 @@ def run():
                 - _low_wr_rank_penalty        # penalidade WR < 60%
                 + _universe_boost             # boost universe quality
             , 1)
+            operable = _univ_tag in ("PREMIUM", "HIGH_QUAL")
+            entry_score = float(np.clip(
+                0.25 * confidence
+                + 0.20 * upside_score
+                + 0.15 * rank_score
+                + 0.15 * q_timing_pre * 100.0
+                + 0.10 * q_pivot_pre * 100.0
+                + 0.10 * bt_win_rate * 100.0
+                + 0.05 * bt_win_rate_target * 100.0,
+                0.0,
+                100.0,
+            ))
+            expected_hold_score = float(st.get("expected_hold_score", expected_hold_score_from_stat(st)) or 0.0)
+            early_take_dependency = float(st.get("early_take_dependency", 0.0) or 0.0)
+            alpha_ann_current = float(st.get("alpha_ann", 0.0) or 0.0)
+            exit_score = 0.0
 
             # ── CLASSIFICACAO DE POTENCIAL (pre-override, sera recalculado abaixo) ──
             _net_pct = (take_reward / max(entry_ref, ATR_EPS) - COST_PER_TRADE_PCT) * (1.0 - IR_SWING_PCT)
@@ -4312,6 +4752,16 @@ def run():
             _above_r1 = close_val > r1
             _above_s1 = close_val > s1
             _regime_str = "favoravel" if regime_val >= 0.6 else ("neutro" if regime_val >= 0.3 else "desfavoravel")
+            exit_score = float(np.clip(
+                (100.0 if stage_num == 4 else 70.0 if stage_num == 3 else 20.0)
+                + (20.0 if close_val < pivot else 0.0)
+                + (20.0 if not _above_s1 else 0.0)
+                + (15.0 if close_val >= r1 or close_val >= take_profit else 0.0)
+                + (15.0 if sig == "sell" else 0.0)
+                + (10.0 if queda_max_esperada > potential else 0.0),
+                0.0,
+                100.0,
+            ))
 
             # ── Entrada/Stop/Alvo em FUNCAO de Pivot/S1/R1 ──
             # Regra operacional classica:
@@ -4387,14 +4837,30 @@ def run():
             # Signal final (que vai para o usuario)
             sig = final_sig
 
-            # Gate de potencial minimo (APOS coerce + pivot override)
-            # Usa take_profit final (ja ajustado por R1/pivot)
-            # Abaixo de 5% nao compensa custos (0.55% + 15% IR)
-            if sig == "buy":
-                _final_alvo_pct = (take_profit - best_buy) / max(best_buy, ATR_EPS)
-                if _final_alvo_pct < 0.05:
-                    sig = "hold"
-                    _low_wr_reason = f"Potencial {_final_alvo_pct*100:.1f}% < 5% (nao compensa custos)"
+            # Gate operacional Premium/HQ (APOS coerce + pivot override).
+            _final_alvo_pct = (take_profit - best_buy) / max(best_buy, ATR_EPS)
+            _final_net_pct = (_final_alvo_pct - COST_PER_TRADE_PCT) * (1.0 - IR_SWING_PCT)
+            sig, _op_gate_reason = enforce_operational_buy_gate(
+                sig,
+                operable=operable,
+                stage_num=stage_num,
+                timing_sub=timing_sub,
+                estagio=estagio,
+                entry_score=entry_score,
+                confidence=confidence,
+                rank_score=rank_score,
+                net_potential_pct=_final_net_pct,
+                close_val=close_val,
+                pivot=pivot,
+                s1=s1,
+                r1=r1,
+                expected_hold_score=expected_hold_score,
+                early_take_dependency=early_take_dependency,
+                alpha_ann=alpha_ann_current,
+            )
+            if _op_gate_reason:
+                _low_wr_reason = _op_gate_reason
+            final_sig = sig
 
             # ═══════════════════════════════════════════════════════════════
             # AJUSTE DE RANK/POTENCIAL baseado no signal final
@@ -4653,6 +5119,32 @@ def run():
                 _cancel_val = round(_cancel, 4)
             except (NameError, TypeError):
                 _cancel_val = round(pivot, 4) if final_sig != "sell" else None
+            try:
+                _hold_target_days = int(round(np.clip(float(st.get("median_hold_bars", 5.0) or 5.0), 3, 10)))
+            except Exception:
+                _hold_target_days = 5
+            try:
+                _oos_wr_ci_lo = _overfit_meta.get("oos_wr_ci_lo")
+                _oos_wr_ci_lo = round(float(_oos_wr_ci_lo), 4) if _oos_wr_ci_lo is not None else None
+            except Exception:
+                _oos_wr_ci_lo = None
+            try:
+                _oos_alpha_delta = _overfit_meta.get("oos_alpha_delta")
+                _oos_alpha_delta = round(float(_oos_alpha_delta), 4) if _oos_alpha_delta is not None else None
+            except Exception:
+                _oos_alpha_delta = None
+            _recent_diag = _recent_diag_for_ticker(tkr)
+            try:
+                _recent_operability_score = _recent_diag.get("recent_operability_score")
+                _recent_operability_score = (
+                    round(float(_recent_operability_score), 1)
+                    if _recent_operability_score not in (None, "")
+                    else None
+                )
+            except Exception:
+                _recent_operability_score = None
+            _recent_operability_tier = str(_recent_diag.get("recent_operability_tier", "UNKNOWN") or "UNKNOWN")
+            _recent_operability_blockers = str(_recent_diag.get("recent_operability_blockers", "") or "")
 
             results_apply.append({
                 # === Identificacao (esquerda) ===
@@ -4686,6 +5178,27 @@ def run():
                 "wr_ci_hi": round(bt_ci_hi * 100, 1),            # upper bound Wilson 95%
                 "stat_conf": _stat_label,                          # 'CI [X-Y%]' ou 'low CI [..]' ou 'insuf. n<10'
                 "universe": _univ_tag,  # PREMIUM/HIGH_QUAL/REGULAR (dynamic from current metrics)
+                "operable": bool(operable),
+                "entry_score": round(entry_score, 1),
+                "expected_hold_score": round(expected_hold_score, 1),
+                "exit_score": round(exit_score, 1),
+                "hold_target_days": _hold_target_days,
+                "wr_after_3_bars": round(float(st.get("wr_after_3_bars", 0.0) or 0.0) * 100.0, 1),
+                "target_wr_after_3_bars": round(float(st.get("target_wr_after_3_bars", 0.0) or 0.0) * 100.0, 1),
+                "alpha_after_3_bars": round(float(st.get("alpha_after_3_bars", 0.0) or 0.0) * 100.0, 1),
+                "early_take_dependency": round(early_take_dependency * 100.0, 1),
+                "swing_survival_3d": round(float(st.get("swing_survival_3d", 0.0) or 0.0) * 100.0, 1),
+                "early_exit_pct": round(float(st.get("pct_exit_early", 0.0) or 0.0) * 100.0, 1),
+                "early_take_pct": round(float(st.get("pct_early_exit_take", 0.0) or 0.0) * 100.0, 1),
+                "exit_take_pct": round(float(st.get("pct_exit_take", 0.0) or 0.0) * 100.0, 1),
+                "exit_trailing_pct": round(float(st.get("pct_exit_trailing", 0.0) or 0.0) * 100.0, 1),
+                "early_take_defer": round(float(st.get("early_take_defer_per_trade", 0.0) or 0.0), 2),
+                "overfit_verdict": _overfit_meta.get("overfit_verdict", "UNKNOWN"),
+                "oos_wr_ci_lo": _oos_wr_ci_lo,
+                "oos_alpha_delta": _oos_alpha_delta,
+                "recent_operability_score": _recent_operability_score,
+                "recent_operability_tier": _recent_operability_tier,
+                "recent_operability_blockers": _recent_operability_blockers,
                 "queda_max": round(queda_max_esperada * 100, 1),
                 "regime": _regime_str,
                 # === Auditoria ===
@@ -4722,7 +5235,17 @@ def run():
     )
 
     # Schema validation: ensure required columns exist before saving
-    required_apply_cols = {"Date", "ticker", "recomendacao", "potencial_pct", "signal", "estagio", "confidence", "rank", "close", "entrada", "stop", "alvo", "RR"}
+    required_apply_cols = {
+        "Date", "ticker", "recomendacao", "potencial_pct", "signal", "estagio",
+        "confidence", "rank", "close", "entrada", "stop", "alvo", "RR",
+        "operable", "entry_score", "expected_hold_score", "exit_score", "hold_target_days",
+        "wr_after_3_bars", "target_wr_after_3_bars", "alpha_after_3_bars",
+        "early_take_dependency", "swing_survival_3d",
+        "early_exit_pct", "early_take_pct", "exit_take_pct",
+        "exit_trailing_pct", "early_take_defer",
+        "overfit_verdict", "oos_wr_ci_lo", "oos_alpha_delta",
+        "recent_operability_score", "recent_operability_tier", "recent_operability_blockers",
+    }
     required_summary_cols = {"ticker", "test_return", "test_mdd", "test_sharpe", "test_trades", "test_win_rate"}
     if not df_app.empty:
         missing_apply = sorted(required_apply_cols - set(df_app.columns))
@@ -4910,11 +5433,28 @@ def run():
                             "Tier operacional do modelo atual:\n"
                             "PREMIUM = WR>=74%, WR alvo>=72%, alpha_ann>=-12pp, MDD<=13%, >=30 trades\n"
                             "HIGH_QUAL = WR>=67%, WR alvo>=65%, alpha_ann>=-20pp, MDD<=16%, >=20 trades\n"
+                            "Apenas PREMIUM/HIGH_QUAL pode sair como BUY operacional\n"
                             "REGULAR = demais\n"
                             f"Hoje: PREMIUM={_universe_counts.get('PREMIUM', 0)} | "
                             f"HIGH_QUAL={_universe_counts.get('HIGH_QUAL', 0)} | "
                             f"REGULAR={_universe_counts.get('REGULAR', 0)}"
                         ),
+                        "operable": "True quando universe e PREMIUM ou HIGH_QUAL. REGULAR vira HOLD/OBSERVAR.",
+                        "entry_score": "0-100: qualidade de entrada combinando confidence, rank, timing, pivot e WR.",
+                        "expected_hold_score": "0-100: probabilidade de o edge sobreviver a 3+ pregoes sem depender de take profit cedo.",
+                        "exit_score": "0-100: risco de saida/reducao por alvo/R1, Stage 3/4, perda de pivot/S1/MA50, sell GA ou downside.",
+                        "hold_target_days": "Holding operacional alvo em pregoes, limitado a 3-10 para swing trade.",
+                        "wr_after_3_bars": "Win rate hipotetico se cada trade fosse marcado no terceiro pregao.",
+                        "target_wr_after_3_bars": "Percentual de trades que ainda atingiriam alvo dentro da janela de 3 pregoes.",
+                        "alpha_after_3_bars": "Alpha anualizado aproximado do edge marcado no terceiro pregao.",
+                        "early_take_dependency": "% de takes antes de 3 pregoes que perderiam dinheiro se segurados ate o terceiro pregao.",
+                        "swing_survival_3d": "% de trades historicos que chegam a 3+ pregoes.",
+                        "overfit_verdict": "Ultimo verdict do relatorio OOS/overfit: CLEAN, MARGINAL, OVERFIT ou UNKNOWN.",
+                        "oos_wr_ci_lo": "Lower bound Wilson/OOS do WR no universo operavel, quando disponivel.",
+                        "oos_alpha_delta": "Delta de alpha OOS vs treino no universo operavel, quando disponivel.",
+                        "recent_operability_score": "0-100: triagem OOS recente para priorizar candidatos; nao libera BUY nem promocao sozinha.",
+                        "recent_operability_tier": "RECENT_READY, RECENT_WATCH ou RECENT_WEAK no holdout recente.",
+                        "recent_operability_blockers": "Motivos que impedem o ticker de virar candidato recente forte.",
                         "regime": "Regime de mercado: favoravel/neutro/desfavoravel",
                         "signal_ga": "Sinal bruto do GA antes do override por stage (auditoria)",
                     }
@@ -4936,7 +5476,14 @@ def run():
                         "pivot": 10, "r1": 10, "s1": 10,
                         "rank": 8, "confidence": 11, "win_rate": 10, "wr_alvo": 10,
                         "n_trades": 9, "wr_ci_lo": 10, "wr_ci_hi": 10, "stat_conf": 20,
-                        "universe": 11,
+                        "universe": 11, "operable": 9, "entry_score": 12, "expected_hold_score": 18,
+                        "exit_score": 11, "hold_target_days": 16,
+                        "wr_after_3_bars": 16, "target_wr_after_3_bars": 20,
+                        "alpha_after_3_bars": 16, "early_take_dependency": 20,
+                        "swing_survival_3d": 16, "overfit_verdict": 15,
+                        "oos_wr_ci_lo": 12, "oos_alpha_delta": 14,
+                        "recent_operability_score": 20, "recent_operability_tier": 18,
+                        "recent_operability_blockers": 32,
                         "queda_max": 10, "regime": 13, "signal_ga": 10,
                     }
                     for col_idx, col_name in enumerate(df_app.columns):
@@ -4957,8 +5504,8 @@ def run():
 
                     price_cols = {"close", "entrada", "stop", "alvo", "piso"}
                     # Note: venda_pct and trailing removed (always 100% and breakeven with current genome)
-                    score_cols = {"confidence"}
-                    int_cols = {"tight_dias", "time_stop"}
+                    score_cols = {"confidence", "entry_score", "expected_hold_score", "exit_score", "recent_operability_score"}
+                    int_cols = {"tight_dias", "time_stop", "hold_target_days"}
 
                     for row_idx, row in enumerate(df_app.itertuples(index=False), start=1):
                         is_buy = (row.signal == "buy")
