@@ -1804,12 +1804,27 @@ def run_etl():
             return set()
         return set(df.columns.get_level_values(1).astype(str))
 
+    def tickers_in_parquet_schema(path: str) -> set:
+        """Audit saved tickers from parquet metadata without loading the frame."""
+        import ast
+        import pyarrow.parquet as pq
+
+        tickers_found = set()
+        for name in pq.ParquetFile(path).schema_arrow.names:
+            try:
+                parsed = ast.literal_eval(name)
+            except (ValueError, SyntaxError):
+                continue
+            if isinstance(parsed, tuple) and len(parsed) >= 2:
+                tickers_found.add(str(parsed[1]))
+        return tickers_found
+
     expected_saved = tickers_in_dataset_cols(DATASET_FULL)
     print("[AUDIT] tickers in-memory FULL:", len(expected_saved))
 
-    # Round-trip read
-    re_full = pd.read_parquet(OUTPUT_PATH)
-    full_file = tickers_in_dataset_cols(re_full)
+    # Schema-only round-trip audit. Loading the full parquet here can require
+    # another wide-frame allocation immediately after save.
+    full_file = tickers_in_parquet_schema(OUTPUT_PATH)
 
     missing_in_file = sorted(expected_saved - full_file)
     extra_in_file   = sorted(full_file - expected_saved)
@@ -1820,8 +1835,7 @@ def run_etl():
         print("  missing ex:", missing_in_file[:20])
 
     # Reduced
-    re_red = pd.read_parquet(OUT_REDUCED)
-    red_file = tickers_in_dataset_cols(re_red)
+    red_file = tickers_in_parquet_schema(OUT_REDUCED)
     expected_red = tickers_in_dataset_cols(DATASET_REDUCED)
 
     miss_red = sorted(expected_red - red_file)

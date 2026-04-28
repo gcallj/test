@@ -64,7 +64,9 @@ def normalize_before_save(df: pd.DataFrame) -> pd.DataFrame:
     if df is None or df.empty:
         return df
 
-    out = df.copy()
+    # Keep this shallow: ETL frames can be very wide and a deep copy may require
+    # another full-frame allocation just before saving.
+    out = df.copy(deep=False)
 
     # numeric columns: only inf cleanup (cheap)
     num_cols = out.select_dtypes(include=[np.number, "bool", "boolean"]).columns

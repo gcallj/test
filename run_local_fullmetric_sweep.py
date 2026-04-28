@@ -26,6 +26,8 @@ os.environ["GA_ALPHA_FOCUS"] = os.environ.get("GA_ALPHA_FOCUS", "off")
 import ga_run as gr
 import run_local_ga_staged as staged_runner
 
+CACHE_SCHEMA_VERSION = 3
+
 
 DEFAULT_FOCUS_GENES = [
     "stop_atr_mult",
@@ -38,6 +40,11 @@ DEFAULT_FOCUS_GENES = [
     "partial_take_pct_2",
     "partial_take_level_2",
     "trailing_stop_mode",
+    "min_hold_bars",
+    "early_exit_block_bars",
+    "profit_take_min_bars",
+    "early_take_quality_gate",
+    "early_take_score_decay_max",
 ]
 
 
@@ -124,7 +131,7 @@ def main() -> None:
         if (best_ever and best_ever.get("last_best_genome")
                 and float(best_ever.get("best_fit", 0.0))
                     > float(seed_metrics.get("fit", 0.0)) + 0.5):
-            _bev_genome = list(best_ever["last_best_genome"])
+            _bev_genome = gr.sanitize_global_genome(list(best_ever["last_best_genome"]))
             if len(_bev_genome) == len(gr.GLOBAL_PARAM_SPECS):
                 print(f"[SWEEP] BASELINE SWITCH: usando best_ever genome "
                       f"(best_fit={best_ever['best_fit']:.4f} vs "
@@ -185,6 +192,11 @@ def main() -> None:
     multipliers_by_gene = {
         "stop_atr_mult": (-2, -1, 1, 2),
         "time_stop_bars": (-3, -2, -1, 1, 2, 3),
+        "min_hold_bars": (1, 2, 3, 4, 5),
+        "early_exit_block_bars": (1, 2, 3, 4, 5),
+        "profit_take_min_bars": (1, 2, 3, 4, 5),
+        "early_take_quality_gate": (2, 3, 4, 5, 6, 7, 8),
+        "early_take_score_decay_max": (-4, -2, -1, 1, 2, 4, 6),
         "stop_tighten_after_bars": (-2, -1, 1, 2),
         "reward_risk_ratio": (-1, 1, 2),
         # v5: current=1.0 (lenient), range 0.0-1.0 step 0.1 — so moves sao negativos
@@ -235,7 +247,11 @@ def main() -> None:
         # cada sweep identicos candidates.
         ckey = _combo_key(genome)
         _cached = tried_combos.get(ckey)
-        if _cached and isinstance(_cached.get("metrics"), dict):
+        if (
+            _cached
+            and int(_cached.get("schema_version", 0) or 0) >= CACHE_SCHEMA_VERSION
+            and isinstance(_cached.get("metrics"), dict)
+        ):
             metrics = dict(_cached["metrics"])
             metrics["_cache_hit"] = True
             metrics["eval_time_s"] = 0.0
@@ -247,21 +263,11 @@ def main() -> None:
             _cache_misses += 1
             # Armazena no cache (apenas metrics essenciais pra caber 5000 entries)
             tried_combos[ckey] = {
+                "schema_version": CACHE_SCHEMA_VERSION,
                 "when": datetime.now().astimezone().isoformat(timespec="seconds"),
                 "metrics": {
-                    "fit": metrics.get("fit"),
-                    "wr_med_all": metrics.get("wr_med_all"),
-                    "wr_target_med_all": metrics.get("wr_target_med_all"),
-                    "mean_alpha_ann": metrics.get("mean_alpha_ann"),
-                    "alpha_ann_pos_rate": metrics.get("alpha_ann_pos_rate"),
-                    "n_ge_70": metrics.get("n_ge_70"),
-                    "trades_med": metrics.get("trades_med"),
-                    "mdd_med": metrics.get("mdd_med"),
-                    "mdd_p75": metrics.get("mdd_p75"),
-                    "mdd_duration_med": metrics.get("mdd_duration_med"),
-                    "avg_hold_bars_med": metrics.get("avg_hold_bars_med"),
-                    "median_hold_bars_med": metrics.get("median_hold_bars_med"),
-                    "max_hold_bars_p75": metrics.get("max_hold_bars_p75"),
+                    k: v for k, v in metrics.items()
+                    if isinstance(v, (int, float, bool)) or v is None
                 },
             }
         decision = staged_runner._candidate_beats_incumbent(metrics, base_metrics, seed_metrics)
@@ -321,6 +327,10 @@ def main() -> None:
                 return
             seen_pairs.add(pair_key)
             target.append((left, right))
+
+        for i in range(len(anchor_sorted)):
+            for j in range(i + 1, len(anchor_sorted)):
+                _append_pair(anchored_pairs, anchor_sorted[i], anchor_sorted[j])
 
         for anchor in anchor_sorted:
             for partner in top_for_combo:

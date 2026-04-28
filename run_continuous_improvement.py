@@ -31,6 +31,9 @@ ja explorou A/B/E em 2026-04; D e F continuam virgens):
                        volatility_filter_percentile, regime_threshold,
                        volume_confirm_mode, momentum_confirm_days
   F. trailing:         trailing_stop_mode
+  G. exit_quality:     min_hold_bars, early_exit_block_bars,
+                       profit_take_min_bars, early_take_quality_gate,
+                       early_take_score_decay_max
 
 Modo de uso:
   # Um ciclo (selecao automatica de categoria)
@@ -110,6 +113,13 @@ GENE_CATEGORIES = {
     "F_trailing": [
         "trailing_stop_mode",
     ],
+    "G_exit_quality": [
+        "min_hold_bars",
+        "early_exit_block_bars",
+        "profit_take_min_bars",
+        "early_take_quality_gate",
+        "early_take_score_decay_max",
+    ],
 }
 
 
@@ -127,7 +137,11 @@ def _load_state() -> dict:
             "total_cycles": 0,
             "total_promotions": 0,
         }
-    return json.loads(STATE_FILE.read_text(encoding="utf-8"))
+    state = json.loads(STATE_FILE.read_text(encoding="utf-8"))
+    cats = state.setdefault("categories", {})
+    for cat in GENE_CATEGORIES:
+        cats.setdefault(cat, {"last_swept": None, "n_runs": 0, "n_promotions": 0})
+    return state
 
 
 def _save_state(state: dict) -> None:

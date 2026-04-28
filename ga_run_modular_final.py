@@ -100,6 +100,12 @@ GLOBAL_PARAM_SPECS = [
     # ATR-based (coerente com v5). Range [0.0, 2.0] step 0.25.
     ("resistance_overext_gate", 0.0, 2.0, 0.25, False),
     ("support_broken_gate", 0.0, 2.0, 0.25, False),
+    # -- NEW v10 genes: swing holding controls (3-10 pregões target) --
+    ("min_hold_bars", 0.0, 5.0, 1.0, True),
+    ("early_exit_block_bars", 0.0, 5.0, 1.0, True),
+    ("profit_take_min_bars", 0.0, 5.0, 1.0, True),
+    ("early_take_quality_gate", 0.0, 1.0, 0.10, False),
+    ("early_take_score_decay_max", 0.0, 1.0, 0.05, False),
 ]
 
 # Backward-compat default para genomas antigos (mirror de ga_run.py).
@@ -108,6 +114,11 @@ _LEGACY_GENE_DEFAULTS = {
     "entry_aggressiveness": 1.0,
     "resistance_overext_gate": 0.0,
     "support_broken_gate": 0.0,
+    "min_hold_bars": 0.0,
+    "early_exit_block_bars": 0.0,
+    "profit_take_min_bars": 0.0,
+    "early_take_quality_gate": 0.0,
+    "early_take_score_decay_max": 0.35,
 }
 
 
@@ -153,6 +164,12 @@ class GlobalParams:
     # -- NEW v7 genes (Fase 2: Woodie R1/S1 gates) --
     resistance_overext_gate: float  # 0.0=off, 0.20=bloqueia se close>R1*1.20
     support_broken_gate: float      # 0.0=off, 0.20=bloqueia se close<S1*0.80
+    # -- NEW v10 genes (swing holding controls) --
+    min_hold_bars: int
+    early_exit_block_bars: int
+    profit_take_min_bars: int
+    early_take_quality_gate: float
+    early_take_score_decay_max: float
 
 
 def sanitize_global_genome(genome: List[float]) -> List[float]:
@@ -371,12 +388,97 @@ def _extract_alpha_ann(stat: Dict[str, float]) -> float:
     return float(stat.get("excess_return", stat.get("total_return", 0.0)))
 
 
+def _classify_operational_universe_tier(
+    win_rate: float,
+    win_rate_target: float,
+    alpha_ann: float,
+    mdd_abs: float,
+    n_trades: int,
+) -> str:
+    wr = float(win_rate or 0.0)
+    wr_tgt = float(win_rate_target or 0.0)
+    alpha = float(alpha_ann or 0.0)
+    mdd = abs(float(mdd_abs or 0.0))
+    trades = int(n_trades or 0)
+    if trades >= 30 and wr >= 0.74 and wr_tgt >= 0.72 and alpha >= -0.12 and mdd <= 0.13:
+        return "PREMIUM"
+    if trades >= 20 and wr >= 0.67 and wr_tgt >= 0.65 and alpha >= -0.20 and mdd <= 0.16:
+        return "HIGH_QUAL"
+    return "REGULAR"
+
+
+def _operational_metrics_from_stats(per_ticker_stats: List[Dict[str, float]]) -> Dict[str, float]:
+    operable = [
+        s for s in per_ticker_stats
+        if _classify_operational_universe_tier(
+            s.get("win_rate", 0.0),
+            s.get("win_rate_target", 0.0),
+            _extract_alpha_ann(s),
+            abs(float(s.get("mdd", 0.0) or 0.0)),
+            int(s.get("n_trades", 0) or 0),
+        ) in ("PREMIUM", "HIGH_QUAL")
+    ]
+    if not operable:
+        return {
+            "hold_med_operable": 0.0,
+            "max_hold_bars_p75_operable": 0.0,
+            "expected_hold_score_med_operable": 0.0,
+            "early_take_dependency_med_operable": 1.0,
+            "swing_survival_3d_med_operable": 0.0,
+            "wr_after_3_bars_med_operable": 0.0,
+            "target_wr_after_3_bars_med_operable": 0.0,
+            "n_buy_operable": 0,
+        }
+    hold = np.asarray([s.get("median_hold_bars", 0.0) for s in operable], dtype=np.float64)
+    max_hold = np.asarray([s.get("max_hold_bars", 0.0) for s in operable], dtype=np.float64)
+    hold_score = np.asarray([_expected_hold_score_from_stat(s) for s in operable], dtype=np.float64)
+    early_dep = np.asarray([s.get("early_take_dependency", 1.0) for s in operable], dtype=np.float64)
+    survival_3d = np.asarray([s.get("swing_survival_3d", 0.0) for s in operable], dtype=np.float64)
+    wr_after_3 = np.asarray([s.get("wr_after_3_bars", 0.0) for s in operable], dtype=np.float64)
+    tgt_after_3 = np.asarray([s.get("target_wr_after_3_bars", 0.0) for s in operable], dtype=np.float64)
+    return {
+        "hold_med_operable": float(np.median(hold)),
+        "max_hold_bars_p75_operable": float(np.percentile(max_hold, 75)),
+        "expected_hold_score_med_operable": float(np.median(hold_score)),
+        "early_take_dependency_med_operable": float(np.median(early_dep)),
+        "swing_survival_3d_med_operable": float(np.median(survival_3d)),
+        "wr_after_3_bars_med_operable": float(np.median(wr_after_3)),
+        "target_wr_after_3_bars_med_operable": float(np.median(tgt_after_3)),
+        "n_buy_operable": int(len(operable)),
+    }
+
+
+def _expected_hold_score_from_stat(stat: Dict[str, float]) -> float:
+    wr3 = float(stat.get("wr_after_3_bars", stat.get("win_rate", 0.0)) or 0.0)
+    tgt3 = float(stat.get("target_wr_after_3_bars", stat.get("win_rate_target", 0.0)) or 0.0)
+    survival = float(stat.get("swing_survival_3d", 0.0) or 0.0)
+    if "swing_survival_3d" not in stat:
+        survival = 1.0 if float(stat.get("median_hold_bars", 0.0) or 0.0) >= 3.0 else 0.0
+    early_dep = float(stat.get("early_take_dependency", stat.get("pct_early_exit_take", 0.0)) or 0.0)
+    alpha3 = float(stat.get("alpha_after_3_bars", stat.get("alpha_ann", 0.0)) or 0.0)
+    hold_med = float(stat.get("median_hold_bars", 0.0) or 0.0)
+    hold_fit = 1.0 - min(abs(hold_med - 6.5) / 6.5, 1.0) if hold_med > 0.0 else 0.0
+    alpha_component = float(np.clip((alpha3 + 0.08) / 0.16, 0.0, 1.0))
+    score = (
+        32.0 * np.clip(wr3, 0.0, 1.0)
+        + 18.0 * np.clip(tgt3, 0.0, 1.0)
+        + 18.0 * np.clip(survival, 0.0, 1.0)
+        + 14.0 * (1.0 - np.clip(early_dep, 0.0, 1.0))
+        + 10.0 * alpha_component
+        + 8.0 * hold_fit
+    )
+    return float(np.clip(score, 0.0, 100.0))
+
+
 def _attach_benchmark_stats(stats: Dict[str, float], close: np.ndarray) -> Dict[str, float]:
     buy_hold_return = buyhold_capped(close)
     buy_hold_cagr = _compute_cagr(buy_hold_return, len(close))
     stats["buy_hold_return"] = float(buy_hold_return)
     stats["buy_hold_cagr"] = float(buy_hold_cagr)
     stats["alpha_ann"] = float(stats.get("cagr", _compute_cagr(stats.get("total_return", 0.0), len(close))) - buy_hold_cagr)
+    if "alpha_after_3_bars" in stats:
+        stats["alpha_after_3_bars"] = float(stats.get("alpha_after_3_bars", 0.0) - buy_hold_cagr)
+        stats["expected_hold_score"] = _expected_hold_score_from_stat(stats)
     return stats
 
 
@@ -389,6 +491,11 @@ def _finalize_backtest_stats(
     mdd: float,
     n_bars: int,
     max_drawdown_duration: int,
+    early_take_deferred_events: int = 0,
+    trade_rets_after_3: Optional[List[float]] = None,
+    trade_target_after_3: Optional[List[bool]] = None,
+    early_take_events: int = 0,
+    early_take_dependency_events: int = 0,
 ) -> Dict[str, float]:
     base_stats = {
         "total_return": float(total_return),
@@ -406,7 +513,25 @@ def _finalize_backtest_stats(
         "win_rate_target_robust": 0.0,
         "pct_exit_take": 0.0,
         "pct_exit_stop": 0.0,
+        "pct_exit_trailing": 0.0,
         "pct_exit_time": 0.0,
+        "pct_exit_hard_loss": 0.0,
+        "pct_exit_early": 0.0,
+        "pct_early_exit_take": 0.0,
+        "pct_early_exit_stop": 0.0,
+        "pct_early_exit_trailing": 0.0,
+        "pct_early_exit_time": 0.0,
+        "pct_early_exit_hard_loss": 0.0,
+        "early_take_deferred_events": float(early_take_deferred_events),
+        "early_take_defer_per_trade": 0.0,
+        "wr_after_3_bars": 0.0,
+        "target_wr_after_3_bars": 0.0,
+        "expectancy_after_3_bars": 0.0,
+        "alpha_after_3_bars": 0.0,
+        "early_take_events": float(early_take_events),
+        "early_take_dependency": 0.0,
+        "swing_survival_3d": 0.0,
+        "expected_hold_score": 0.0,
         "avg_trade": 0.0,
         "trade_std": 0.0,
         "avg_hold_bars": 0.0,
@@ -434,6 +559,9 @@ def _finalize_backtest_stats(
     hold_arr = np.asarray(trade_hold_bars, dtype=np.float64) if len(trade_hold_bars) > 0 else np.zeros(len(tr), dtype=np.float64)
     if hold_arr.shape[0] != tr.shape[0]:
         hold_arr = np.resize(hold_arr, tr.shape[0])
+    after3_arr = np.asarray(trade_rets_after_3 or [], dtype=np.float64)
+    after3_arr = after3_arr[np.isfinite(after3_arr)]
+    target3_arr = np.asarray(trade_target_after_3 or [], dtype=bool)
     n_years = max(float(n_bars) / 252.0, 0.1)
     trades_per_year = len(tr) / n_years
     ann_factor = np.sqrt(min(trades_per_year, 252.0))
@@ -444,10 +572,28 @@ def _finalize_backtest_stats(
 
     pct_exit_take = float((exit_arr == "take").mean()) if len(exit_arr) > 0 else 0.0
     pct_exit_stop = float(((exit_arr == "stop") | (exit_arr == "hard_loss")).mean()) if len(exit_arr) > 0 else 0.0
+    pct_exit_trailing = float((exit_arr == "trailing").mean()) if len(exit_arr) > 0 else 0.0
     pct_exit_time = float((exit_arr == "time").mean()) if len(exit_arr) > 0 else 0.0
+    pct_exit_hard_loss = float((exit_arr == "hard_loss").mean()) if len(exit_arr) > 0 else 0.0
+    early_exit_mask = hold_arr < 3.0
+    swing_survival_3d = float((hold_arr >= 3.0).mean()) if len(hold_arr) > 0 else 0.0
+    pct_exit_early = float(early_exit_mask.mean()) if len(hold_arr) > 0 else 0.0
+    pct_early_exit_take = float(((exit_arr == "take") & early_exit_mask).mean()) if len(exit_arr) > 0 else 0.0
+    pct_early_exit_stop = float((((exit_arr == "stop") | (exit_arr == "hard_loss")) & early_exit_mask).mean()) if len(exit_arr) > 0 else 0.0
+    pct_early_exit_trailing = float(((exit_arr == "trailing") & early_exit_mask).mean()) if len(exit_arr) > 0 else 0.0
+    pct_early_exit_time = float(((exit_arr == "time") & early_exit_mask).mean()) if len(exit_arr) > 0 else 0.0
+    pct_early_exit_hard_loss = float(((exit_arr == "hard_loss") & early_exit_mask).mean()) if len(exit_arr) > 0 else 0.0
     take_mask = (exit_arr == "take")
     time_pos_mask = (exit_arr == "time") & (tr > 0)
     wr_target_robust = float((take_mask | time_pos_mask).mean()) if len(exit_arr) > 0 else 0.0
+    wr_after_3 = float((after3_arr > 0.0).mean()) if len(after3_arr) > 0 else 0.0
+    target_wr_after_3 = float(target3_arr.mean()) if len(target3_arr) > 0 else 0.0
+    expectancy_after_3 = float(np.mean(after3_arr)) if len(after3_arr) > 0 else 0.0
+    alpha_after_3 = float(np.clip(expectancy_after_3 * (252.0 / 3.0), -1.0, 1.0))
+    early_take_dependency = (
+        float(early_take_dependency_events) / max(1.0, float(early_take_events))
+        if early_take_events > 0 else 0.0
+    )
 
     wins = tr[tr > 0]
     losses = tr[tr < 0]
@@ -487,7 +633,24 @@ def _finalize_backtest_stats(
         "win_rate_target_robust": wr_target_robust,
         "pct_exit_take": pct_exit_take,
         "pct_exit_stop": pct_exit_stop,
+        "pct_exit_trailing": pct_exit_trailing,
         "pct_exit_time": pct_exit_time,
+        "pct_exit_hard_loss": pct_exit_hard_loss,
+        "pct_exit_early": pct_exit_early,
+        "pct_early_exit_take": pct_early_exit_take,
+        "pct_early_exit_stop": pct_early_exit_stop,
+        "pct_early_exit_trailing": pct_early_exit_trailing,
+        "pct_early_exit_time": pct_early_exit_time,
+        "pct_early_exit_hard_loss": pct_early_exit_hard_loss,
+        "early_take_deferred_events": float(early_take_deferred_events),
+        "early_take_defer_per_trade": float(early_take_deferred_events) / max(1.0, float(len(tr))),
+        "wr_after_3_bars": wr_after_3,
+        "target_wr_after_3_bars": target_wr_after_3,
+        "expectancy_after_3_bars": expectancy_after_3,
+        "alpha_after_3_bars": alpha_after_3,
+        "early_take_events": float(early_take_events),
+        "early_take_dependency": early_take_dependency,
+        "swing_survival_3d": swing_survival_3d,
         "avg_trade": mean_tr,
         "trade_std": std_tr,
         "avg_hold_bars": float(np.mean(hold_arr)) if len(hold_arr) > 0 else 0.0,
@@ -506,6 +669,7 @@ def _finalize_backtest_stats(
         "big_wins_pct": big_wins,
         "big_losses_pct": big_losses,
     })
+    base_stats["expected_hold_score"] = _expected_hold_score_from_stat(base_stats)
     return base_stats
 
 
@@ -560,6 +724,7 @@ def _backtest_stats_global_intraday(
     score95 = max(score95, ATR_EPS)
 
     # Regime score (multi-factor bull/bear detection)
+    ma50_exit = _rolling_mean_np(c, 50, 20)
     ma200 = _rolling_mean_np(c, 200, 50)
     regime_score = compute_regime_score(c, ma200, vol_rank)
 
@@ -591,18 +756,34 @@ def _backtest_stats_global_intraday(
         r1_prev[1:] = 2.0 * pivot_prev[1:] - l[:-1]
         s1_prev[1:] = 2.0 * pivot_prev[1:] - h[:-1]
 
+    min_hold_bars = int(max(0, getattr(gp, "min_hold_bars", 3)))
+    early_exit_block_bars = int(max(min_hold_bars, getattr(gp, "early_exit_block_bars", min_hold_bars)))
+    profit_take_min_bars = int(max(min_hold_bars, getattr(gp, "profit_take_min_bars", min_hold_bars)))
+    early_take_quality_gate = float(np.clip(getattr(gp, "early_take_quality_gate", 0.0), 0.0, 1.0))
+    early_take_score_decay_max = float(np.clip(getattr(gp, "early_take_score_decay_max", 0.35), 0.0, 1.0))
+
     equity = 1.0
     peak = 1.0
     mdd = 0.0
     trade_rets = []
     trade_exit_types = []  # v8: track "take", "stop", "time", "hard_loss"
     trade_hold_bars = []
+    trade_rets_after_3 = []
+    trade_target_after_3 = []
     pos = 0
     entry_px = np.nan
+    entry_bar_idx = -1
+    entry_side = 0
+    entry_take_abs = 0.0
+    realized_partial_ret = 0.0
     bars = 0
     partial_taken = False
     partial_taken_2 = False
     max_fav = 0.0  # track maximum favorable excursion for trailing stop
+    entry_score_strength = 0.0
+    early_take_deferred_events = 0
+    early_take_events = 0
+    early_take_dependency_events = 0
     consec_long = 0
     consec_short = 0
     consec_stops = 0
@@ -610,6 +791,38 @@ def _backtest_stats_global_intraday(
     exposure_acc = 0.0
     current_drawdown_duration = 0
     max_drawdown_duration = 0
+
+    def _after_3_snapshot_ret() -> Tuple[Optional[float], bool]:
+        if entry_bar_idx < 0 or entry_px <= 0.0 or entry_side == 0:
+            return None, False
+        idx3 = entry_bar_idx + 3
+        if idx3 >= n:
+            return None, False
+        gross = (float(c[idx3]) / max(entry_px, ATR_EPS) - 1.0) * float(entry_side)
+        net = gross - COST_PER_TRADE_PCT
+        if net > 0.0:
+            net *= (1.0 - IR_SWING_PCT)
+        lo = min(n, idx3 + 1)
+        if entry_side > 0:
+            max_fav_3 = float(np.nanmax(h[entry_bar_idx + 1:lo] - entry_px)) if lo > entry_bar_idx + 1 else 0.0
+        else:
+            max_fav_3 = float(np.nanmax(entry_px - l[entry_bar_idx + 1:lo])) if lo > entry_bar_idx + 1 else 0.0
+        target_hit_3 = bool(max_fav_3 >= max(entry_take_abs, ATR_EPS))
+        return float(net), target_hit_3
+
+    def _record_trade(ret: float, exit_type: str, hold_bars: float) -> None:
+        nonlocal early_take_events, early_take_dependency_events
+        after3_ret, target_hit_3 = _after_3_snapshot_ret()
+        if after3_ret is not None:
+            trade_rets_after_3.append(after3_ret)
+            trade_target_after_3.append(target_hit_3)
+        if exit_type == "take" and hold_bars < 3.0:
+            early_take_events += 1
+            if after3_ret is not None and after3_ret <= 0.0:
+                early_take_dependency_events += 1
+        trade_rets.append(float(ret))
+        trade_exit_types.append(str(exit_type))
+        trade_hold_bars.append(float(max(1.0, hold_bars)))
 
     for i in range(1, n):
         if cooldown > 0:
@@ -621,9 +834,9 @@ def _backtest_stats_global_intraday(
             bars += 1
             # -- Dynamic stop tightening --
             tighten = 1.0
-            if bars >= gp.stop_tighten_after_bars:
+            if bars >= max(int(gp.stop_tighten_after_bars), min_hold_bars):
                 tighten = gp.stop_tighten_factor
-            elif bars >= 3:
+            elif bars >= max(3, min_hold_bars):
                 # Early P&L: tighten if underwater after 3+ bars
                 early_pnl = (c[i - 1] / max(entry_px, ATR_EPS) - 1.0) * np.sign(pos)
                 if early_pnl < -0.002:
@@ -641,21 +854,53 @@ def _backtest_stats_global_intraday(
             hard_loss = abs(o[i] / max(entry_px, ATR_EPS) - 1.0)
 
             if hard_loss > gp.max_loss_per_trade_pct:
-                ret = (o[i] / entry_px - 1.0) * pos - COST_PER_TRADE_PCT
-                equity *= (1.0 + ret)
-                trade_rets.append(ret)
-                trade_exit_types.append("hard_loss")
-                trade_hold_bars.append(float(max(1, bars)))
-                consec_stops += 1 if ret < 0 else 0
-                if ret > 0:
+                final_leg_ret = (o[i] / entry_px - 1.0) * pos - COST_PER_TRADE_PCT
+                trade_ret = float(realized_partial_ret + final_leg_ret)
+                equity *= (1.0 + final_leg_ret)
+                _record_trade(trade_ret, "hard_loss", float(max(1, bars)))
+                consec_stops += 1 if trade_ret < 0 else 0
+                if trade_ret > 0:
                     consec_stops = 0
                 pos = 0
+                entry_bar_idx = -1
+                entry_side = 0
+                entry_take_abs = 0.0
+                realized_partial_ret = 0.0
+                bars = 0
+                partial_taken = False
+                partial_taken_2 = False
                 max_fav = 0.0
+                entry_score_strength = 0.0
                 continue
 
             fav = ((h[i] - entry_px) if pos > 0 else (entry_px - l[i]))
             adv = ((entry_px - l[i]) if pos > 0 else (h[i] - entry_px))
             max_fav = max(max_fav, fav)
+
+            def _should_defer_early_take() -> bool:
+                if profit_take_min_bars <= 0 or bars >= profit_take_min_bars:
+                    return False
+                if early_take_quality_gate <= 1e-12:
+                    return True
+                if pos < 0:
+                    return False
+                idx_prev = max(0, i - 1)
+                signed_score = float(score_ev[idx_prev]) * float(np.sign(pos))
+                score_strength_now = float(np.clip(signed_score / score95, 0.0, 1.0)) if np.isfinite(signed_score) else 0.0
+                score_decay = max(0.0, float(entry_score_strength) - score_strength_now)
+                pivot_ok = (not np.isfinite(pivot_prev[idx_prev])) or (c[idx_prev] >= pivot_prev[idx_prev])
+                support_ok = (not np.isfinite(s1_prev[idx_prev])) or (c[idx_prev] >= s1_prev[idx_prev])
+                trend_ok = True
+                if np.isfinite(ma50_exit[idx_prev]) and np.isfinite(ma200[idx_prev]):
+                    ma50_rising = idx_prev < 5 or ma50_exit[idx_prev] >= ma50_exit[max(0, idx_prev - 5)]
+                    trend_ok = c[idx_prev] >= ma200[idx_prev] and (ma50_exit[idx_prev] >= ma200[idx_prev] or ma50_rising)
+                return bool(
+                    score_strength_now >= early_take_quality_gate
+                    and score_decay <= early_take_score_decay_max
+                    and pivot_ok
+                    and support_ok
+                    and trend_ok
+                )
 
             # -- Trailing stop logic --
             effective_stop = stop_abs
@@ -666,30 +911,50 @@ def _backtest_stats_global_intraday(
                     # Mode 2: trail at 50% of max favorable excursion
                     effective_stop = 0.5 * max_fav
 
-            if gp.partial_take_pct > 0 and (not partial_taken) and fav >= gp.partial_take_level * stop_abs:
+            early_profit_threshold = take_abs
+            if gp.partial_take_pct > 0:
+                early_profit_threshold = min(early_profit_threshold, gp.partial_take_level * stop_abs)
+            if gp.partial_take_pct_2 > 0 and partial_taken:
+                early_profit_threshold = min(early_profit_threshold, gp.partial_take_level_2 * stop_abs)
+            defer_early_take = _should_defer_early_take() if fav >= early_profit_threshold else False
+            profit_take_allowed = (bars >= profit_take_min_bars) or (not defer_early_take)
+            if defer_early_take:
+                early_take_deferred_events += 1
+
+            partial_take_allowed = profit_take_allowed or (defer_early_take and bars < profit_take_min_bars)
+
+            if partial_take_allowed and gp.partial_take_pct > 0 and (not partial_taken) and fav >= gp.partial_take_level * stop_abs:
                 part_ret = gp.partial_take_pct * gp.partial_take_level * stop_abs / max(entry_px, ATR_EPS)
-                equity *= (1.0 + part_ret - 0.0003)
+                net_part_ret = part_ret - 0.0003
+                equity *= (1.0 + net_part_ret)
+                realized_partial_ret += float(net_part_ret)
                 pos = pos * (1.0 - gp.partial_take_pct)
                 partial_taken = True
 
             # 2nd partial take at higher level
-            if gp.partial_take_pct_2 > 0 and partial_taken and (not partial_taken_2) and fav >= gp.partial_take_level_2 * stop_abs:
+            if partial_take_allowed and gp.partial_take_pct_2 > 0 and partial_taken and (not partial_taken_2) and fav >= gp.partial_take_level_2 * stop_abs:
                 part_ret2 = gp.partial_take_pct_2 * gp.partial_take_level_2 * stop_abs / max(entry_px, ATR_EPS)
-                equity *= (1.0 + part_ret2 - 0.0003)
+                net_part_ret2 = part_ret2 - 0.0003
+                equity *= (1.0 + net_part_ret2)
+                realized_partial_ret += float(net_part_ret2)
                 pos = pos * (1.0 - gp.partial_take_pct_2)
                 partial_taken_2 = True
 
             # Use effective_stop for trailing, but original stop_abs for take/time
             trail_adv = max_fav - fav  # how far price pulled back from best
-            stop_hit = (adv >= stop_abs) if gp.trailing_stop_mode == 0 else (trail_adv >= effective_stop if max_fav > stop_abs else adv >= stop_abs)
-            take_hit = fav >= take_abs
-            time_stop = (bars >= gp.time_stop_bars) and (fav < 0.5 * stop_abs)
+            trailing_active = gp.trailing_stop_mode > 0 and max_fav > stop_abs
+            base_stop_hit = (adv >= stop_abs) if gp.trailing_stop_mode == 0 else ((not trailing_active) and adv >= stop_abs)
+            trailing_stop_hit = trailing_active and trail_adv >= effective_stop
+            stop_hit = bool(base_stop_hit or (bars >= early_exit_block_bars and trailing_stop_hit))
+            exit_reason = "stop" if base_stop_hit else ("trailing" if (bars >= early_exit_block_bars and trailing_stop_hit) else "")
+            take_hit = profit_take_allowed and (fav >= take_abs)
+            time_stop = (bars >= max(int(gp.time_stop_bars), min_hold_bars)) and (fav < 0.5 * stop_abs)
 
             if stop_hit or take_hit or time_stop:
                 exit_px = c[i]
                 if stop_hit:
                     # For trailing stop: exit at trailed level, not original stop
-                    if gp.trailing_stop_mode > 0 and max_fav > stop_abs:
+                    if exit_reason == "trailing":
                         trail_stop_px = entry_px + np.sign(pos) * (max_fav - effective_stop)
                         ideal_exit = trail_stop_px
                     else:
@@ -714,26 +979,32 @@ def _backtest_stats_global_intraday(
                 # IR: 15% sobre lucro (swing trade, isencao mensal ignorada por conservadorismo)
                 if net_ret > 0:
                     net_ret = net_ret * (1.0 - IR_SWING_PCT)
-                ret = net_ret
-                equity *= (1.0 + ret)
-                trade_rets.append(ret)
+                trade_ret = float(realized_partial_ret + net_ret)
+                equity *= (1.0 + net_ret)
                 # v8: track exit type for win_rate_target computation
                 if take_hit:
-                    trade_exit_types.append("take")
+                    _exit_type = "take"
+                elif exit_reason == "trailing":
+                    _exit_type = "trailing"
                 elif stop_hit:
-                    trade_exit_types.append("stop")
+                    _exit_type = "stop"
                 else:
-                    trade_exit_types.append("time")
-                trade_hold_bars.append(float(max(1, bars)))
-                if stop_hit and ret < 0:
+                    _exit_type = "time"
+                _record_trade(trade_ret, _exit_type, float(max(1, bars)))
+                if exit_reason == "stop" and trade_ret < 0:
                     consec_stops += 1
-                elif ret > 0:
+                elif trade_ret > 0:
                     consec_stops = 0
                 pos = 0
+                entry_bar_idx = -1
+                entry_side = 0
+                entry_take_abs = 0.0
+                realized_partial_ret = 0.0
                 bars = 0
                 partial_taken = False
                 partial_taken_2 = False
                 max_fav = 0.0
+                entry_score_strength = 0.0
                 if gp.consecutive_loss_cooldown > 0 and consec_stops >= 2:
                     cooldown = gp.consecutive_loss_cooldown
                 continue
@@ -831,17 +1102,27 @@ def _backtest_stats_global_intraday(
                 if fill and limit_px > 0:
                     pos = side
                     entry_px = float(limit_px)
+                    entry_bar_idx = i
+                    entry_side = int(side)
+                    entry_take_abs = float(gp.reward_risk_ratio * max(ATR_EPS, gp.stop_atr_mult * max(atr[i], ATR_EPS)))
+                    realized_partial_ret = 0.0
                     bars = 0
                     partial_taken = False
                     partial_taken_2 = False
                     max_fav = 0.0
+                    entry_score_strength = strength
                 elif np.isfinite(o[i]) and o[i] > 0:
                     pos = side
                     entry_px = float(o[i])
+                    entry_bar_idx = i
+                    entry_side = int(side)
+                    entry_take_abs = float(gp.reward_risk_ratio * max(ATR_EPS, gp.stop_atr_mult * max(atr[i], ATR_EPS)))
+                    realized_partial_ret = 0.0
                     bars = 0
                     partial_taken = False
                     partial_taken_2 = False
                     max_fav = 0.0
+                    entry_score_strength = strength
 
         peak = max(peak, equity)
         drawdown = (equity / max(peak, ATR_EPS)) - 1.0
@@ -865,6 +1146,11 @@ def _backtest_stats_global_intraday(
         mdd=float(mdd),
         n_bars=n,
         max_drawdown_duration=max_drawdown_duration,
+        early_take_deferred_events=early_take_deferred_events,
+        trade_rets_after_3=trade_rets_after_3,
+        trade_target_after_3=trade_target_after_3,
+        early_take_events=early_take_events,
+        early_take_dependency_events=early_take_dependency_events,
     )
 
 
@@ -942,6 +1228,17 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
     mean_mdd          = float(np.mean(mdd_vals))   # negative
     median_mdd        = float(np.median(mdd_vals)) # negative
     alpha_pos_floor   = 0.22 if GA_ALPHA_FOCUS else 0.18
+    op_metrics = _operational_metrics_from_stats(per_ticker_stats)
+    op_count = int(op_metrics.get("n_buy_operable", 0) or 0)
+    op_hold_med = float(op_metrics.get("hold_med_operable", 0.0) or 0.0) if op_count >= 5 else med_hold_med
+    op_hold_p75_max = (
+        float(op_metrics.get("max_hold_bars_p75_operable", 0.0) or 0.0)
+        if op_count >= 5 else p75_hold_max
+    )
+    op_expected_hold_score = float(op_metrics.get("expected_hold_score_med_operable", 0.0) or 0.0)
+    op_early_take_dependency = float(op_metrics.get("early_take_dependency_med_operable", 1.0))
+    op_swing_survival_3d = float(op_metrics.get("swing_survival_3d_med_operable", 0.0) or 0.0)
+    op_wr_after_3 = float(op_metrics.get("wr_after_3_bars_med_operable", 0.0) or 0.0)
 
     # -- Activity bonus/penalty --------------------------------------------
     # Target: 15-80 trades per year per ticker. Penalise extremes.
@@ -1198,20 +1495,27 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
         drawdown_duration_penalty += (mean_mdd_duration_years - 0.20) * 1.5
 
     swing_bonus = 0.0
-    if mean_hold_avg < 2.0:
-        swing_bonus -= (2.0 - mean_hold_avg) * 0.40
-    elif mean_hold_avg <= 18.0:
-        swing_bonus += min(mean_hold_avg - 2.0, 8.0) * 0.10
-    elif mean_hold_avg > 30.0:
-        swing_bonus -= (mean_hold_avg - 30.0) * 0.08
-    if med_hold_med >= 3.0 and med_hold_med <= 15.0:
-        swing_bonus += 0.90
-    elif med_hold_med > 22.0:
-        swing_bonus -= (med_hold_med - 22.0) * 0.07
-    elif med_hold_med < 2.0:
-        swing_bonus -= (2.0 - med_hold_med) * 0.20
-    if p75_hold_max > 45.0:
-        swing_bonus -= (p75_hold_max - 45.0) * 0.03
+    if op_hold_med < 3.0:
+        swing_bonus -= (3.0 - op_hold_med) * 6.0
+    elif op_hold_med <= 10.0:
+        swing_bonus += 2.0 - min(abs(op_hold_med - 6.5) * 0.18, 1.2)
+    else:
+        swing_bonus -= (op_hold_med - 10.0) * 2.0
+    if op_hold_p75_max > 20.0:
+        swing_bonus -= (op_hold_p75_max - 20.0) * 0.35
+    if op_count >= 5 and not (3.0 <= op_hold_med <= 10.0 and op_hold_p75_max <= 20.0):
+        swing_bonus -= 3.0
+    if op_count >= 5:
+        if op_expected_hold_score < 70.0:
+            swing_bonus -= (70.0 - op_expected_hold_score) * 0.10
+        else:
+            swing_bonus += min((op_expected_hold_score - 70.0) * 0.04, 1.2)
+        if op_early_take_dependency > 0.35:
+            swing_bonus -= (op_early_take_dependency - 0.35) * 8.0
+        if op_swing_survival_3d < 0.55:
+            swing_bonus -= (0.55 - op_swing_survival_3d) * 5.0
+        if op_wr_after_3 < 0.60:
+            swing_bonus -= (0.60 - op_wr_after_3) * 8.0
 
     quality_bonus = sortino_bonus + profit_factor_bonus + expectancy_bonus
     alpha_quality_scale = 1.0
@@ -1613,7 +1917,7 @@ def _run_stage(
     # Seed with top individuals from previous stage or checkpoint
     if seed_genomes:
         for i, g in enumerate(seed_genomes[:pop_size]):
-            pop[i][:] = g
+            pop[i][:] = sanitize_global_genome(g)
             del pop[i].fitness.values
 
     hof = tools.HallOfFame(GA_HOF_SIZE)
@@ -1796,7 +2100,7 @@ def run_global_ga_two_stage(
 
     # Build warm-start seeds from previous checkpoint genome
     s1_seed_genomes = None
-    if seed_genome is not None and len(seed_genome) == len(GLOBAL_PARAM_SPECS):
+    if seed_genome is not None:
         sanitized_seed = sanitize_global_genome(seed_genome)
         s1_seed_genomes = [sanitized_seed]
         # Add small perturbations of the seed
