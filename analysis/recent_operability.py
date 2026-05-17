@@ -106,6 +106,13 @@ def recent_operability_blockers(view: dict[str, Any]) -> list[str]:
         blockers.append("recent_survival3_lt_45")
     if _safe_float(view.get("early_take_dependency"), 1.0) > 0.55:
         blockers.append("recent_early_take_dependency_gt_55")
+    # D5: soft edge-decay flag. Triggered only when the caller attached
+    # edge_decay_ratio via analysis.edge_decay.attach_edge_decay_to_view. Not in
+    # the hard_blockers set in recent_operability_tier — diagnostic, not gating.
+    if view.get("edge_decay_ratio") is not None:
+        ratio = _safe_float(view.get("edge_decay_ratio"), default=float("nan"))
+        if np.isfinite(ratio) and ratio < 0.5:
+            blockers.append("recent_edge_decay_lt_50")
     return blockers
 
 

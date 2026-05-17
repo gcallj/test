@@ -59,9 +59,31 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
+from numpy.lib.stride_tricks import sliding_window_view
 import pandas as pd
 import os
 import json
+
+
+def _rolling_mad(arr: np.ndarray, n: int) -> np.ndarray:
+    # Matches Series.rolling(n, min_periods=1).apply(
+    #     lambda w: np.mean(np.abs(w - w.mean())), raw=True
+    # ) but avoids the per-window Python lambda call, ~50x faster for n=20.
+    arr = np.asarray(arr, dtype=np.float64)
+    L = arr.shape[0]
+    out = np.empty(L, dtype=np.float64)
+    if L == 0:
+        return out
+    limit = min(n - 1, L - 1)
+    for k in range(limit + 1):
+        win = arr[: k + 1]
+        m = win.mean()
+        out[k] = np.abs(win - m).mean()
+    if L >= n:
+        sw = sliding_window_view(arr, window_shape=n)
+        m_full = sw.mean(axis=1, keepdims=True)
+        out[n - 1 :] = np.abs(sw - m_full).mean(axis=1)
+    return out
 from concurrent.futures import ThreadPoolExecutor
 import matplotlib.pyplot as plt
 
@@ -945,7 +967,9 @@ def add_technical_features(df: pd.DataFrame) -> pd.DataFrame:
     # CCI (Commodity Channel Index, 20-day)
     tp = (df[HIGH_COL] + df[LOW_COL] + df[CLOSE_COL]) / 3.0
     tp_ma = tp.groupby(df[TICKER_COL], sort=False).transform(lambda x: x.rolling(20, min_periods=1).mean())
-    tp_md = tp.groupby(df[TICKER_COL], sort=False).transform(lambda x: x.rolling(20, min_periods=1).apply(lambda w: np.mean(np.abs(w - w.mean())), raw=True))
+    tp_md = tp.groupby(df[TICKER_COL], sort=False).transform(
+        lambda x: pd.Series(_rolling_mad(x.to_numpy(dtype=np.float64), 20), index=x.index)
+    )
     df['cci_20'] = (tp - tp_ma) / (0.015 * tp_md.replace(0, np.nan))
 
     # ADX proxy: absolute directional movement normalized by ATR

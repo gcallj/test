@@ -369,6 +369,23 @@ def _safe_positive_ratio(numerator: float, denominator: float, cap: float = 10.0
     return float(np.clip(num / den, 0.0, cap))
 
 
+def _max_consecutive(mask: np.ndarray) -> int:
+    if mask.size == 0:
+        return 0
+    m = mask.astype(np.int8)
+    padded = np.concatenate([[0], m, [0]])
+    diff = np.diff(padded)
+    starts = np.flatnonzero(diff == 1)
+    ends = np.flatnonzero(diff == -1)
+    if starts.size == 0:
+        return 0
+    return int((ends - starts).max())
+
+
+# T3 mirror: roundtrip-cost magnitude (see ga_run.py for the rationale).
+_BREAKEVEN_MAGNITUDE = float(os.environ.get("GA_BREAKEVEN_MAGNITUDE", "0.011") or 0.011)
+
+
 def _compute_cagr(total_return: float, n_bars: int) -> float:
     n_years = max(float(n_bars) / 252.0, 1.0 / 252.0)
     equity = 1.0 + float(total_return)
@@ -550,6 +567,11 @@ def _finalize_backtest_stats(
         "dist_quality": 0.0,
         "big_wins_pct": 0.0,
         "big_losses_pct": 0.0,
+        "max_consec_losses": 0.0,
+        "max_consec_wins": 0.0,
+        "current_streak": 0.0,
+        "pct_trades_below_breakeven": 0.0,
+        "breakeven_magnitude": float(_BREAKEVEN_MAGNITUDE),
     }
     if len(trade_rets) == 0:
         return base_stats
@@ -621,6 +643,21 @@ def _finalize_backtest_stats(
     big_losses = pct_lt_n10 + pct_n10_n5 + pct_n5_n2
     dist_quality = float(np.clip((big_wins - big_losses + 0.5), 0.0, 1.0))
 
+    loss_mask = tr < 0
+    win_mask = tr > 0
+    max_consec_losses = _max_consecutive(loss_mask)
+    max_consec_wins = _max_consecutive(win_mask)
+    signs = np.sign(tr).astype(np.int8)
+    last_sign = int(signs[-1])
+    if last_sign == 0:
+        current_streak = 0
+    else:
+        diff_from_end = np.flatnonzero(signs[::-1] != last_sign)
+        streak_len = int(diff_from_end[0]) if diff_from_end.size else int(signs.size)
+        current_streak = last_sign * streak_len
+
+    pct_trades_below_breakeven = float((np.abs(tr) < _BREAKEVEN_MAGNITUDE).mean())
+
     base_stats.update({
         "sharpe": ann_sharpe,
         "sortino": ann_sortino,
@@ -668,6 +705,11 @@ def _finalize_backtest_stats(
         "dist_quality": dist_quality,
         "big_wins_pct": big_wins,
         "big_losses_pct": big_losses,
+        "max_consec_losses": float(max_consec_losses),
+        "max_consec_wins": float(max_consec_wins),
+        "current_streak": float(current_streak),
+        "pct_trades_below_breakeven": pct_trades_below_breakeven,
+        "breakeven_magnitude": float(_BREAKEVEN_MAGNITUDE),
     })
     base_stats["expected_hold_score"] = _expected_hold_score_from_stat(base_stats)
     return base_stats

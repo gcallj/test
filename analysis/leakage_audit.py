@@ -52,7 +52,7 @@ def audit_snapshot_fundamentals(df):
             issues.append({"column": col, "type": "all_nan", "detail": "Column exists but all NaN"})
             continue
         # Check variance per ticker
-        var_per_ticker = df.groupby("ticker")[col].apply(lambda s: pd.to_numeric(s, errors="coerce").std())
+        var_per_ticker = pd.to_numeric(df[col], errors="coerce").groupby(df["ticker"]).std()
         n_zero_var = (var_per_ticker == 0).sum()
         n_tickers = len(var_per_ticker)
         pct_static = n_zero_var / max(n_tickers, 1)

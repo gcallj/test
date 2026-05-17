@@ -63,6 +63,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
+from numpy.lib.stride_tricks import sliding_window_view
 import pandas as pd
 
 try:
@@ -1014,6 +1015,13 @@ def _safe_metric_ratio(numerator: float, denominator: float, cap: float = 10.0) 
     return float(np.clip(num / den, -cap, cap))
 
 
+# T3: magnitude under which a trade is treated as coin-flip after costs.
+# Default ~1.1% based on README cost model: brokerage R$7 + B3 0.065% + slippage
+# 0.10%/side + 15% IR ~= 0.55% per trade gross + ~0.55% IR drag on profitable
+# trades. Override via GA_BREAKEVEN_MAGNITUDE env (e.g. "0.015" for tighter).
+_BREAKEVEN_MAGNITUDE = float(os.environ.get("GA_BREAKEVEN_MAGNITUDE", "0.011") or 0.011)
+
+
 def _safe_positive_ratio(numerator: float, denominator: float, cap: float = 10.0) -> float:
     num = float(numerator) if np.isfinite(numerator) else 0.0
     den = float(denominator) if np.isfinite(denominator) else 0.0
@@ -1022,6 +1030,54 @@ def _safe_positive_ratio(numerator: float, denominator: float, cap: float = 10.0
     if abs(den) < 1e-12:
         return float(cap)
     return float(np.clip(num / den, 0.0, cap))
+
+
+def _rolling_mad(arr: np.ndarray, n: int) -> np.ndarray:
+    # Matches Series.rolling(n, min_periods=1).apply(
+    #     lambda w: np.mean(np.abs(w - w.mean())), raw=True
+    # ) but avoids the per-window Python lambda call, ~50x faster for n=20.
+    arr = np.asarray(arr, dtype=np.float64)
+    L = arr.shape[0]
+    out = np.empty(L, dtype=np.float64)
+    if L == 0:
+        return out
+    limit = min(n - 1, L - 1)
+    for k in range(limit + 1):
+        win = arr[: k + 1]
+        m = win.mean()
+        out[k] = np.abs(win - m).mean()
+    if L >= n:
+        sw = sliding_window_view(arr, window_shape=n)
+        m_full = sw.mean(axis=1, keepdims=True)
+        out[n - 1 :] = np.abs(sw - m_full).mean(axis=1)
+    return out
+
+
+def _annualize_returns_vec(arr_like, n_years: float) -> pd.Series:
+    # Vectorized equivalent of:
+    #   def _annualize_scalar(r, n):
+    #       if not np.isfinite(r): return 0.0
+    #       return max(1.0 + r, 0.001) ** (1.0 / n) - 1.0
+    r = pd.to_numeric(arr_like, errors="coerce")
+    finite = np.isfinite(r.to_numpy()) if hasattr(r, "to_numpy") else np.isfinite(np.asarray(r))
+    ratio = np.maximum(1.0 + r, 0.001)
+    annualized = ratio ** (1.0 / float(n_years)) - 1.0
+    return annualized.where(finite, 0.0)
+
+
+def _max_consecutive(mask: np.ndarray) -> int:
+    # Longest run of True in a 1-D boolean array (O(n), vectorized).
+    if mask.size == 0:
+        return 0
+    m = mask.astype(np.int8)
+    # Mark boundaries by diff
+    padded = np.concatenate([[0], m, [0]])
+    diff = np.diff(padded)
+    starts = np.flatnonzero(diff == 1)
+    ends = np.flatnonzero(diff == -1)
+    if starts.size == 0:
+        return 0
+    return int((ends - starts).max())
 
 
 def _compute_cagr(total_return: float, n_bars: int) -> float:
@@ -1293,6 +1349,14 @@ def _finalize_backtest_stats(
         "dist_quality": 0.0,
         "big_wins_pct": 0.0,
         "big_losses_pct": 0.0,
+        "max_consec_losses": 0.0,
+        "max_consec_wins": 0.0,
+        "current_streak": 0.0,
+        # T3 diagnostics — share of trades whose magnitude is below the
+        # roundtrip-cost break-even (default ~1.1% mirrors README cost model
+        # ~0.55% + IR allowance). Configurable via GA_BREAKEVEN_MAGNITUDE.
+        "pct_trades_below_breakeven": 0.0,
+        "breakeven_magnitude": float(_BREAKEVEN_MAGNITUDE),
     }
     if len(trade_rets) == 0:
         return base_stats
@@ -1364,6 +1428,23 @@ def _finalize_backtest_stats(
     big_losses = pct_lt_n10 + pct_n10_n5 + pct_n5_n2
     dist_quality = float(np.clip((big_wins - big_losses + 0.5), 0.0, 1.0))
 
+    loss_mask = tr < 0
+    win_mask = tr > 0
+    max_consec_losses = _max_consecutive(loss_mask)
+    max_consec_wins = _max_consecutive(win_mask)
+    signs = np.sign(tr).astype(np.int8)
+    last_sign = int(signs[-1])
+    if last_sign == 0:
+        current_streak = 0
+    else:
+        # Trailing run of the same sign at the tail.
+        diff_from_end = np.flatnonzero(signs[::-1] != last_sign)
+        streak_len = int(diff_from_end[0]) if diff_from_end.size else int(signs.size)
+        current_streak = last_sign * streak_len
+
+    # T3: fraction of trades that didn't move enough to clear costs (coin flips).
+    pct_trades_below_breakeven = float((np.abs(tr) < _BREAKEVEN_MAGNITUDE).mean())
+
     base_stats.update({
         "sharpe": ann_sharpe,
         "sortino": ann_sortino,
@@ -1411,6 +1492,11 @@ def _finalize_backtest_stats(
         "dist_quality": dist_quality,
         "big_wins_pct": big_wins,
         "big_losses_pct": big_losses,
+        "max_consec_losses": float(max_consec_losses),
+        "max_consec_wins": float(max_consec_wins),
+        "current_streak": float(current_streak),
+        "pct_trades_below_breakeven": pct_trades_below_breakeven,
+        "breakeven_magnitude": float(_BREAKEVEN_MAGNITUDE),
     })
     base_stats["expected_hold_score"] = expected_hold_score_from_stat(base_stats)
     return base_stats
@@ -2251,13 +2337,24 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
         alpha_quality_scale *= 0.75
     quality_bonus *= alpha_quality_scale
 
-    # -- Main fitness (v5.2 alpha-hard) ------------------------------------
+    # T3: aggregate break-even share across tickers (per-fold).
+    pct_below_breakeven_vals = np.array(
+        [s.get("pct_trades_below_breakeven", 0.0) for s in per_ticker_stats],
+        dtype=np.float64,
+    )
+    mean_pct_below_breakeven = float(np.mean(pct_below_breakeven_vals))
+
+    # -- Main fitness (v6.0 alpha-hard + breakeven/consistency hooks) ------
     # GA_ALPHA_FOCUS: amplifica sinal de alpha para forcar GA a priorizar
     # reducao de underperformance vs B&H via alpha anualizado.
     _alpha_w_mean = 26.0 if GA_ALPHA_FOCUS else 12.0
     _alpha_w_med = 18.0 if GA_ALPHA_FOCUS else 8.0
     _alpha_pos_w = 4.5 if GA_ALPHA_FOCUS else 2.5
     _alpha_clip_lo = -0.35 if GA_ALPHA_FOCUS else -0.20
+    # T3: opt-in penalty for trades whose magnitude is below the break-even
+    # threshold. GA_BREAKEVEN_W=0 (default) -> no behavior change vs v5.2.
+    _ga_breakeven_w = float(os.environ.get("GA_BREAKEVEN_W", "0.0") or 0.0)
+    breakeven_penalty = _ga_breakeven_w * mean_pct_below_breakeven
     fitness = (
         _alpha_w_mean * np.clip(mean_alpha_ann, _alpha_clip_lo, 0.50) +
         _alpha_w_med  * np.clip(med_alpha_ann,  _alpha_clip_lo, 0.50) +
@@ -2280,7 +2377,8 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
         alpha_drag_penalty -
         drawdown_duration_penalty -
         mdd_penalty -
-        underperf_penalty
+        underperf_penalty -
+        breakeven_penalty                              # T3: cost-aware (opt-in)
     )
     return float(fitness)
 
@@ -2326,14 +2424,27 @@ def evaluate_global_walkforward(genome: List[float], payloads_by_window: List[Tu
             
     if not val_fits:
         return -1e9, 0.0, 0.0
-        
+
     mean_tr = float(np.mean(train_fits))
     mean_te = float(np.mean(val_fits))
-    
+
     # Combine train and test: primarily OOS, small penalty for overfitting
     overfit_penalty = max(0.0, mean_tr - mean_te) * 0.3
     fitness = mean_te - overfit_penalty
-    
+
+    # T2: walk-forward consistency penalty (opt-in, default 0 = no effect).
+    # GA_CONSISTENCY_W > 0 subtracts std(val_fits) * W so a genome that wins
+    # one fold and loses another doesn't survive on mean alone. Optional
+    # hard-fail if too many folds end up negative.
+    _ga_consistency_w = float(os.environ.get("GA_CONSISTENCY_W", "0.0") or 0.0)
+    if _ga_consistency_w > 0.0 and len(val_fits) >= 2:
+        fitness -= _ga_consistency_w * float(np.std(val_fits))
+    _ga_consistency_max_bad = int(os.environ.get("GA_CONSISTENCY_MAX_BAD_FOLDS", "0") or 0)
+    if _ga_consistency_max_bad > 0:
+        bad_folds = int(sum(1 for v in val_fits if float(v) < 0.0))
+        if bad_folds >= _ga_consistency_max_bad:
+            fitness *= 0.5  # heavy haircut for chronically negative folds
+
     return fitness, mean_tr, mean_te
 
 # Global variable for multiprocessing to avoid pickling issues
@@ -2787,7 +2898,9 @@ def add_technical_features(df: pd.DataFrame) -> pd.DataFrame:
     # CCI (Commodity Channel Index, 20-day)
     tp = (df[HIGH_COL] + df[LOW_COL] + df[CLOSE_COL]) / 3.0
     tp_ma = tp.groupby(df[TICKER_COL], sort=False).transform(lambda x: x.rolling(20, min_periods=1).mean())
-    tp_md = tp.groupby(df[TICKER_COL], sort=False).transform(lambda x: x.rolling(20, min_periods=1).apply(lambda w: np.mean(np.abs(w - w.mean())), raw=True))
+    tp_md = tp.groupby(df[TICKER_COL], sort=False).transform(
+        lambda x: pd.Series(_rolling_mad(x.to_numpy(dtype=np.float64), 20), index=x.index)
+    )
     df['cci_20'] = (tp - tp_ma) / (0.015 * tp_md.replace(0, np.nan))
 
     # ADX proxy: absolute directional movement normalized by ATR
@@ -3179,7 +3292,7 @@ def load_full_history_all_cols(path: str) -> pd.DataFrame:
     df = df.sort_values([TICKER_COL, DATE_COL]).reset_index(drop=True)
 
     if ALLOWED_SUFFIXES:
-        mask = df[TICKER_COL].apply(lambda t: any(str(t).endswith(s) for s in ALLOWED_SUFFIXES))
+        mask = df[TICKER_COL].astype(str).str.endswith(tuple(ALLOWED_SUFFIXES))
         df = df[mask].copy()
     elif ONLY_SA:
         df = df[df[TICKER_COL].str.endswith(".SA")].copy()
@@ -5622,8 +5735,8 @@ def run():
             if _n_filtered > 0:
                 _ret_col_f = _df_filtered["test_return"]
                 _bh_col_f = _df_filtered["buy_hold_return"]
-                _ret_ann_series = _ret_col_f.apply(lambda x: _annualize_scalar(x, _n_years_default))
-                _bh_ann_series = _bh_col_f.apply(lambda x: _annualize_scalar(x, _n_years_default))
+                _ret_ann_series = _annualize_returns_vec(_ret_col_f, _n_years_default)
+                _bh_ann_series = _annualize_returns_vec(_bh_col_f, _n_years_default)
                 _alpha_ann_series = _ret_ann_series - _bh_ann_series
 
                 _ret_ann_med = float(_ret_ann_series.median() * 100)

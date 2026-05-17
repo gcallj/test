@@ -868,7 +868,7 @@ def run_final_output():
                 print(f"  [DBG] filtering tickers (tickers_sa_set has {len(tickers_sa_set)} items)...", flush=True)
                 # Include all allowed suffixes, not just .SA
                 if ALLOWED_SUFFIXES:
-                    allowed_mask = reg_p["ticker"].apply(lambda t: any(t.endswith(sfx) for sfx in ALLOWED_SUFFIXES))
+                    allowed_mask = reg_p["ticker"].astype(str).str.endswith(tuple(ALLOWED_SUFFIXES))
                     reg_p = reg_p[allowed_mask]
                 else:
                     reg_p = reg_p[reg_p["ticker"].isin(tickers_sa_set)]
@@ -1228,7 +1228,7 @@ def run_final_output():
         df = df.dropna()
 
         if ALLOWED_SUFFIXES:
-            df = df[df["ticker"].apply(lambda t: any(str(t).endswith(s) for s in ALLOWED_SUFFIXES))]
+            df = df[df["ticker"].astype(str).str.endswith(tuple(ALLOWED_SUFFIXES))]
         elif ONLY_SA:
             df = df[df["ticker"].str.endswith(".SA", na=False)]
 
