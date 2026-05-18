@@ -751,6 +751,13 @@ def _write_checkpoint_with_metadata(
         "incumbent_wr_guardrail": dict(incumbent_guardrail),
         "incumbent_safety_guardrail": dict(incumbent_safety_guardrail),
     }
+    # ANTI-1: stamp the fitness formula version so future best-ever guards can
+    # avoid cross-version comparisons. See analysis/fitness_versioning.py.
+    try:
+        from analysis.fitness_versioning import tag_payload as _tag_fitness_version
+        payload = _tag_fitness_version(payload)
+    except Exception:
+        pass  # Versioning is opportunistic — never block a write on it.
 
     _atomic_json_dump(MAIN_CHECKPOINT, payload)
 

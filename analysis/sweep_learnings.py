@@ -394,6 +394,19 @@ def main() -> None:
             )
         md.append("\n")
 
+    # D3: per-segment breakdown when summary_latest.xlsx is available.
+    summary_xlsx = ROOT / "summary_latest.xlsx"
+    if summary_xlsx.exists():
+        try:
+            from analysis.sector_breakdown import breakdown_by_segment, format_markdown, from_summary_xlsx
+            per_ticker = from_summary_xlsx(summary_xlsx)
+            seg_df = breakdown_by_segment(per_ticker)
+            md.append("\n## Per-segment breakdown (latest summary)\n\n")
+            md.append(format_markdown(seg_df, title="Universe x segment"))
+            md.append("\n")
+        except Exception as e:  # missing openpyxl, malformed sheet, etc.
+            print(f"[LEARNINGS] sector breakdown skipped: {e}")
+
     md.append("---\n\n_Run again with: `python analysis/sweep_learnings.py`_\n")
 
     SUMMARY.write_text("".join(md), encoding="utf-8")
