@@ -137,7 +137,12 @@ jobs:
     needs: sweep
     if: always() && (needs.sweep.result == 'success' || needs.sweep.result == 'failure')
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Bumped 30 -> 60 (2026-05-18): observed runs cancelled at exactly the
+    # 30-min timeout while consolidate ran apply_fullmetric_sweep_best for each
+    # of 6 categories (~5 min/category full gate eval). Free runners on a public
+    # repo have unlimited minutes; 60 min ceiling leaves slack while still
+    # catching genuinely-stuck runs.
+    timeout-minutes: 60
     env:
       GA_DRIFT_GUARD: '1'
       GA_DRIFT_MIN_CONSECUTIVE: '3'
