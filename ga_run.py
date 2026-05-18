@@ -1189,6 +1189,10 @@ def operational_metrics_from_stats(per_ticker_stats: List[Dict[str, float]]) -> 
             "wr_after_3_bars_med_operable": 0.0,
             "target_wr_after_3_bars_med_operable": 0.0,
             "n_buy_operable": 0,
+            # T3 + D1 aggregates (v6.0+): zeros when no operable ticker.
+            "pct_trades_below_breakeven_med_operable": 0.0,
+            "max_consec_losses_p75_operable": 0.0,
+            "max_consec_wins_med_operable": 0.0,
         }
 
     wr = np.asarray([s.get("win_rate", 0.0) for s in operable], dtype=np.float64)
@@ -1203,6 +1207,11 @@ def operational_metrics_from_stats(per_ticker_stats: List[Dict[str, float]]) -> 
     survival_3d = np.asarray([s.get("swing_survival_3d", 0.0) for s in operable], dtype=np.float64)
     wr_after_3 = np.asarray([s.get("wr_after_3_bars", 0.0) for s in operable], dtype=np.float64)
     tgt_after_3 = np.asarray([s.get("target_wr_after_3_bars", 0.0) for s in operable], dtype=np.float64)
+    # T3 + D1 aggregates (v6.0). Per-ticker fields emitted from
+    # _finalize_backtest_stats need to reach the sweep snapshot here.
+    pct_below = np.asarray([s.get("pct_trades_below_breakeven", 0.0) for s in operable], dtype=np.float64)
+    consec_loss = np.asarray([s.get("max_consec_losses", 0.0) for s in operable], dtype=np.float64)
+    consec_win = np.asarray([s.get("max_consec_wins", 0.0) for s in operable], dtype=np.float64)
     return {
         "wr_med_operable": float(np.median(wr)),
         "wr_target_med_operable": float(np.median(wr_tgt)),
@@ -1217,6 +1226,9 @@ def operational_metrics_from_stats(per_ticker_stats: List[Dict[str, float]]) -> 
         "wr_after_3_bars_med_operable": float(np.median(wr_after_3)),
         "target_wr_after_3_bars_med_operable": float(np.median(tgt_after_3)),
         "n_buy_operable": int(len(operable)),
+        "pct_trades_below_breakeven_med_operable": float(np.median(pct_below)),
+        "max_consec_losses_p75_operable": float(np.percentile(consec_loss, 75)) if consec_loss.size else 0.0,
+        "max_consec_wins_med_operable": float(np.median(consec_win)),
     }
 
 

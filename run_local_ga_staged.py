@@ -699,10 +699,16 @@ def _snapshot_metrics(metrics):
         "max_hold_bars_p75",
         "trades_med",
         "n_ge_70",
+        # v6.0 (T3 + D1): cost-aware and risk-of-ruin diagnostics surfaced
+        # from operational_metrics_from_stats.
+        "pct_trades_below_breakeven_med_operable",
+        "max_consec_losses_p75_operable",
+        "max_consec_wins_med_operable",
     )
+    int_keys = {"n_ge_70"}
     out = {}
     for k in keys:
-        if k == "n_ge_70":
+        if k in int_keys:
             out[k] = int(metrics.get(k, 0) or 0)
         else:
             out[k] = float(metrics.get(k, 0.0) or 0.0)
