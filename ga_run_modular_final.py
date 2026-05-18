@@ -445,6 +445,9 @@ def _operational_metrics_from_stats(per_ticker_stats: List[Dict[str, float]]) ->
             "wr_after_3_bars_med_operable": 0.0,
             "target_wr_after_3_bars_med_operable": 0.0,
             "n_buy_operable": 0,
+            "pct_trades_below_breakeven_med_operable": 0.0,
+            "max_consec_losses_p75_operable": 0.0,
+            "max_consec_wins_med_operable": 0.0,
         }
     hold = np.asarray([s.get("median_hold_bars", 0.0) for s in operable], dtype=np.float64)
     max_hold = np.asarray([s.get("max_hold_bars", 0.0) for s in operable], dtype=np.float64)
@@ -453,6 +456,9 @@ def _operational_metrics_from_stats(per_ticker_stats: List[Dict[str, float]]) ->
     survival_3d = np.asarray([s.get("swing_survival_3d", 0.0) for s in operable], dtype=np.float64)
     wr_after_3 = np.asarray([s.get("wr_after_3_bars", 0.0) for s in operable], dtype=np.float64)
     tgt_after_3 = np.asarray([s.get("target_wr_after_3_bars", 0.0) for s in operable], dtype=np.float64)
+    pct_below = np.asarray([s.get("pct_trades_below_breakeven", 0.0) for s in operable], dtype=np.float64)
+    consec_loss = np.asarray([s.get("max_consec_losses", 0.0) for s in operable], dtype=np.float64)
+    consec_win = np.asarray([s.get("max_consec_wins", 0.0) for s in operable], dtype=np.float64)
     return {
         "hold_med_operable": float(np.median(hold)),
         "max_hold_bars_p75_operable": float(np.percentile(max_hold, 75)),
@@ -462,6 +468,9 @@ def _operational_metrics_from_stats(per_ticker_stats: List[Dict[str, float]]) ->
         "wr_after_3_bars_med_operable": float(np.median(wr_after_3)),
         "target_wr_after_3_bars_med_operable": float(np.median(tgt_after_3)),
         "n_buy_operable": int(len(operable)),
+        "pct_trades_below_breakeven_med_operable": float(np.median(pct_below)),
+        "max_consec_losses_p75_operable": float(np.percentile(consec_loss, 75)) if consec_loss.size else 0.0,
+        "max_consec_wins_med_operable": float(np.median(consec_win)),
     }
 
 
