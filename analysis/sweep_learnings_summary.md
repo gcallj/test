@@ -1,6 +1,6 @@
 # Sweep Learnings Summary
 
-_Generated: 2026-08-16T11:44:25+00:00_
+_Generated: 2026-08-17T18:40:54+00:00_
 
 Aggregates all `local_fullmetric_sweep_result*.json` files plus the
 continuous-improvement state. Use this file to plan the next cycle.
@@ -8,9 +8,9 @@ continuous-improvement state. Use this file to plan the next cycle.
 ## Current snapshot
 
 - Checkpoint fitness: `26.459605239382256`
-- Total sweeps seen: **1592**
+- Total sweeps seen: **1594**
 - Total promotions: **121** (including 1 from codex log)
-- Promotion rate: **7.5%** (over 1616 total attempts)
+- Promotion rate: **7.5%** (over 1618 total attempts)
 - Continuous cycles run: 34
 - Continuous promotions: 14
 - Codex attempts synced: **24** (11 promoted) from `codex_attempts_source.md`
@@ -153,18 +153,18 @@ Genes tentados >= 2 vezes sem nenhuma promocao. Considere SKIP no proximo ciclo.
 | Gene | Attempts | Promotions | (codex) Attempts | (codex) Promotions |
 |---|---:|---:|---:|---:|
 | `reward_risk_ratio` | 268 | 0 | 0 | 0 |
-| `vote_threshold_long` | 267 | 0 | 0 | 0 |
-| `score_strength_scaling` | 267 | 0 | 0 | 0 |
-| `min_signal_strength` | 266 | 0 | 0 | 0 |
-| `entry_confirmation_days` | 265 | 0 | 0 | 0 |
-| `volume_confirm_mode` | 264 | 0 | 1 | 0 |
-| `vote_threshold_short` | 264 | 0 | 1 | 0 |
+| `score_strength_scaling` | 268 | 0 | 0 | 0 |
+| `vote_threshold_long` | 268 | 0 | 0 | 0 |
+| `min_signal_strength` | 267 | 0 | 0 | 0 |
+| `entry_confirmation_days` | 266 | 0 | 0 | 0 |
+| `vote_threshold_short` | 265 | 0 | 1 | 0 |
 | `ma_filter_period` | 264 | 0 | 1 | 0 |
-| `time_stop_bars` | 263 | 0 | 0 | 0 |
-| `z_threshold` | 263 | 0 | 0 | 0 |
+| `volume_confirm_mode` | 264 | 0 | 1 | 0 |
+| `time_stop_bars` | 264 | 0 | 0 | 0 |
+| `z_threshold` | 264 | 0 | 0 | 0 |
 | `stop_atr_mult` | 262 | 0 | 0 | 0 |
 | `stop_tighten_after_bars` | 260 | 0 | 0 | 0 |
-| `entry_aggressiveness` | 246 | 0 | 0 | 0 |
+| `entry_aggressiveness` | 247 | 0 | 0 | 0 |
 
 ## Hot zones (genes que ja promoveram)
 
@@ -172,21 +172,21 @@ Genes onde alguma combinacao funcionou. Vale revisitar com novos vizinhos.
 
 | Gene | Promotions | Attempts | Hit rate | (codex) Promotions |
 |---|---:|---:|---:|---:|
-| `consecutive_loss_cooldown` | 21 | 274 | 8% | 1 |
-| `score_percentile_trigger` | 20 | 269 | 7% | 0 |
+| `consecutive_loss_cooldown` | 21 | 275 | 8% | 1 |
+| `score_percentile_trigger` | 20 | 270 | 7% | 0 |
 | `momentum_confirm_days` | 18 | 269 | 7% | 0 |
 | `partial_take_level` | 8 | 275 | 3% | 1 |
-| `signal_ema_span` | 7 | 268 | 3% | 0 |
+| `signal_ema_span` | 7 | 269 | 3% | 0 |
 | `max_loss_per_trade_pct` | 6 | 264 | 2% | 0 |
-| `entry_score_threshold` | 6 | 278 | 2% | 0 |
+| `entry_score_threshold` | 6 | 279 | 2% | 0 |
 | `regime_threshold` | 6 | 284 | 2% | 1 |
 | `equity_drawdown_stop_pct` | 5 | 261 | 2% | 0 |
-| `volatility_filter_percentile` | 5 | 274 | 2% | 0 |
 | `ma_filter_mode` | 5 | 274 | 2% | 0 |
+| `volatility_filter_percentile` | 5 | 274 | 2% | 0 |
 | `partial_take_pct` | 4 | 268 | 1% | 0 |
 | `support_broken_gate` | 2 | 243 | 1% | 0 |
-| `entry_discount_atr_frac` | 2 | 264 | 1% | 0 |
 | `trailing_stop_mode` | 2 | 265 | 1% | 0 |
+| `entry_discount_atr_frac` | 2 | 265 | 1% | 0 |
 | `stop_tighten_factor` | 2 | 267 | 1% | 0 |
 | `partial_take_pct_2` | 2 | 267 | 1% | 0 |
 | `partial_take_level_2` | 2 | 270 | 1% | 0 |
@@ -206,7 +206,7 @@ Genes onde alguma combinacao funcionou. Vale revisitar com novos vizinhos.
 
 ## Codex sync history (latest attempts)
 
-Parsed `codex_attempts_source.md` at 2026-08-16T11:44:24+00:00. Total attempts: **24**, promoted: **11**. Updates via `python analysis/codex_attempts_sync.py` at the start of every continuous cycle (auto) or on demand.
+Parsed `codex_attempts_source.md` at 2026-08-17T18:40:53+00:00. Total attempts: **24**, promoted: **11**. Updates via `python analysis/codex_attempts_sync.py` at the start of every continuous cycle (auto) or on demand.
 
 | Attempt | Timestamp | Promoted | Move(s) | Learning (snippet) |
 |---|---|:-:|---|---|
