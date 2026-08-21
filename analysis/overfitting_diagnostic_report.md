@@ -1,6 +1,6 @@
 # Overfitting diagnostic report
 
-Generated: overfitting_diagnostic.py sobre 59 attempts (25 promoted) + 1618 sweeps
+Generated: overfitting_diagnostic.py sobre 59 attempts (25 promoted) + 1624 sweeps
 
 ## Executive summary
 
@@ -34,9 +34,9 @@ Generated: overfitting_diagnostic.py sobre 59 attempts (25 promoted) + 1618 swee
 | idx | timestamp | fit | alpha_ann |
 |---:|---|---:|---:|
 | 0 | 2026-04-18T15:38:22 | -75.19 | -8.28% |
-| 539 | 2026-04-21T04:00:20 | 23.74 | -8.17% |
-| 1078 | 2026-04-21T19:52:00 | 25.53 | -7.89% |
-| 1617 | 2026-04-20T15:07:48 | 23.64 | -8.23% |
+| 541 | 2026-04-21T04:00:20 | 23.74 | -8.17% |
+| 1082 | 2026-04-21T19:52:00 | 25.53 | -7.89% |
+| 1623 | 2026-04-20T15:07:48 | 23.64 | -8.23% |
 
 ## 4. Gene drift detection (retrospective B4 preview)
 
@@ -55,8 +55,8 @@ Generated: overfitting_diagnostic.py sobre 59 attempts (25 promoted) + 1618 swee
 
 ## 5. Signal-to-noise do ganho por attempt
 
-- **Ganho medio de fit por sweep**: +0.0611
-- **Desvio padrao dos deltas**: 9.0574
+- **Ganho medio de fit por sweep**: +0.0609
+- **Desvio padrao dos deltas**: 9.0455
 - **Signal-to-noise ratio**: 0.01
 - **Interpretacao**: SNR < 1 sugere que os ganhos sao indistinguiveis de ruido — overfit provavel
 
