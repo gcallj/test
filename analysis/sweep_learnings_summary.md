@@ -1,6 +1,6 @@
 # Sweep Learnings Summary
 
-_Generated: 2026-08-23T17:41:12+00:00_
+_Generated: 2026-08-26T03:09:42+00:00_
 
 Aggregates all `local_fullmetric_sweep_result*.json` files plus the
 continuous-improvement state. Use this file to plan the next cycle.
@@ -8,9 +8,9 @@ continuous-improvement state. Use this file to plan the next cycle.
 ## Current snapshot
 
 - Checkpoint fitness: `26.459605239382256`
-- Total sweeps seen: **1648**
+- Total sweeps seen: **1654**
 - Total promotions: **121** (including 1 from codex log)
-- Promotion rate: **7.2%** (over 1672 total attempts)
+- Promotion rate: **7.2%** (over 1678 total attempts)
 - Continuous cycles run: 34
 - Continuous promotions: 14
 - Codex attempts synced: **24** (11 promoted) from `codex_attempts_source.md`
@@ -152,19 +152,19 @@ Genes tentados >= 2 vezes sem nenhuma promocao. Considere SKIP no proximo ciclo.
 
 | Gene | Attempts | Promotions | (codex) Attempts | (codex) Promotions |
 |---|---:|---:|---:|---:|
-| `reward_risk_ratio` | 277 | 0 | 0 | 0 |
-| `vote_threshold_long` | 277 | 0 | 0 | 0 |
-| `score_strength_scaling` | 277 | 0 | 0 | 0 |
-| `min_signal_strength` | 276 | 0 | 0 | 0 |
-| `entry_confirmation_days` | 275 | 0 | 0 | 0 |
-| `vote_threshold_short` | 274 | 0 | 1 | 0 |
-| `time_stop_bars` | 273 | 0 | 0 | 0 |
-| `volume_confirm_mode` | 273 | 0 | 1 | 0 |
-| `z_threshold` | 273 | 0 | 0 | 0 |
-| `ma_filter_period` | 273 | 0 | 1 | 0 |
-| `stop_atr_mult` | 271 | 0 | 0 | 0 |
-| `stop_tighten_after_bars` | 269 | 0 | 0 | 0 |
-| `entry_aggressiveness` | 256 | 0 | 0 | 0 |
+| `reward_risk_ratio` | 278 | 0 | 0 | 0 |
+| `score_strength_scaling` | 278 | 0 | 0 | 0 |
+| `vote_threshold_long` | 278 | 0 | 0 | 0 |
+| `min_signal_strength` | 277 | 0 | 0 | 0 |
+| `entry_confirmation_days` | 276 | 0 | 0 | 0 |
+| `vote_threshold_short` | 275 | 0 | 1 | 0 |
+| `time_stop_bars` | 274 | 0 | 0 | 0 |
+| `volume_confirm_mode` | 274 | 0 | 1 | 0 |
+| `z_threshold` | 274 | 0 | 0 | 0 |
+| `ma_filter_period` | 274 | 0 | 1 | 0 |
+| `stop_atr_mult` | 272 | 0 | 0 | 0 |
+| `stop_tighten_after_bars` | 270 | 0 | 0 | 0 |
+| `entry_aggressiveness` | 257 | 0 | 0 | 0 |
 
 ## Hot zones (genes que ja promoveram)
 
@@ -172,26 +172,26 @@ Genes onde alguma combinacao funcionou. Vale revisitar com novos vizinhos.
 
 | Gene | Promotions | Attempts | Hit rate | (codex) Promotions |
 |---|---:|---:|---:|---:|
-| `consecutive_loss_cooldown` | 21 | 284 | 7% | 1 |
-| `score_percentile_trigger` | 20 | 279 | 7% | 0 |
-| `momentum_confirm_days` | 18 | 278 | 6% | 0 |
-| `partial_take_level` | 8 | 284 | 3% | 1 |
-| `signal_ema_span` | 7 | 278 | 3% | 0 |
-| `max_loss_per_trade_pct` | 6 | 273 | 2% | 0 |
-| `entry_score_threshold` | 6 | 288 | 2% | 0 |
-| `regime_threshold` | 6 | 293 | 2% | 1 |
-| `equity_drawdown_stop_pct` | 5 | 270 | 2% | 0 |
-| `volatility_filter_percentile` | 5 | 283 | 2% | 0 |
-| `ma_filter_mode` | 5 | 283 | 2% | 0 |
-| `partial_take_pct` | 4 | 277 | 1% | 0 |
-| `support_broken_gate` | 2 | 252 | 1% | 0 |
-| `trailing_stop_mode` | 2 | 274 | 1% | 0 |
-| `entry_discount_atr_frac` | 2 | 274 | 1% | 0 |
-| `stop_tighten_factor` | 2 | 276 | 1% | 0 |
-| `partial_take_pct_2` | 2 | 276 | 1% | 0 |
-| `partial_take_level_2` | 2 | 279 | 1% | 0 |
-| `resistance_overext_gate` | 1 | 252 | 0% | 0 |
-| `vol_regime_mode` | 1 | 275 | 0% | 0 |
+| `consecutive_loss_cooldown` | 21 | 285 | 7% | 1 |
+| `score_percentile_trigger` | 20 | 280 | 7% | 0 |
+| `momentum_confirm_days` | 18 | 279 | 6% | 0 |
+| `partial_take_level` | 8 | 285 | 3% | 1 |
+| `signal_ema_span` | 7 | 279 | 3% | 0 |
+| `max_loss_per_trade_pct` | 6 | 274 | 2% | 0 |
+| `entry_score_threshold` | 6 | 289 | 2% | 0 |
+| `regime_threshold` | 6 | 294 | 2% | 1 |
+| `equity_drawdown_stop_pct` | 5 | 271 | 2% | 0 |
+| `volatility_filter_percentile` | 5 | 284 | 2% | 0 |
+| `ma_filter_mode` | 5 | 284 | 2% | 0 |
+| `partial_take_pct` | 4 | 278 | 1% | 0 |
+| `support_broken_gate` | 2 | 253 | 1% | 0 |
+| `trailing_stop_mode` | 2 | 275 | 1% | 0 |
+| `entry_discount_atr_frac` | 2 | 275 | 1% | 0 |
+| `stop_tighten_factor` | 2 | 277 | 1% | 0 |
+| `partial_take_pct_2` | 2 | 277 | 1% | 0 |
+| `partial_take_level_2` | 2 | 280 | 1% | 0 |
+| `resistance_overext_gate` | 1 | 253 | 0% | 0 |
+| `vol_regime_mode` | 1 | 276 | 0% | 0 |
 
 ## Category rotation status
 
@@ -206,7 +206,7 @@ Genes onde alguma combinacao funcionou. Vale revisitar com novos vizinhos.
 
 ## Codex sync history (latest attempts)
 
-Parsed `codex_attempts_source.md` at 2026-08-23T17:41:11+00:00. Total attempts: **24**, promoted: **11**. Updates via `python analysis/codex_attempts_sync.py` at the start of every continuous cycle (auto) or on demand.
+Parsed `codex_attempts_source.md` at 2026-08-26T03:09:41+00:00. Total attempts: **24**, promoted: **11**. Updates via `python analysis/codex_attempts_sync.py` at the start of every continuous cycle (auto) or on demand.
 
 | Attempt | Timestamp | Promoted | Move(s) | Learning (snippet) |
 |---|---|:-:|---|---|
