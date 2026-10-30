@@ -54,9 +54,13 @@ que aparece no replay.
   10 pregões.
 - **Stop** = limite − `stop_atr_mult` × ATR · **Alvo** = limite + `reward_risk_ratio` × distância do stop.
 - **Validade**: 3 pregões. Executa na abertura se o mercado abrir abaixo do
-  limite, ou no limite se o pregão tocar nele. Se fechar abaixo do stop antes
-  de executar, cancela. Se expirar, é uma *missed entry*: **não compre a outro
-  preço** — o replay não conta esse trade, e a operação real também não deve.
+  limite, ou no limite se o pregão tocar nele. Se expirar, é uma *missed
+  entry*: **não compre a outro preço** — o replay não conta esse trade, e a
+  operação real também não deve.
+- **Cancelamento abaixo do stop**: a regra existe, mas na prática não dispara
+  — para fechar abaixo do stop o preço precisa antes passar pelo limite (que
+  fica acima do stop), e aí a ordem já executou. Por isso os replays mostram
+  0 ordens canceladas.
 
 ### Com a posição aberta (níveis recalculados a cada fechamento)
 

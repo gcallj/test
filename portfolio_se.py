@@ -288,6 +288,7 @@ def main(argv=None) -> int:
     ap.add_argument("--orders", default=str(REPORT_DIR / "orders.csv"))
     args = ap.parse_args(argv)
 
+    out_dir = Path(args.orders).resolve().parent  # outputs next to the orders they summarise
     orders = pd.read_csv(args.orders, keep_default_na=True)
     for col in ("data_compra", "data_venda", "data_fim_ordem"):
         orders[col] = orders[col].fillna("")
@@ -302,18 +303,18 @@ def main(argv=None) -> int:
     res0 = simulate(adjust_for_brokerage(orders, 0.0), closes, days)
     opt = verdict(res0, bench)
 
-    REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame({"sistema": res.equity, "indice": base["bench_equity"]}).to_csv(REPORT_DIR / "portfolio_equity.csv")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame({"sistema": res.equity, "indice": base["bench_equity"]}).to_csv(out_dir / "portfolio_equity.csv")
     if not res.taken.empty:
-        res.taken.to_csv(REPORT_DIR / "portfolio_trades.csv", index=False)
-    (REPORT_DIR / "portfolio.md").write_text(markdown(base, opt), encoding="utf-8")
+        res.taken.to_csv(out_dir / "portfolio_trades.csv", index=False)
+    (out_dir / "portfolio.md").write_text(markdown(base, opt), encoding="utf-8")
     fill = orders[orders["status"].isin(["executada", "perdida", "cancelada"])]
     summary = {k: v for k, v in base.items() if k != "bench_equity"}
     summary["replay_fill_rate"] = float((fill["status"] == "executada").mean()) if len(fill) else None
     summary["slippage_assumed_per_side"] = market_se.SLIPPAGE_PCT_PER_SIDE
     summary["optimistic_pass"] = opt["pass"]
-    (REPORT_DIR / "portfolio.json").write_text(json.dumps(summary, indent=2, default=float), encoding="utf-8")
-    chart(base, res, REPORT_DIR / "portfolio.png")
+    (out_dir / "portfolio.json").write_text(json.dumps(summary, indent=2, default=float), encoding="utf-8")
+    chart(base, res, out_dir / "portfolio.png")
     print(markdown(base, opt))
     return 0
 
