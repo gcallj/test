@@ -67,6 +67,14 @@ jobs:
     env:
       GA_EVAL_WORKERS: "4"
       GA_TIME_BUDGET_HOURS: "4.0"
+      # Tamanho fixo do GA (decidido antes de ver qualquer replay): no 1o run
+      # o auto-tune estimou 3,2h e terminou em 58 min ainda melhorando. Pelos
+      # tempos medidos (~3 s/avaliacao com 4 workers) isto leva ~3h por job.
+      GA_AUTO_TUNE: "0"
+      GA_STAGE1_POP_SIZE: "80"
+      GA_STAGE1_NGEN: "25"
+      GA_STAGE2_POP_SIZE: "40"
+      GA_STAGE2_NGEN: "30"
     steps:
       - uses: actions/checkout@v4
 

@@ -82,6 +82,17 @@ antes de qualquer dinheiro real. O Brasil fica congelado como está.
   histórico inteiro, e um fold (histórico truncado) podia escolher features
   diferentes das do replay.
 
+## Walk-forward: execução oficial
+
+Decidido em 30/out/2026, **antes de ver qualquer replay fora da amostra**:
+a 1ª execução do workflow (run 41131117803) vale só como teste de pipeline. O
+auto-tune estimou 3,2h por job e o GA terminou em 58 min, com o fitness ainda
+melhorando na última geração. A execução oficial usa um GA de tamanho fixo
+(estágio 1: população 80 × 25 gerações; estágio 2: 40 × 30), ~3h por job. Os
+replays e o veredito da carteira usam somente os genomas da execução oficial;
+escolher entre execuções pelo resultado fora da amostra contaminaria a
+validação.
+
 ## Resultado da Fase 0 (30/out/2026)
 
 Reproduzido neste container com o código exato do branch antigo (`a5606dd`),
