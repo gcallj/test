@@ -151,6 +151,15 @@ _Avoid_: entrada/alvo (in prose)
 How a signal becomes an order and an order becomes a fill: order type, price,
 validity, and what happens when it does not fill.
 
+**Order validity**:
+The number of trading days a limit buy order stays live after its signal
+before it is cancelled.
+
+**Missed entry**:
+A buy signal whose limit order expired without filling. It counts as no trade,
+never as a fill at another price.
+_Avoid_: skipped trade, unfilled signal
+
 **Minervini stage**:
 A ticker's trend phase from its price against its 50- and 200-day averages.
 
@@ -181,6 +190,14 @@ on open positions.
 **Paper trading**:
 Forward recording of each day's real signals and the fills a trader would have
 got, without real money.
+
+**Walk-forward replay**:
+A replay split into consecutive folds, where each fold is traded by a genome
+trained only on data from before that fold began.
+
+**Fold**:
+One train-then-trade segment of a walk-forward replay: a training span ending
+at a cutoff date, followed by the trading span the resulting genome replays.
 
 **Holdout**:
 A span of dates withheld from the optimizer, used to judge a genome on data it
