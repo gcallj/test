@@ -53,163 +53,23 @@ def run_etl():
     SKIP_MI_REDUCTION = True   # skip slow MI-based feature reduction; GA does its own Spearman selection
 
     # ============================
-    # Listas de tickers
+    # Universo e contexto — mercado sueco (market_se.py)
     # ============================
-    # ============================
-    # Listas de tickers (curadas)
-    # ============================
+    # Acoes: snapshot congelado Nasdaq Stockholm Large Cap (data/universe_se.json,
+    # docs/adr/0003). Indices/FX/commodities entram so como contexto macro.
+    import market_se
+    equity_tickers = market_se.universe_tickers()
+    global_indices = list(market_se.CONTEXT_INDICES)
+    currency_commodity_tickers = list(market_se.CONTEXT_FX_COMMODITIES)
 
-    # Ações Brasil (foco em liquidez/setores + alguns nomes clássicos)
-    ibovespa_tickers = [
-        # Bancos / financeiros
-        "BBAS3.SA", "BBDC4.SA", "ITUB4.SA", "ITSA4.SA", "BBSE3.SA", "BPAC11.SA", "SANB11.SA",
-
-        # Commodities / energia / materiais
-        "VALE3.SA", "PETR4.SA", "PRIO3.SA", "BRKM5.SA",
-        "GGBR4.SA", "GOAU4.SA", "CSNA3.SA", "USIM5.SA",
-        "SUZB3.SA", "KLBN11.SA",
-
-        # Utilities / infraestrutura
-        "AXIA3.SA", "AXIA6.SA", "EQTL3.SA", "ENGI11.SA", "TAEE11.SA", "CMIG4.SA", "CPLE6.SA",
-        "SBSP3.SA", "SAPR11.SA",
-
-        # Consumo / varejo / saúde
-        "ABEV3.SA", "ASAI3.SA", "RADL3.SA", "LREN3.SA", "MGLU3.SA", "RENT3.SA", "MULT3.SA", "HAPV3.SA",
-
-        # Indústria / transporte / energia downstream
-        "WEGE3.SA", "EMBR3.SA", "RAIL3.SA", "CCRO3.SA", "ECOR3.SA",
-        "CSAN3.SA", "RAIZ4.SA", "UGPA3.SA", "VBBR3.SA", "SLCE3.SA",
-
-        # Proteínas (mantém diversificação exportadora)
-        "MBRF3.SA", "BEEF3.SA",
-
-        # Telecom / real estate (opcionais, mas costumam ser úteis)
-        "VIVT3.SA", "TIMS3.SA", "CYRE3.SA", "JHSF3.SA",
-
-        # JBS: no Yahoo costuma funcionar melhor via BDR (mantém “JBS” sem depender do JBSS3.SA)
-        "JBSS32.SA",
-
-        # Incorporação / real estate (apareceram forte em DY 2025)
-        "DIRR3.SA", "CURY3.SA", "LAVV3.SA", "SYNE3.SA",
-
-        # Energia / utilities (tradicionalmente boas pagadoras)
-        "ISAE4.SA", "TRPL4.SA", "EGIE3.SA", "ALUP11.SA", "CPFE3.SA", "NEOE3.SA", "ENBR3.SA",
-
-        # Saneamento
-        "CSMG3.SA",
-
-        # Bancos / seguros / serviços financeiros
-        "ABCB4.SA", "BRSR6.SA", "PSSA3.SA", "CXSE3.SA", "WIZC3.SA",
-
-        # Saúde / consumo
-        "FLRY3.SA", "ODPV3.SA", "MDIA3.SA", "GRND3.SA", "VULC3.SA",
-
-        # Indústria / logística
-        "POMO4.SA", "LEVE3.SA", "RANI3.SA", "TGMA3.SA",
-
-        # Agro
-        "SMTO3.SA", "AGRO3.SA",
-
-        # Shoppings
-        "IGTI11.SA",
-
-        # Química / materiais
-        "UNIP6.SA",
-
-        # Construção civil / incorporação
-        "EZTC3.SA",
-
-        # Frigoríficos / alimentos
-        "MLAS3.SA",
-
-        # Turismo / lazer
-        "CVCB3.SA",
-
-        # BDR / ETF internacional
-        "XPBR31.SA",
-
-        # Construção civil (adicionados)
-        "TCSA3.SA",
-
-        # ETF internacional (adicionado)
-        "IVVB11.SA",
-
-    ]
-
-    # FIIs Brasil (mix: logística, shoppings, lajes, papel, FoF)
-    fii_tickers = [
-        # Tijolo - logística / renda
-        "MXRF11.SA", "KNRI11.SA", "HGLG11.SA", "XPLG11.SA", "BTLG11.SA", "BRCO11.SA", "GGRC11.SA", "LVBI11.SA",
-        # Tijolo - shoppings
-        "VISC11.SA", "XPML11.SA", "HSML11.SA", "HGBS11.SA",
-        # Tijolo - lajes / híbridos
-        "BRCR11.SA", "HGRE11.SA", "HGPO11.SA", "PVBI11.SA", "RCRB11.SA", "VINO11.SA",
-        # Híbridos / renda urbana
-        "ALZR11.SA", "TRXF11.SA", "RBRP11.SA",
-        # Papel / crédito
-        "KNCR11.SA", "KNSC11.SA", "KNHY11.SA", "CPTS11.SA", "IRDM11.SA", "IRIM11.SA",
-        # FoF
-        "BCFF11.SA", "HFOF11.SA", "KFOF11.SA", "RBRF11.SA",
-        # Saúde / biotech
-        "RBRX11.SA",
-        # Híbridos / diversificados
-        "BCIA11.SA",
-    ]
-
-    # Índices globais + proxies macro (inclui Suécia e juros EUA)
-    global_indices = [
-        # EUA (equities)
-        "^GSPC", "^DJI", "^IXIC", "^NDX", "^RUT",
-        # Volatilidade / sentimento
-        "^VIX", "^VVIX",
-        # Juros EUA (yields)
-        "^IRX", "^FVX", "^TNX", "^TYX",
-
-        # Europa
-        "^FTSE", "^GDAXI", "^FCHI", "^STOXX50E", "^STOXX",
-
-        # Ásia-Pacífico
-        "^N225", "^HSI", "^KS11", "^AXJO", "^TWII", "^JKSE",
-
-        # Emergentes / LatAm
-        "^BVSP", "^BSESN", "^MXX",
-
-        # China (muitas vezes o Yahoo usa “códigos de bolsa” como índices)
-        "000001.SS", "399001.SZ",
-
-        # Suécia (relevante pra você)
-        "^OMXS30",
-    ]
-
-    # FX + commodities + cripto (mais “robusto” no Yahoo que XAUEUR/XAGEUR)
-    currency_commodity_tickers = [
-        # Dólar (DXY)
-        "DX-Y.NYB",
-
-        # FX principais (formas mais comuns no Yahoo)
-        "EURUSD=X", "GBPUSD=X", "AUDUSD=X",
-        "JPY=X", "CNY=X", "CHF=X", "BRL=X", "MXN=X", "SEK=X",
-
-        # Metais / energia (futuros)
-        "GC=F", "SI=F", "HG=F",
-        "CL=F", "BZ=F", "NG=F", "HO=F",
-
-        # Agricultura / pecuária
-        "ZC=F", "ZW=F", "ZS=F", "KC=F", "SB=F", "HE=F", "LE=F",
-
-        # ETFs macro/temáticos (complemento)
-        "UUP", "FXE", "FXY", "GLD", "USO", "COPX",
-
-        # Crypto
-        "BTC-USD", "ETH-USD", "SOL-USD", "LTC-USD", "DOGE-USD","CRO-USD",
-    ]
-
-    ALL_TICKERS = ibovespa_tickers + fii_tickers + global_indices + currency_commodity_tickers
+    ALL_TICKERS = equity_tickers + global_indices + currency_commodity_tickers
 
     # ============================
     # Fundamentals (opcional)
     # ============================
-    ADD_FUNDAMENTALS_QUARTERLY = True      # recomendado (histórico)
+    # Desligado: indexado pela data do trimestre, nao pela de divulgacao (~30-60
+    # dias depois) — vazaria informacao futura para o replay. Ver docs/sweden/plano.md.
+    ADD_FUNDAMENTALS_QUARTERLY = False
     ADD_FUNDAMENTALS_SNAPSHOT  = False     # WARNING: snapshot atual (leakage no treino)
 
     # cache em memória (p/ não chamar yfinance toda hora)
@@ -1480,8 +1340,8 @@ def run_etl():
             rate_up = float(y_up20.dropna().mean()) if y_up20.notna().any() else 0.0
             rate_dd = float(y_dd5.dropna().mean()) if y_dd5.notna().any() else 0.0
 
-            # FIIs (ending in 11.SA) are low-volatility: skip degeneracy for them
-            is_fii = tk.endswith("11.SA")
+            # No FII-like low-volatility class in the Swedish universe
+            is_fii = False
             if not is_fii:
                 if not (MIN_TARGET_RATE <= rate_up <= MAX_TARGET_RATE):
                     skip_reasons[f"degenerate_up20_{tk}"] += 1
@@ -1523,7 +1383,7 @@ def run_etl():
     # Pre-compute market reference data for cross-ticker features
     # ============================
     _ibov_sym = None
-    for _try_sym in ['^BVSP', '^BVSP.SA']:
+    for _try_sym in [market_se.INDEX_SYMBOL, *market_se.INDEX_FALLBACKS]:
         try:
             _ibov_ohlcv = data.xs(_try_sym, level=1, axis=1)
             if 'Close' in _ibov_ohlcv.columns and _ibov_ohlcv['Close'].notna().sum() > 100:
@@ -1533,7 +1393,7 @@ def run_etl():
             continue
     if _ibov_sym:
         _ibov_ret = data.xs(_ibov_sym, level=1, axis=1)['Close'].pct_change()
-        print(f"[cross-features] IBOV reference: {_ibov_sym} ({_ibov_ret.notna().sum()} returns)")
+        print(f"[cross-features] Market index reference: {_ibov_sym} ({_ibov_ret.notna().sum()} returns)")
     else:
         _ibov_ret = None
         print("[cross-features] WARNING: IBOV not found, skipping beta/relative-strength")
@@ -1556,7 +1416,7 @@ def run_etl():
 
     # ── STRATEGY 3: Market regime features (cross-sectional) ──
     # These measure overall market conditions, shared across all tickers
-    _sa_tickers = [t for t in valid_tickers if t.endswith('.SA') and not any(t.startswith(x) for x in ['^'])]
+    _sa_tickers = [t for t in valid_tickers if market_se.is_equity(t)]
     _market_breadth = None
     _market_dispersion = None
     if len(_sa_tickers) >= 10:

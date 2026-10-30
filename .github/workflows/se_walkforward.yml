@@ -1,0 +1,134 @@
+name: SE Walk-forward
+
+# Treina os 6 genomas do walk-forward sueco (docs/adr/0002) em paralelo, um
+# job por fold, e commita data/walkforward/fold_<k>.json no branch que disparou.
+#
+# Disparo: editar e dar push em data/walkforward/REQUEST. (workflow_dispatch so
+# funciona com o workflow no branch padrao, e este vive num branch de feature.)
+
+on:
+  push:
+    paths:
+      - "data/walkforward/REQUEST"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: se-walkforward-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  etl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ hashFiles('requirements.txt') }}
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: ETL (universo sueco, data/universe_se.json)
+        run: |
+          mkdir -p output/data
+          python -u -c "from stock_etl import run_etl; run_etl()"
+          test -f output/data/expanded_stock_reduced.parquet
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: se-etl
+          path: output/data/expanded_stock_reduced.parquet
+          retention-days: 3
+          if-no-files-found: error
+
+  train:
+    needs: etl
+    runs-on: ubuntu-latest
+    # Limite de 6h por job no GitHub: 4h de GA + preparo dos payloads.
+    timeout-minutes: 340
+    strategy:
+      fail-fast: false
+      matrix:
+        fold: [1, 2, 3, 4, 5, 6]
+    env:
+      GA_EVAL_WORKERS: "4"
+      GA_TIME_BUDGET_HOURS: "4.0"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ hashFiles('requirements.txt') }}
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: se-etl
+          path: output/data/
+
+      - name: Train fold ${{ matrix.fold }}
+        run: python -u walkforward.py train --fold ${{ matrix.fold }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fold-${{ matrix.fold }}
+          path: data/walkforward/fold_${{ matrix.fold }}.json
+          retention-days: 7
+          if-no-files-found: error
+
+  collect:
+    needs: train
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: fold-*
+          path: data/walkforward/
+          merge-multiple: true
+
+      - name: Commit fold genomes
+        run: |
+          ls -la data/walkforward/
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add data/walkforward/fold_*.json
+          if git diff --cached --quiet; then
+            echo "Nenhum genoma novo"
+            exit 0
+          fi
+          git commit -m "[se-walkforward] fold genomes $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          branch="${GITHUB_REF#refs/heads/}"
+          for i in 1 2 3; do
+            if git -c rebase.autoStash=true pull --rebase origin "$branch" && git push origin "HEAD:$branch"; then
+              exit 0
+            fi
+            sleep $(( (RANDOM % 10) + 3 ))
+          done
+          echo "push falhou apos 3 tentativas"
+          exit 1

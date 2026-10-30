@@ -7,9 +7,9 @@ from analysis.sector_cap import ENV_VAR, apply_sector_cap, cap_summary, get_acti
 
 
 def _df_with_4_commodity_buys():
-    # 4 commodity_largecap buys, 2 financials buys, 1 hold mixed in.
+    # 4 basic_materials buys, 2 financials buys, 1 hold mixed in.
     return pd.DataFrame({
-        "ticker": ["VALE3.SA", "PETR4.SA", "CSNA3.SA", "GGBR4.SA", "ITUB4.SA", "BBDC4.SA", "BBAS3.SA"],
+        "ticker": ["BOL.ST", "SSAB-B.ST", "SKF-B.ST", "SCA-B.ST", "SEB-A.ST", "SWED-A.ST", "SHB-A.ST"],
         "signal": ["buy", "buy", "buy", "buy", "buy", "buy", "hold"],
         "rank": [10.0, 8.0, 7.5, 6.0, 9.0, 7.0, 5.0],
     })
@@ -59,13 +59,13 @@ class ApplySectorCap(unittest.TestCase):
         out = apply_sector_cap(df, max_per_segment=2)
         # Commodity buys had ranks [10.0, 8.0, 7.5, 6.0] -> keep VALE3 (10) and PETR4 (8).
         kept = out.loc[out["signal"] == "buy", "ticker"].tolist()
-        self.assertIn("VALE3.SA", kept)
-        self.assertIn("PETR4.SA", kept)
-        self.assertNotIn("CSNA3.SA", kept)
-        self.assertNotIn("GGBR4.SA", kept)
+        self.assertIn("BOL.ST", kept)
+        self.assertIn("SSAB-B.ST", kept)
+        self.assertNotIn("SKF-B.ST", kept)
+        self.assertNotIn("SCA-B.ST", kept)
         # Financials: 2 buys [ITUB4=9.0, BBDC4=7.0] both <= cap=2 -> both stay.
-        self.assertIn("ITUB4.SA", kept)
-        self.assertIn("BBDC4.SA", kept)
+        self.assertIn("SEB-A.ST", kept)
+        self.assertIn("SWED-A.ST", kept)
 
     def test_demoted_signals_get_pre_and_reason_columns(self):
         df = _df_with_4_commodity_buys()
@@ -80,7 +80,7 @@ class ApplySectorCap(unittest.TestCase):
         df = _df_with_4_commodity_buys()
         out = apply_sector_cap(df, max_per_segment=2)
         # BBAS3 was already hold
-        bbas_row = out.loc[out["ticker"] == "BBAS3.SA"].iloc[0]
+        bbas_row = out.loc[out["ticker"] == "SHB-A.ST"].iloc[0]
         self.assertEqual(bbas_row["signal"], "hold")
         self.assertFalse(bool(bbas_row.get("sector_cap_reason", "") or ""))
 
@@ -92,13 +92,13 @@ class ApplySectorCap(unittest.TestCase):
 
     def test_no_buy_rows_is_safe_noop(self):
         df = pd.DataFrame({
-            "ticker": ["VALE3.SA"], "signal": ["hold"], "rank": [10.0],
+            "ticker": ["BOL.ST"], "signal": ["hold"], "rank": [10.0],
         })
         out = apply_sector_cap(df, max_per_segment=1)
         pd.testing.assert_frame_equal(out, df)
 
     def test_missing_columns_is_safe_noop(self):
-        df = pd.DataFrame({"ticker": ["VALE3.SA"], "rank": [10.0]})
+        df = pd.DataFrame({"ticker": ["BOL.ST"], "rank": [10.0]})
         out = apply_sector_cap(df, max_per_segment=1)
         pd.testing.assert_frame_equal(out, df)
 
@@ -110,18 +110,18 @@ class ApplySectorCap(unittest.TestCase):
         kept_buys = out.loc[out["signal"] == "buy", "ticker"].tolist()
         self.assertEqual(len(kept_buys), 2)
         # Top by rank: ITUB4=9.0 then VALE3=10.0 — actual top-2 are VALE3 (10) and ITUB4 (9).
-        self.assertIn("VALE3.SA", kept_buys)
-        self.assertIn("ITUB4.SA", kept_buys)
+        self.assertIn("BOL.ST", kept_buys)
+        self.assertIn("SEB-A.ST", kept_buys)
 
     def test_missing_rank_column_falls_back_to_input_order(self):
         df = pd.DataFrame({
-            "ticker": ["VALE3.SA", "PETR4.SA", "CSNA3.SA"],
+            "ticker": ["BOL.ST", "SSAB-B.ST", "SKF-B.ST"],
             "signal": ["buy", "buy", "buy"],
         })
         out = apply_sector_cap(df, max_per_segment=2)
-        # All 3 are commodity_largecap. Cap=2 -> keep first 2 by input order.
+        # All 3 are basic_materials. Cap=2 -> keep first 2 by input order.
         kept = out.loc[out["signal"] == "buy", "ticker"].tolist()
-        self.assertEqual(kept, ["VALE3.SA", "PETR4.SA"])
+        self.assertEqual(kept, ["BOL.ST", "SSAB-B.ST"])
 
     def test_idempotent(self):
         df = _df_with_4_commodity_buys()

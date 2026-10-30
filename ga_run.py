@@ -71,8 +71,6 @@ try:
 except ImportError:
     def get_ticker_meta(ticker):
         t = ticker.strip().upper()
-        if t.endswith("-USD"): return {"asset_class": "crypto", "sector": "crypto", "segment_key": "crypto"}
-        if t.endswith("11.SA"): return {"asset_class": "fii", "sector": "fii", "segment_key": "fii"}
         return {"asset_class": "equity", "sector": "other_equity", "segment_key": "other_equity"}
     def get_segment_for_tickers(tickers):
         return {t: get_ticker_meta(t)["segment_key"] for t in tickers}
@@ -86,6 +84,7 @@ import matplotlib.pyplot as plt
 # --- Modular GA pipeline imports ---
 from payload_store import PayloadStore, build_window_plans
 from ga_run_modular_final import run_global_ga_two_stage
+from ga_run_modular_final import _backtest_stats_global_intraday as _gm_backtest
 from auto_tune import AutoTuner
 
 try:
@@ -118,7 +117,7 @@ LOW_COL   = "low"
 CLOSE_COL = "close"
 
 ONLY_SA    = False  # replaced by ALLOWED_SUFFIXES
-ALLOWED_SUFFIXES = (".SA", "-USD")  # .SA = Brasil equities/FIIs, -USD = crypto
+ALLOWED_SUFFIXES = (".ST",)  # Nasdaq Stockholm equities (market_se.py)
 LONG_ONLY  = True
 
 APPLY_DAYS = 5
@@ -151,7 +150,7 @@ ATR_MULT_RANGE = (1.5, 3.5)
 RR_MULT_RANGE  = (1.5, 4.0)  # wider RR to pursue larger trend-following payoffs
 
 # Volume / liquidity filter (v5)
-MIN_VOL_FIN_DAILY = 200_000  # R$200k/dia — focus on liquid tickers to save memory during GA
+MIN_VOL_FIN_DAILY = 200_000  # SEK/dia; o universo ja exige giro mediano >= 10 MSEK (data/universe_se.json)
 
 # Apply output constraints
 MIN_STOP_PCT = 0.02       # 2% minimum stop (avoids unrealistic tight stops)
@@ -171,22 +170,18 @@ GA_STAGE_GATE = os.environ.get("GA_STAGE_GATE", "off").lower()
 GA_ALPHA_FOCUS = os.environ.get("GA_ALPHA_FOCUS", "off").lower() == "on"
 MIN_BUY_CONFIDENCE = 38.0 # Lowered from 50 to allow more buy signals while maintaining quality gate
 
-# Friction — custos realistas Brasil
-# Corretagem: R$7.00 por ordem (compra + venda = R$14 round-trip)
-BROKERAGE_PER_ORDER = 7.00     # R$ por ordem
-DEFAULT_POSITION_SIZE = 5000.0 # R$ posicao tipica para calculo de custo %
-# B3 fees: emolumentos + liquidacao ≈ 0.0325% por operacao (compra+venda)
-B3_FEES_PCT = 0.000325 * 2    # 0.065% round-trip
-# Slippage estimado
-SLIPPAGE_BPS = 10.0           # 0.10% por lado
-# IR: 15% sobre lucro liquido (swing trade), 20% day trade
-IR_SWING_PCT = 0.15
-# Custo total por trade (round-trip):
-#   corretagem: 2*7/5000 = 0.28%
-#   B3: 0.065%
-#   slippage: 0.20%
-#   total: ~0.55% (sem IR)
-COST_PER_TRADE_PCT = (2 * BROKERAGE_PER_ORDER / DEFAULT_POSITION_SIZE) + B3_FEES_PCT + (2 * SLIPPAGE_BPS / 10000)
+# Friction — mercado sueco (market_se.py): ISK, courtage Mini, slippage.
+from market_se import (  # noqa: E402
+    BROKERAGE_PCT_PER_ORDER,
+    BUY_SIDE_COST_PCT,
+    ROUND_TRIP_COST_PCT,
+    SELL_SIDE_COST_PCT,
+    SLIPPAGE_PCT_PER_SIDE,
+    TAX_PER_TRADE_PCT,
+)
+SLIPPAGE_BPS = SLIPPAGE_PCT_PER_SIDE * 10000.0   # 0.10% por lado
+IR_SWING_PCT = TAX_PER_TRADE_PCT                 # ISK: sem imposto por operacao
+COST_PER_TRADE_PCT = ROUND_TRIP_COST_PCT         # ~0.70% ida e volta
 
 MIN_PRICE     = 0.01
 CAP_DAILY_RET = 0.30
@@ -1514,465 +1509,19 @@ def _finalize_backtest_stats(
     return base_stats
 
 
-def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalParams, precomputed: Optional[Dict[str, np.ndarray]] = None, stage_gate: Optional[str] = None) -> Dict[str, float]:
-    o = np.asarray(o, dtype=np.float64)
-    h = np.asarray(h, dtype=np.float64)
-    l = np.asarray(l, dtype=np.float64)
-    c = np.asarray(c, dtype=np.float64)
-    atr = np.asarray(atr, dtype=np.float64)
+def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalParams, precomputed: Optional[Dict[str, np.ndarray]] = None, stage_gate: Optional[str] = None, trace: Optional[List[Dict[str, Any]]] = None, trades_out: Optional[List[Dict[str, Any]]] = None) -> Dict[str, float]:
+    """Per-ticker backtest under the real execution rule (docs/adr/0001).
+
+    The single implementation lives in ga_run_modular_final, which the GA
+    trains against; this wrapper only applies the optional Minervini stage
+    gate first. See `ga_run_modular_final._backtest_stats_global_intraday`.
+    """
     x = np.asarray(score_matrix, dtype=np.float64)
-    n = len(c)
-    if n < 5 or x.ndim != 2 or x.shape[0] != n:
-        return {"total_return": 0.0, "mdd": 0.0, "sharpe": 0.0, "n_trades": 0.0, "win_rate": 0.0, "avg_trade": 0.0}
-
-    # --- Apply Minervini stage gate (opcional) ---
+    c_arr = np.asarray(c, dtype=np.float64)
     _gate = stage_gate if stage_gate is not None else GA_STAGE_GATE
-    if _gate != "off":
-        x = _apply_stage_gate_to_score_matrix(x, c, _gate)
-
-    feat_n = max(1, x.shape[1])
-    ma = rolling_mean_np(c, int(gp.ma_filter_period), max(20, int(gp.ma_filter_period // 2)))
-    if precomputed is not None and ("vol_rank" in precomputed):
-        vol_rank = np.asarray(precomputed["vol_rank"], dtype=np.float64)
-    else:
-        vol_rank = rolling_percentile_rank(atr / np.maximum(c, ATR_EPS), 252)
-
-    # Weighted voting (magnitude-aware)
-    votes_long, votes_short = compute_weighted_votes(x, gp.z_threshold, feat_n)
-    score_raw = votes_long - votes_short
-    score_ev = ewm_mean_np(score_raw, int(gp.signal_ema_span))
-    score_pctl = rolling_quantile_trigger(score_ev, float(gp.score_percentile_trigger), max(63, SCORE_LOOKBACK))
-
-    score95 = np.nanpercentile(np.abs(score_ev), 95) if np.isfinite(np.nanmax(np.abs(score_ev))) else 1.0
-    score95 = max(score95, ATR_EPS)
-
-    # Regime score (multi-factor bull/bear detection)
-    ma50_exit = rolling_mean_np(c, 50, 20)
-    ma200 = rolling_mean_np(c, 200, 50)
-    regime_score = compute_regime_score(c, ma200, vol_rank)
-
-    # Volume confirmation: precompute volume moving averages
-    vol_data = precomputed.get("volume", None) if precomputed is not None else None
-    vol_ma20 = None
-    vol_ma50 = None
-    if vol_data is not None and gp.volume_confirm_mode > 0:
-        vol_arr = np.asarray(vol_data, dtype=np.float64)
-        vol_ma20 = rolling_mean_np(vol_arr, 20, 5)
-        if gp.volume_confirm_mode == 2:
-            vol_ma50 = rolling_mean_np(vol_arr, 50, 10)
-
-    # Momentum confirmation: precompute N-day returns
-    mom_days = int(gp.momentum_confirm_days)
-    mom_ret = np.full(n, np.nan, dtype=np.float64)
-    if mom_days > 0:
-        mom_ret[mom_days:] = (c[mom_days:] / np.maximum(c[:-mom_days], 1e-8)) - 1.0
-
-    # v5/v7 gates: precompute Woodie daily pivot + R1/S1 do bar anterior.
-    # Usado tanto em evaluate_genome_full (fitness GA) quanto em apply.
-    pivot_prev = np.full(n, np.nan, dtype=np.float64)
-    r1_prev = np.full(n, np.nan, dtype=np.float64)
-    s1_prev = np.full(n, np.nan, dtype=np.float64)
-    if n >= 2:
-        pivot_prev[1:] = (h[:-1] + l[:-1] + c[:-1]) / 3.0
-        r1_prev[1:] = 2.0 * pivot_prev[1:] - l[:-1]
-        s1_prev[1:] = 2.0 * pivot_prev[1:] - h[:-1]
-
-    min_hold_bars = int(max(0, getattr(gp, "min_hold_bars", 3)))
-    early_exit_block_bars = int(max(min_hold_bars, getattr(gp, "early_exit_block_bars", min_hold_bars)))
-    profit_take_min_bars = int(max(min_hold_bars, getattr(gp, "profit_take_min_bars", min_hold_bars)))
-    early_take_quality_gate = float(np.clip(getattr(gp, "early_take_quality_gate", 0.0), 0.0, 1.0))
-    early_take_score_decay_max = float(np.clip(getattr(gp, "early_take_score_decay_max", 0.35), 0.0, 1.0))
-
-    equity = 1.0
-    peak = 1.0
-    mdd = 0.0
-    trade_rets = []
-    trade_exit_types = []  # "stop", "take", "time", "hard_loss"
-    trade_hold_bars = []
-    trade_rets_after_3 = []
-    trade_target_after_3 = []
-    pos = 0
-    entry_px = np.nan
-    entry_bar_idx = -1
-    entry_side = 0
-    entry_take_abs = 0.0
-    realized_partial_ret = 0.0
-    bars = 0
-    partial_taken = False
-    partial_taken_2 = False
-    max_fav = 0.0  # track maximum favorable excursion for trailing stop
-    entry_score_strength = 0.0
-    early_take_deferred_events = 0
-    early_take_events = 0
-    early_take_dependency_events = 0
-    consec_long = 0
-    consec_short = 0
-    consec_stops = 0
-    cooldown = 0
-    exposure_acc = 0.0
-    current_drawdown_duration = 0
-    max_drawdown_duration = 0
-
-    def _after_3_snapshot_ret() -> Tuple[Optional[float], bool]:
-        if entry_bar_idx < 0 or entry_px <= 0.0 or entry_side == 0:
-            return None, False
-        idx3 = entry_bar_idx + 3
-        if idx3 >= n:
-            return None, False
-        gross = (float(c[idx3]) / max(entry_px, ATR_EPS) - 1.0) * float(entry_side)
-        net = gross - COST_PER_TRADE_PCT
-        if net > 0.0:
-            net *= (1.0 - IR_SWING_PCT)
-        lo = min(n, idx3 + 1)
-        if entry_side > 0:
-            max_fav_3 = float(np.nanmax(h[entry_bar_idx + 1:lo] - entry_px)) if lo > entry_bar_idx + 1 else 0.0
-        else:
-            max_fav_3 = float(np.nanmax(entry_px - l[entry_bar_idx + 1:lo])) if lo > entry_bar_idx + 1 else 0.0
-        target_hit_3 = bool(max_fav_3 >= max(entry_take_abs, ATR_EPS))
-        return float(net), target_hit_3
-
-    def _record_trade(ret: float, exit_type: str, hold_bars: float) -> None:
-        nonlocal early_take_events, early_take_dependency_events
-        after3_ret, target_hit_3 = _after_3_snapshot_ret()
-        if after3_ret is not None:
-            trade_rets_after_3.append(after3_ret)
-            trade_target_after_3.append(target_hit_3)
-        if exit_type == "take" and hold_bars < 3.0:
-            early_take_events += 1
-            if after3_ret is not None and after3_ret <= 0.0:
-                early_take_dependency_events += 1
-        trade_rets.append(float(ret))
-        trade_exit_types.append(str(exit_type))
-        trade_hold_bars.append(float(max(1.0, hold_bars)))
-
-    for i in range(1, n):
-        if cooldown > 0:
-            cooldown -= 1
-
-        if abs(pos) > 0:
-            exposure_acc += float(min(1.0, abs(pos)))
-        if pos != 0:
-            bars += 1
-            # -- Dynamic stop tightening --
-            tighten = 1.0
-            if bars >= max(int(gp.stop_tighten_after_bars), min_hold_bars):
-                tighten = gp.stop_tighten_factor
-            elif bars >= max(3, min_hold_bars):
-                # Early P&L: tighten if underwater after 3+ bars
-                early_pnl = (c[i - 1] / max(entry_px, ATR_EPS) - 1.0) * np.sign(pos)
-                if early_pnl < -0.002:
-                    tighten = max(gp.stop_tighten_factor, 0.85)
-            # Vol-regime stop adjustment (mode 1: widen stops in high vol)
-            vol_stop_adj = 1.0
-            if gp.vol_regime_mode == 1 and np.isfinite(vol_rank[i - 1]):
-                if vol_rank[i - 1] > 0.75:
-                    vol_stop_adj = 1.15
-                elif vol_rank[i - 1] < 0.25:
-                    vol_stop_adj = 0.90
-            stop_mult = gp.stop_atr_mult * tighten * vol_stop_adj
-            stop_abs = max(ATR_EPS, stop_mult * max(atr[i], ATR_EPS))
-            take_abs = gp.reward_risk_ratio * stop_abs
-            hard_loss = abs(o[i] / max(entry_px, ATR_EPS) - 1.0)
-
-            if hard_loss > gp.max_loss_per_trade_pct:
-                final_leg_ret = (o[i] / entry_px - 1.0) * pos - COST_PER_TRADE_PCT
-                trade_ret = float(realized_partial_ret + final_leg_ret)
-                equity *= (1.0 + final_leg_ret)
-                _record_trade(trade_ret, "hard_loss", float(max(1, bars)))
-                consec_stops += 1 if trade_ret < 0 else 0
-                if trade_ret > 0:
-                    consec_stops = 0
-                pos = 0
-                entry_bar_idx = -1
-                entry_side = 0
-                entry_take_abs = 0.0
-                realized_partial_ret = 0.0
-                bars = 0
-                partial_taken = False
-                partial_taken_2 = False
-                max_fav = 0.0
-                entry_score_strength = 0.0
-                continue
-
-            fav = ((h[i] - entry_px) if pos > 0 else (entry_px - l[i]))
-            adv = ((entry_px - l[i]) if pos > 0 else (h[i] - entry_px))
-            max_fav = max(max_fav, fav)
-
-            def _should_defer_early_take() -> bool:
-                if profit_take_min_bars <= 0 or bars >= profit_take_min_bars:
-                    return False
-                if early_take_quality_gate <= 1e-12:
-                    return True
-                if pos < 0:
-                    return False
-                idx_prev = max(0, i - 1)
-                signed_score = float(score_ev[idx_prev]) * float(np.sign(pos))
-                score_strength_now = float(np.clip(signed_score / score95, 0.0, 1.0)) if np.isfinite(signed_score) else 0.0
-                score_decay = max(0.0, float(entry_score_strength) - score_strength_now)
-                pivot_ok = (not np.isfinite(pivot_prev[idx_prev])) or (c[idx_prev] >= pivot_prev[idx_prev])
-                support_ok = (not np.isfinite(s1_prev[idx_prev])) or (c[idx_prev] >= s1_prev[idx_prev])
-                trend_ok = True
-                if np.isfinite(ma50_exit[idx_prev]) and np.isfinite(ma200[idx_prev]):
-                    ma50_rising = idx_prev < 5 or ma50_exit[idx_prev] >= ma50_exit[max(0, idx_prev - 5)]
-                    trend_ok = c[idx_prev] >= ma200[idx_prev] and (ma50_exit[idx_prev] >= ma200[idx_prev] or ma50_rising)
-                return bool(
-                    score_strength_now >= early_take_quality_gate
-                    and score_decay <= early_take_score_decay_max
-                    and pivot_ok
-                    and support_ok
-                    and trend_ok
-                )
-
-            # -- Trailing stop logic --
-            effective_stop = stop_abs
-            if gp.trailing_stop_mode >= 1 and max_fav > stop_abs:
-                # Mode 1+2: move stop to breakeven after profit > 1x stop
-                effective_stop = max_fav  # breakeven = 0 adverse from max
-                if gp.trailing_stop_mode == 2 and max_fav > 2.0 * stop_abs:
-                    # Mode 2: trail at 50% of max favorable excursion
-                    effective_stop = 0.5 * max_fav
-
-            early_profit_threshold = take_abs
-            if gp.partial_take_pct > 0:
-                early_profit_threshold = min(early_profit_threshold, gp.partial_take_level * stop_abs)
-            if gp.partial_take_pct_2 > 0 and partial_taken:
-                early_profit_threshold = min(early_profit_threshold, gp.partial_take_level_2 * stop_abs)
-            defer_early_take = _should_defer_early_take() if fav >= early_profit_threshold else False
-            profit_take_allowed = (bars >= profit_take_min_bars) or (not defer_early_take)
-            if defer_early_take:
-                early_take_deferred_events += 1
-
-            partial_take_allowed = profit_take_allowed or (defer_early_take and bars < profit_take_min_bars)
-
-            if partial_take_allowed and gp.partial_take_pct > 0 and (not partial_taken) and fav >= gp.partial_take_level * stop_abs:
-                part_ret = gp.partial_take_pct * gp.partial_take_level * stop_abs / max(entry_px, ATR_EPS)
-                net_part_ret = part_ret - 0.0003
-                equity *= (1.0 + net_part_ret)
-                realized_partial_ret += float(net_part_ret)
-                pos = pos * (1.0 - gp.partial_take_pct)
-                partial_taken = True
-
-            # 2nd partial take at higher level
-            if partial_take_allowed and gp.partial_take_pct_2 > 0 and partial_taken and (not partial_taken_2) and fav >= gp.partial_take_level_2 * stop_abs:
-                part_ret2 = gp.partial_take_pct_2 * gp.partial_take_level_2 * stop_abs / max(entry_px, ATR_EPS)
-                net_part_ret2 = part_ret2 - 0.0003
-                equity *= (1.0 + net_part_ret2)
-                realized_partial_ret += float(net_part_ret2)
-                pos = pos * (1.0 - gp.partial_take_pct_2)
-                partial_taken_2 = True
-
-            # Use effective_stop for trailing, but original stop_abs for take/time
-            trail_adv = max_fav - fav  # how far price pulled back from best
-            trailing_active = gp.trailing_stop_mode > 0 and max_fav > stop_abs
-            base_stop_hit = (adv >= stop_abs) if gp.trailing_stop_mode == 0 else ((not trailing_active) and adv >= stop_abs)
-            trailing_stop_hit = trailing_active and trail_adv >= effective_stop
-            stop_hit = bool(base_stop_hit or (bars >= early_exit_block_bars and trailing_stop_hit))
-            exit_reason = "stop" if base_stop_hit else ("trailing" if (bars >= early_exit_block_bars and trailing_stop_hit) else "")
-            take_hit = profit_take_allowed and (fav >= take_abs)
-            time_stop = (bars >= max(int(gp.time_stop_bars), min_hold_bars)) and (fav < 0.5 * stop_abs)
-
-            if stop_hit or take_hit or time_stop:
-                exit_px = c[i]
-                if stop_hit:
-                    # For trailing stop: exit at trailed level, not original stop
-                    if exit_reason == "trailing":
-                        trail_stop_px = entry_px + np.sign(pos) * (max_fav - effective_stop)
-                        ideal_exit = trail_stop_px
-                    else:
-                        ideal_exit = entry_px - np.sign(pos) * stop_abs
-                    if pos > 0:
-                        exit_px = min(ideal_exit, o[i]) if o[i] < ideal_exit else ideal_exit
-                    else:
-                        exit_px = max(ideal_exit, o[i]) if o[i] > ideal_exit else ideal_exit
-                elif take_hit:
-                    ideal_exit = entry_px + np.sign(pos) * take_abs
-                    if pos > 0:
-                        exit_px = max(ideal_exit, o[i]) if o[i] > ideal_exit else ideal_exit
-                    else:
-                        exit_px = min(ideal_exit, o[i]) if o[i] < ideal_exit else ideal_exit
-                
-                gross_ret = (exit_px / entry_px - 1.0) * pos
-                # Custos: corretagem + B3 + slippage
-                cost = COST_PER_TRADE_PCT
-                if partial_taken or partial_taken_2:
-                    cost *= 0.7  # partial takes already paid some friction
-                net_ret = gross_ret - cost
-                # IR: 15% sobre lucro (swing trade, isenção mensal ignorada por conservadorismo)
-                if net_ret > 0:
-                    net_ret = net_ret * (1.0 - IR_SWING_PCT)
-                trade_ret = float(realized_partial_ret + net_ret)
-                equity *= (1.0 + net_ret)
-                # Track exit type for win_rate_target metric
-                if take_hit:
-                    _exit_type = "take"
-                elif exit_reason == "trailing":
-                    _exit_type = "trailing"
-                elif stop_hit:
-                    _exit_type = "stop"
-                else:
-                    _exit_type = "time"
-                _record_trade(trade_ret, _exit_type, float(max(1, bars)))
-                if exit_reason == "stop" and trade_ret < 0:
-                    consec_stops += 1
-                elif trade_ret > 0:
-                    consec_stops = 0
-                pos = 0
-                entry_bar_idx = -1
-                entry_side = 0
-                entry_take_abs = 0.0
-                realized_partial_ret = 0.0
-                bars = 0
-                partial_taken = False
-                partial_taken_2 = False
-                max_fav = 0.0
-                entry_score_strength = 0.0
-                if gp.consecutive_loss_cooldown > 0 and consec_stops >= 2:
-                    cooldown = gp.consecutive_loss_cooldown
-                continue
-
-        if pos == 0 and cooldown == 0 and np.isfinite(score_ev[i - 1]) and np.isfinite(score_pctl[i - 1]):
-            if gp.volatility_filter_percentile > 0 and np.isfinite(vol_rank[i - 1]) and vol_rank[i - 1] < gp.volatility_filter_percentile:
-                continue
-            # Vol regime mode 2: skip entries in very high volatility periods
-            if gp.vol_regime_mode == 2 and np.isfinite(vol_rank[i - 1]) and vol_rank[i - 1] > 0.85:
-                continue
-            # Liquidity filter (ATR proxy)
-            if atr[i-1] < 0.01:
-                continue
-            # Min signal strength filter
-            if gp.min_signal_strength > 0:
-                if abs(score_ev[i - 1]) / score95 < gp.min_signal_strength:
-                    continue
-            # Entry score threshold filter (v4)
-            if gp.entry_score_threshold > 0:
-                if abs(score_ev[i - 1]) / score95 < gp.entry_score_threshold:
-                    continue
-            # Volume confirmation filter (v4)
-            if gp.volume_confirm_mode == 1 and vol_ma20 is not None and i - 1 < len(vol_ma20):
-                if np.isfinite(vol_ma20[i - 1]) and vol_data[i - 1] < vol_ma20[i - 1]:
-                    continue
-            elif gp.volume_confirm_mode == 2 and vol_ma50 is not None and i - 1 < len(vol_ma50):
-                if np.isfinite(vol_ma50[i - 1]) and vol_data[i - 1] < vol_ma50[i - 1]:
-                    continue
-            # Momentum confirmation filter (v4)
-            if mom_days > 0 and np.isfinite(mom_ret[i - 1]) and mom_ret[i - 1] < 0:
-                continue
-            # Regime filter (v4): continuous regime score replaces binary MA filter
-            if gp.regime_threshold > 0 and np.isfinite(regime_score[i - 1]):
-                if regime_score[i - 1] < gp.regime_threshold:
-                    continue  # market regime unfavorable for longs
-
-            vl = votes_long[i - 1]
-            vs = votes_short[i - 1]
-            long_raw = (vl >= gp.vote_threshold_long) and (score_ev[i - 1] >= score_pctl[i - 1])
-            short_raw = (vs >= gp.vote_threshold_short) and (-score_ev[i - 1] >= score_pctl[i - 1])
-
-            if long_raw:
-                consec_long += 1
-            else:
-                consec_long = 0
-            if short_raw:
-                consec_short += 1
-            else:
-                consec_short = 0
-
-            long_ok = consec_long >= gp.entry_confirmation_days
-            short_ok = consec_short >= gp.entry_confirmation_days
-
-            if gp.ma_filter_mode == 1 and np.isfinite(ma[i - 1]):
-                if c[i - 1] < ma[i - 1]:
-                    long_ok = long_ok and (score_ev[i - 1] * 0.5 >= score_pctl[i - 1])
-                if c[i - 1] > ma[i - 1]:
-                    short_ok = short_ok and (-score_ev[i - 1] * 0.5 >= score_pctl[i - 1])
-            elif gp.ma_filter_mode == 2 and np.isfinite(ma[i - 1]):
-                if c[i - 1] < ma[i - 1]:
-                    long_ok = False
-                if c[i - 1] > ma[i - 1]:
-                    short_ok = False
-
-            # v5 pivot gate (ATR-based): bloqueia buy se close abaixo do pivot_prev
-            # por mais de gene*ATR. gene=1.0 desliga. Aplicado no backtest do GA
-            # (antes so estava em vectorized_signals => GA nao otimizava este gene).
-            _ea = float(getattr(gp, "entry_aggressiveness", 1.0))
-            if long_ok and _ea < 1.0 - 1e-9 and np.isfinite(pivot_prev[i - 1]):
-                tolerance = _ea * float(atr[i - 1])
-                if c[i - 1] < pivot_prev[i - 1] - tolerance:
-                    long_ok = False
-            # v7 resistance gate (ATR-based): bloqueia buy se close > R1 + gene*ATR
-            _rog = float(getattr(gp, "resistance_overext_gate", 0.0))
-            if long_ok and _rog > 1e-9 and np.isfinite(r1_prev[i - 1]):
-                if c[i - 1] > r1_prev[i - 1] + _rog * float(atr[i - 1]):
-                    long_ok = False
-            # v7 support gate (ATR-based): bloqueia buy se close < S1 - gene*ATR
-            _sbg = float(getattr(gp, "support_broken_gate", 0.0))
-            if long_ok and _sbg > 1e-9 and np.isfinite(s1_prev[i - 1]):
-                if c[i - 1] < s1_prev[i - 1] - _sbg * float(atr[i - 1]):
-                    long_ok = False
-
-            side = 1 if long_ok else (-1 if (short_ok and not LONG_ONLY) else 0)
-            if side != 0 and np.isfinite(o[i]) and np.isfinite(atr[i]):
-                strength = float(np.clip(abs(score_ev[i - 1]) / score95, 0.0, 1.0))
-                # Support-adaptive discount: scale by distance to recent support
-                base_discount = gp.entry_discount_atr_frac * (1.0 - gp.score_strength_scaling * strength)
-                recent_low = np.nanmin(l[max(0, i - 10):i]) if i > 0 else l[i]
-                support_dist = (o[i] - recent_low) / max(atr[i], ATR_EPS) if np.isfinite(recent_low) else 1.0
-                support_factor = float(np.clip(support_dist / 3.0, 0.3, 1.5))
-                discount = base_discount * support_factor
-                limit_px = o[i] - side * discount * atr[i]
-                fill = (l[i] <= limit_px <= h[i])
-                if fill and limit_px > 0:
-                    pos = side
-                    entry_px = float(limit_px)
-                    entry_bar_idx = i
-                    entry_side = int(side)
-                    entry_take_abs = float(gp.reward_risk_ratio * max(ATR_EPS, gp.stop_atr_mult * max(atr[i], ATR_EPS)))
-                    realized_partial_ret = 0.0
-                    bars = 0
-                    partial_taken = False
-                    partial_taken_2 = False
-                    max_fav = 0.0
-                    entry_score_strength = strength
-                elif np.isfinite(o[i]) and o[i] > 0:
-                    pos = side
-                    entry_px = float(o[i])
-                    entry_bar_idx = i
-                    entry_side = int(side)
-                    entry_take_abs = float(gp.reward_risk_ratio * max(ATR_EPS, gp.stop_atr_mult * max(atr[i], ATR_EPS)))
-                    realized_partial_ret = 0.0
-                    bars = 0
-                    partial_taken = False
-                    partial_taken_2 = False
-                    max_fav = 0.0
-                    entry_score_strength = strength
-
-        peak = max(peak, equity)
-        drawdown = (equity / max(peak, ATR_EPS)) - 1.0
-        mdd = min(mdd, drawdown)
-        if drawdown < -1e-12:
-            current_drawdown_duration += 1
-            max_drawdown_duration = max(max_drawdown_duration, current_drawdown_duration)
-        else:
-            current_drawdown_duration = 0
-        # Equity drawdown circuit-breaker (progressive re-entry: 20 bars, was 30)
-        if gp.equity_drawdown_stop_pct > 0 and drawdown < -gp.equity_drawdown_stop_pct:
-            cooldown = max(cooldown, 20)  # ~1 month pause after DD exceeds threshold
-
-    exposure = float(exposure_acc / max(1, n - 1))
-    return _finalize_backtest_stats(
-        trade_rets=trade_rets,
-        trade_exit_types=trade_exit_types,
-        trade_hold_bars=trade_hold_bars,
-        exposure=exposure,
-        total_return=float(equity - 1.0),
-        mdd=float(mdd),
-        n_bars=n,
-        max_drawdown_duration=max_drawdown_duration,
-        early_take_deferred_events=early_take_deferred_events,
-        trade_rets_after_3=trade_rets_after_3,
-        trade_target_after_3=trade_target_after_3,
-        early_take_events=early_take_events,
-        early_take_dependency_events=early_take_dependency_events,
-    )
+    if _gate != "off" and x.ndim == 2 and x.shape[0] == len(c_arr) and len(c_arr) >= 5:
+        x = _apply_stage_gate_to_score_matrix(x, c_arr, _gate)
+    return _gm_backtest(o, h, l, c_arr, x, atr, gp, precomputed=precomputed, trace=trace, trades_out=trades_out)
 
 
 def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float:
@@ -3307,7 +2856,7 @@ def load_full_history_all_cols(path: str) -> pd.DataFrame:
         mask = df[TICKER_COL].astype(str).str.endswith(tuple(ALLOWED_SUFFIXES))
         df = df[mask].copy()
     elif ONLY_SA:
-        df = df[df[TICKER_COL].str.endswith(".SA")].copy()
+        df = df[df[TICKER_COL].str.endswith(".ST")].copy()
 
     df = add_sma200(df)
     df = add_atr_ohlc_fast(df)
@@ -3773,6 +3322,18 @@ def run():
         except Exception as e:
             print(f"[ETL MERGE] Failed: {e}. Continuing without ETL features.")
 
+    # ── Walk-forward fold (docs/sweden/plano.md) ─────────────────────
+    # GA_TRAIN_END: o GA nao ve nenhum dado posterior ao corte. As features
+    # sao z-scores moveis, entao ficam identicas as que o replay calcula no
+    # historico completo para as mesmas datas.
+    _fold_train_end = os.environ.get("GA_TRAIN_END", "").strip()
+    if _fold_train_end:
+        df[DATE_COL] = pd.to_datetime(df[DATE_COL])
+        _cut = pd.Timestamp(_fold_train_end).normalize()
+        _n0 = len(df)
+        df = df[df[DATE_COL] <= _cut].copy()
+        print(f"[FOLD] GA_TRAIN_END={_cut.date()}: removed {_n0 - len(df)} rows after the cut")
+
     # ── Causal feature allowlist ─────────────────────────────────────
     # Block model-derived columns to prevent circular feature contamination.
     # Only OHLCV-derived technicals and ETL features are allowed as GA inputs.
@@ -3817,7 +3378,7 @@ def run():
     total_tickers = len(tickers)
     if EVAL_ONLY_TICKER:
         t_req = str(EVAL_ONLY_TICKER).strip().upper()
-        tickers = [t for t in tickers if str(t).upper() in {t_req, f"{t_req}.SA"}]
+        tickers = [t for t in tickers if str(t).upper() in {t_req, f"{t_req}.ST"}]
     elif TEST_ONLY_PREFIX_C_TICKERS:
         tickers = [t for t in tickers if str(t).startswith(TEST_TICKER_PREFIX)]
 
@@ -4099,6 +3660,10 @@ def run():
     del df
     gc.collect()
     print(f"[STORE] built memmap store at {store.store_path}, freed DataFrames")
+    if os.environ.get("GA_BUILD_STORE_ONLY", "0") == "1":
+        # Replays and the daily run only need the per-ticker payloads.
+        print("[STORE] GA_BUILD_STORE_ONLY=1: store kept, skipping GA and apply")
+        return
 
     # FASE 2: GA global (two-stage) with memmap PayloadStore
     run_mode = str(RUN_MODE).strip().lower()
@@ -4143,9 +3708,20 @@ def run():
         store.cleanup()
         raise SystemExit(1)
 
+    # Fold training starts from scratch: the stored checkpoint was trained on
+    # later data (or another market) and would leak into an earlier fold.
+    if os.environ.get("GA_NO_SEED", "0") == "1" and run_mode != "load":
+        prev_genome_for_seed = None
+        global_params = None
+        print("[FOLD] GA_NO_SEED=1: GA starts without a seed genome")
+
     if global_params is None:
         dmin = store.min_date
         dmax = store.max_date
+        _fold_train_years = os.environ.get("GA_TRAIN_YEARS", "").strip()
+        if _fold_train_years:
+            dmin = max(pd.Timestamp(dmin), pd.Timestamp(dmax) - pd.DateOffset(years=float(_fold_train_years)))
+            print(f"[FOLD] GA windows limited to {pd.Timestamp(dmin).date()} .. {pd.Timestamp(dmax).date()}")
         # ITEM 3 walk-forward TRUE: holdout_days reserva ultimos N dias para
         # pristine validation. Default 90 dias (3 meses) — GA nao ve esse range.
         # Desligar via GA_HOLDOUT_DAYS=0 para retornar ao comportamento antigo.
@@ -4189,6 +3765,21 @@ def run():
             run_mode=run_mode,
             seed_genome=prev_genome_for_seed,
         )
+        _fold_out = os.environ.get("GA_FOLD_OUT", "").strip()
+        if _fold_out:
+            os.makedirs(os.path.dirname(os.path.abspath(_fold_out)), exist_ok=True)
+            with open(_fold_out, "w", encoding="utf-8") as f:
+                json.dump({
+                    "fitness": float(global_fit),
+                    "genome": [float(g) for g in global_genome],
+                    "train_end": os.environ.get("GA_TRAIN_END", ""),
+                    "train_years": os.environ.get("GA_TRAIN_YEARS", ""),
+                    "window_start": str(pd.Timestamp(dmin).date()),
+                    "window_end": str(pd.Timestamp(dmax).date()),
+                    "n_tickers": len(store.tickers),
+                }, f, indent=2)
+            print(f"[FOLD] genome written to {_fold_out} fit={global_fit:.4f}; skipping apply phase")
+            return
         # Guardrail: only save checkpoint if fitness improved over previous
         prev_fit_for_guard = float("nan")
         if prev_genome_for_seed is not None and os.path.exists(out_global_ckpt):

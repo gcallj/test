@@ -50,12 +50,18 @@ GA_STAGE2_MIN_SPAN_RATIO = 0.18
 # Friction / cost constants (mirrored from ga_run.py config)
 LONG_ONLY = True
 MIN_VOL_FIN_DAILY = 200_000
-BROKERAGE_PER_ORDER = 7.00
-DEFAULT_POSITION_SIZE = 5000.0
-B3_FEES_PCT = 0.000325 * 2
-SLIPPAGE_BPS = 10.0
-IR_SWING_PCT = 0.15
-COST_PER_TRADE_PCT = (2 * BROKERAGE_PER_ORDER / DEFAULT_POSITION_SIZE) + B3_FEES_PCT + (2 * SLIPPAGE_BPS / 10000)
+# Swedish market: costs per side, ISK (no per-trade tax), execution rule.
+from market_se import (  # noqa: E402
+    BUY_SIDE_COST_PCT,
+    ORDER_VALIDITY_DAYS,
+    ROUND_TRIP_COST_PCT,
+    SELL_SIDE_COST_PCT,
+    SLIPPAGE_PCT_PER_SIDE,
+    TAX_PER_TRADE_PCT,
+)
+SLIPPAGE_BPS = SLIPPAGE_PCT_PER_SIDE * 10000.0
+IR_SWING_PCT = TAX_PER_TRADE_PCT
+COST_PER_TRADE_PCT = ROUND_TRIP_COST_PCT
 MIN_PRICE = 0.01
 CAP_DAILY_RET = 0.30
 CAP_TRADE_RET = 3.00
@@ -240,51 +246,79 @@ def _ewm_mean_np(x: np.ndarray, span: int) -> np.ndarray:
     return out
 
 
+try:
+    from numba import njit as _njit
+except ImportError:  # pragma: no cover - numba is in requirements.txt
+    _njit = None
+
+
+def _rolling_percentile_rank_py(x, valid, n, window):
+    out = np.full(n, np.nan, dtype=np.float64)
+    for i in range(n):
+        if not valid[i]:
+            continue
+        start = max(0, i - window + 1)
+        count = 0
+        rank = 0
+        xi = x[i]
+        for j in range(start, i + 1):
+            if valid[j]:
+                count += 1
+                if x[j] <= xi:
+                    rank += 1
+        if count >= 20:
+            out[i] = rank / count
+    return out
+
+
+def _rolling_quantile_trigger_py(x, valid, n, window, q):
+    out = np.full(n, np.nan, dtype=np.float64)
+    for i in range(n):
+        if not valid[i]:
+            continue
+        start = max(0, i - window + 1)
+        count = 0
+        for j in range(start, i + 1):
+            if valid[j]:
+                count += 1
+        if count < 20:
+            continue
+        vals = np.empty(count, dtype=np.float64)
+        k = 0
+        for j in range(start, i + 1):
+            if valid[j]:
+                vals[k] = x[j]
+                k += 1
+        vals.sort()
+        idx = min(max(int(np.ceil(q * count)) - 1, 0), count - 1)
+        out[i] = vals[idx]
+    return out
+
+
+if _njit is not None:
+    _rolling_percentile_rank_kernel = _njit(cache=True)(_rolling_percentile_rank_py)
+    _rolling_quantile_trigger_kernel = _njit(cache=True)(_rolling_quantile_trigger_py)
+else:  # pragma: no cover
+    _rolling_percentile_rank_kernel = _rolling_percentile_rank_py
+    _rolling_quantile_trigger_kernel = _rolling_quantile_trigger_py
+
+
 def _rolling_percentile_rank(arr: np.ndarray, window: int = 252) -> np.ndarray:
+    """Share of the trailing `window` values (inclusive) at or below each value."""
     x = np.asarray(arr, dtype=np.float64)
-    out = np.full_like(x, np.nan, dtype=np.float64)
-    valid = np.isfinite(x)
     n = len(x)
     if n == 0:
-        return out
-    sorted_vals: list = []
-    for i in range(n):
-        xi = x[i]
-        if np.isfinite(xi):
-            insort(sorted_vals, float(xi))
-        j_rm = i - window
-        if j_rm >= 0 and valid[j_rm]:
-            xrm = float(x[j_rm])
-            k = bisect_right(sorted_vals, xrm) - 1
-            if k >= 0:
-                sorted_vals.pop(k)
-        if len(sorted_vals) >= 20 and np.isfinite(xi):
-            out[i] = bisect_right(sorted_vals, float(xi)) / float(len(sorted_vals))
-    return out
+        return np.full(0, np.nan)
+    return _rolling_percentile_rank_kernel(x, np.isfinite(x), n, int(window))
 
 
 def _rolling_quantile_trigger(arr: np.ndarray, q: float, window: int = SCORE_LOOKBACK) -> np.ndarray:
+    """Trailing `window` quantile q (inclusive of the current value)."""
     x = np.asarray(arr, dtype=np.float64)
-    out = np.full_like(x, np.nan, dtype=np.float64)
-    valid = np.isfinite(x)
     n = len(x)
     if n == 0:
-        return out
-    sorted_vals: list = []
-    for i in range(n):
-        xi = x[i]
-        if np.isfinite(xi):
-            insort(sorted_vals, float(xi))
-        j_rm = i - window
-        if j_rm >= 0 and valid[j_rm]:
-            xrm = float(x[j_rm])
-            k = bisect_left(sorted_vals, xrm)
-            if k < len(sorted_vals):
-                sorted_vals.pop(k)
-        if len(sorted_vals) >= 20 and np.isfinite(xi):
-            idx = int(np.clip(math.ceil(q * len(sorted_vals)) - 1, 0, len(sorted_vals) - 1))
-            out[i] = sorted_vals[idx]
-    return out
+        return np.full(0, np.nan)
+    return _rolling_quantile_trigger_kernel(x, np.isfinite(x), n, int(window), float(q))
 
 
 # ---------------------------------------------------------------------------
@@ -747,7 +781,22 @@ def buyhold_capped(close: np.ndarray) -> float:
 def _backtest_stats_global_intraday(
     o, h, l, c, score_matrix, atr, gp: GlobalParams,
     precomputed: Optional[Dict[str, np.ndarray]] = None,
+    trace: Optional[List[Dict[str, Any]]] = None,
+    trades_out: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, float]:
+    """Per-ticker backtest under the real execution rule (docs/adr/0001).
+
+    Every decision for bar i uses data up to bar i-1 only. A buy signal at the
+    close of bar s places a limit order at a price computed from bar s. The
+    order is live for ORDER_VALIDITY_DAYS bars starting at s+1: it fills at the
+    open when the market opens through the limit, at the limit when the bar
+    trades through it, and is cancelled when a close crosses the stop before
+    it fills. An order that never fills is a missed entry: no trade.
+
+    `trace` receives one record per bar explaining the decision and
+    `trades_out` one record per order (filled, missed or cancelled). Both feed
+    the replays and cost nothing when left as None.
+    """
     o = np.asarray(o, dtype=np.float64)
     h = np.asarray(h, dtype=np.float64)
     l = np.asarray(l, dtype=np.float64)
@@ -756,7 +805,8 @@ def _backtest_stats_global_intraday(
     x = np.asarray(score_matrix, dtype=np.float64)
     n = len(c)
     if n < 5 or x.ndim != 2 or x.shape[0] != n:
-        return {"total_return": 0.0, "mdd": 0.0, "sharpe": 0.0, "n_trades": 0.0, "win_rate": 0.0, "avg_trade": 0.0}
+        return {"total_return": 0.0, "mdd": 0.0, "sharpe": 0.0, "n_trades": 0.0, "win_rate": 0.0, "avg_trade": 0.0,
+                "n_orders": 0.0, "n_missed": 0.0, "n_cancelled": 0.0, "fill_rate": 0.0}
 
     feat_n = max(1, x.shape[1])
     ma = _rolling_mean_np(c, int(gp.ma_filter_period), max(20, int(gp.ma_filter_period // 2)))
@@ -770,9 +820,15 @@ def _backtest_stats_global_intraday(
     score_raw = votes_long - votes_short
     score_ev = _ewm_mean_np(score_raw, int(gp.signal_ema_span))
     score_pctl = _rolling_quantile_trigger(score_ev, float(gp.score_percentile_trigger), max(63, SCORE_LOOKBACK))
+    # Signal strength is measured against the trailing year of |score|, never
+    # the whole series (which would include the future).
+    score95_arr = _rolling_quantile_trigger(np.abs(score_ev), 0.95, 252)
 
-    score95 = np.nanpercentile(np.abs(score_ev), 95) if np.isfinite(np.nanmax(np.abs(score_ev))) else 1.0
-    score95 = max(score95, ATR_EPS)
+    def _strength(k: int) -> float:
+        s95 = score95_arr[k]
+        if not np.isfinite(s95) or not np.isfinite(score_ev[k]):
+            return float("nan")
+        return float(np.clip(abs(score_ev[k]) / max(s95, ATR_EPS), 0.0, 1.0))
 
     # Regime score (multi-factor bull/bear detection)
     ma50_exit = _rolling_mean_np(c, 50, 20)
@@ -795,7 +851,7 @@ def _backtest_stats_global_intraday(
     if mom_days > 0:
         mom_ret[mom_days:] = (c[mom_days:] / np.maximum(c[:-mom_days], 1e-8)) - 1.0
 
-    # v5/v7 gates: precompute daily pivot + Woodie R1/S1 do bar anterior
+    # v5/v7 gates: daily pivot + Woodie R1/S1 of the previous bar
     # pivot_prev[i] = (H[i-1] + L[i-1] + C[i-1]) / 3
     # R1_prev[i]    = 2*pivot_prev[i] - L[i-1]
     # S1_prev[i]    = 2*pivot_prev[i] - H[i-1]
@@ -817,11 +873,11 @@ def _backtest_stats_global_intraday(
     peak = 1.0
     mdd = 0.0
     trade_rets = []
-    trade_exit_types = []  # v8: track "take", "stop", "time", "hard_loss"
+    trade_exit_types = []  # "take", "stop", "trailing", "time", "hard_loss"
     trade_hold_bars = []
     trade_rets_after_3 = []
     trade_target_after_3 = []
-    pos = 0
+    pos = 0.0
     entry_px = np.nan
     entry_bar_idx = -1
     entry_side = 0
@@ -830,7 +886,7 @@ def _backtest_stats_global_intraday(
     bars = 0
     partial_taken = False
     partial_taken_2 = False
-    max_fav = 0.0  # track maximum favorable excursion for trailing stop
+    max_fav = 0.0  # maximum favorable excursion for trailing stop
     entry_score_strength = 0.0
     early_take_deferred_events = 0
     early_take_events = 0
@@ -843,6 +899,19 @@ def _backtest_stats_global_intraday(
     current_drawdown_duration = 0
     max_drawdown_duration = 0
 
+    # Pending limit order
+    pend_side = 0
+    pend_limit = np.nan
+    pend_stop_abs = 0.0
+    pend_take_abs = 0.0
+    pend_bars_left = 0
+    pend_signal_idx = -1
+    pend_strength = 0.0
+    order_rec: Optional[Dict[str, Any]] = None
+    n_orders = 0
+    n_missed = 0
+    n_cancelled = 0
+
     def _after_3_snapshot_ret() -> Tuple[Optional[float], bool]:
         if entry_bar_idx < 0 or entry_px <= 0.0 or entry_side == 0:
             return None, False
@@ -850,9 +919,9 @@ def _backtest_stats_global_intraday(
         if idx3 >= n:
             return None, False
         gross = (float(c[idx3]) / max(entry_px, ATR_EPS) - 1.0) * float(entry_side)
-        net = gross - COST_PER_TRADE_PCT
+        net = gross - ROUND_TRIP_COST_PCT
         if net > 0.0:
-            net *= (1.0 - IR_SWING_PCT)
+            net *= (1.0 - TAX_PER_TRADE_PCT)
         lo = min(n, idx3 + 1)
         if entry_side > 0:
             max_fav_3 = float(np.nanmax(h[entry_bar_idx + 1:lo] - entry_px)) if lo > entry_bar_idx + 1 else 0.0
@@ -861,8 +930,8 @@ def _backtest_stats_global_intraday(
         target_hit_3 = bool(max_fav_3 >= max(entry_take_abs, ATR_EPS))
         return float(net), target_hit_3
 
-    def _record_trade(ret: float, exit_type: str, hold_bars: float) -> None:
-        nonlocal early_take_events, early_take_dependency_events
+    def _record_trade(ret: float, exit_type: str, hold_bars: float, exit_idx: int, exit_px: float) -> None:
+        nonlocal early_take_events, early_take_dependency_events, order_rec
         after3_ret, target_hit_3 = _after_3_snapshot_ret()
         if after3_ret is not None:
             trade_rets_after_3.append(after3_ret)
@@ -874,8 +943,18 @@ def _backtest_stats_global_intraday(
         trade_rets.append(float(ret))
         trade_exit_types.append(str(exit_type))
         trade_hold_bars.append(float(max(1.0, hold_bars)))
+        if order_rec is not None:
+            order_rec.update({"exit_idx": int(exit_idx), "exit_px": float(exit_px),
+                              "exit_type": str(exit_type), "ret": float(ret),
+                              "hold_bars": float(max(1.0, hold_bars))})
+            order_rec = None
+
+    def _final_leg_cost(remaining: float) -> float:
+        # Buy side paid once on the whole position; sell side on what is left.
+        return BUY_SIDE_COST_PCT + abs(remaining) * SELL_SIDE_COST_PCT
 
     for i in range(1, n):
+        rec = {"i": i} if trace is not None else None
         if cooldown > 0:
             cooldown -= 1
 
@@ -883,7 +962,7 @@ def _backtest_stats_global_intraday(
             exposure_acc += float(min(1.0, abs(pos)))
         if pos != 0:
             bars += 1
-            # -- Dynamic stop tightening --
+            # -- Dynamic stop tightening (levels known at the previous close) --
             tighten = 1.0
             if bars >= max(int(gp.stop_tighten_after_bars), min_hold_bars):
                 tighten = gp.stop_tighten_factor
@@ -900,19 +979,23 @@ def _backtest_stats_global_intraday(
                 elif vol_rank[i - 1] < 0.25:
                     vol_stop_adj = 0.90
             stop_mult = gp.stop_atr_mult * tighten * vol_stop_adj
-            stop_abs = max(ATR_EPS, stop_mult * max(atr[i], ATR_EPS))
+            stop_abs = max(ATR_EPS, stop_mult * max(atr[i - 1], ATR_EPS))
             take_abs = gp.reward_risk_ratio * stop_abs
             hard_loss = abs(o[i] / max(entry_px, ATR_EPS) - 1.0)
 
             if hard_loss > gp.max_loss_per_trade_pct:
-                final_leg_ret = (o[i] / entry_px - 1.0) * pos - COST_PER_TRADE_PCT
+                final_leg_ret = (o[i] / entry_px - 1.0) * pos - _final_leg_cost(pos)
                 trade_ret = float(realized_partial_ret + final_leg_ret)
                 equity *= (1.0 + final_leg_ret)
-                _record_trade(trade_ret, "hard_loss", float(max(1, bars)))
+                _record_trade(trade_ret, "hard_loss", float(max(1, bars)), i, float(o[i]))
                 consec_stops += 1 if trade_ret < 0 else 0
                 if trade_ret > 0:
                     consec_stops = 0
-                pos = 0
+                if rec is not None:
+                    rec.update(state="long" if pos > 0 else "short", event="exit", exit_type="hard_loss",
+                               exit_px=float(o[i]), ret=trade_ret)
+                    trace.append(rec)
+                pos = 0.0
                 entry_bar_idx = -1
                 entry_side = 0
                 entry_take_abs = 0.0
@@ -936,8 +1019,9 @@ def _backtest_stats_global_intraday(
                 if pos < 0:
                     return False
                 idx_prev = max(0, i - 1)
-                signed_score = float(score_ev[idx_prev]) * float(np.sign(pos))
-                score_strength_now = float(np.clip(signed_score / score95, 0.0, 1.0)) if np.isfinite(signed_score) else 0.0
+                score_strength_now = _strength(idx_prev)
+                if not np.isfinite(score_strength_now) or float(score_ev[idx_prev]) * float(np.sign(pos)) <= 0:
+                    score_strength_now = 0.0
                 score_decay = max(0.0, float(entry_score_strength) - score_strength_now)
                 pivot_ok = (not np.isfinite(pivot_prev[idx_prev])) or (c[idx_prev] >= pivot_prev[idx_prev])
                 support_ok = (not np.isfinite(s1_prev[idx_prev])) or (c[idx_prev] >= s1_prev[idx_prev])
@@ -975,8 +1059,9 @@ def _backtest_stats_global_intraday(
             partial_take_allowed = profit_take_allowed or (defer_early_take and bars < profit_take_min_bars)
 
             if partial_take_allowed and gp.partial_take_pct > 0 and (not partial_taken) and fav >= gp.partial_take_level * stop_abs:
-                part_ret = gp.partial_take_pct * gp.partial_take_level * stop_abs / max(entry_px, ATR_EPS)
-                net_part_ret = part_ret - 0.0003
+                frac_sold = abs(pos) * gp.partial_take_pct
+                part_ret = frac_sold * gp.partial_take_level * stop_abs / max(entry_px, ATR_EPS)
+                net_part_ret = part_ret - frac_sold * SELL_SIDE_COST_PCT
                 equity *= (1.0 + net_part_ret)
                 realized_partial_ret += float(net_part_ret)
                 pos = pos * (1.0 - gp.partial_take_pct)
@@ -984,8 +1069,9 @@ def _backtest_stats_global_intraday(
 
             # 2nd partial take at higher level
             if partial_take_allowed and gp.partial_take_pct_2 > 0 and partial_taken and (not partial_taken_2) and fav >= gp.partial_take_level_2 * stop_abs:
-                part_ret2 = gp.partial_take_pct_2 * gp.partial_take_level_2 * stop_abs / max(entry_px, ATR_EPS)
-                net_part_ret2 = part_ret2 - 0.0003
+                frac_sold = abs(pos) * gp.partial_take_pct_2
+                part_ret2 = frac_sold * gp.partial_take_level_2 * stop_abs / max(entry_px, ATR_EPS)
+                net_part_ret2 = part_ret2 - frac_sold * SELL_SIDE_COST_PCT
                 equity *= (1.0 + net_part_ret2)
                 realized_partial_ret += float(net_part_ret2)
                 pos = pos * (1.0 - gp.partial_take_pct_2)
@@ -1022,17 +1108,11 @@ def _backtest_stats_global_intraday(
                         exit_px = min(ideal_exit, o[i]) if o[i] < ideal_exit else ideal_exit
 
                 gross_ret = (exit_px / entry_px - 1.0) * pos
-                # Custos: corretagem + B3 + slippage
-                cost = COST_PER_TRADE_PCT
-                if partial_taken or partial_taken_2:
-                    cost *= 0.7  # partial takes already paid some friction
-                net_ret = gross_ret - cost
-                # IR: 15% sobre lucro (swing trade, isencao mensal ignorada por conservadorismo)
+                net_ret = gross_ret - _final_leg_cost(pos)
                 if net_ret > 0:
-                    net_ret = net_ret * (1.0 - IR_SWING_PCT)
+                    net_ret = net_ret * (1.0 - TAX_PER_TRADE_PCT)
                 trade_ret = float(realized_partial_ret + net_ret)
                 equity *= (1.0 + net_ret)
-                # v8: track exit type for win_rate_target computation
                 if take_hit:
                     _exit_type = "take"
                 elif exit_reason == "trailing":
@@ -1041,12 +1121,16 @@ def _backtest_stats_global_intraday(
                     _exit_type = "stop"
                 else:
                     _exit_type = "time"
-                _record_trade(trade_ret, _exit_type, float(max(1, bars)))
+                _record_trade(trade_ret, _exit_type, float(max(1, bars)), i, float(exit_px))
                 if exit_reason == "stop" and trade_ret < 0:
                     consec_stops += 1
                 elif trade_ret > 0:
                     consec_stops = 0
-                pos = 0
+                if rec is not None:
+                    rec.update(state="long" if pos > 0 else "short", event="exit", exit_type=_exit_type,
+                               exit_px=float(exit_px), ret=trade_ret)
+                    trace.append(rec)
+                pos = 0.0
                 entry_bar_idx = -1
                 entry_side = 0
                 entry_take_abs = 0.0
@@ -1059,121 +1143,211 @@ def _backtest_stats_global_intraday(
                 if gp.consecutive_loss_cooldown > 0 and consec_stops >= 2:
                     cooldown = gp.consecutive_loss_cooldown
                 continue
+            if rec is not None:
+                rec.update(state="long" if pos > 0 else "short", event="hold",
+                           stop_px=float(entry_px - np.sign(pos) * stop_abs),
+                           target_px=float(entry_px + np.sign(pos) * take_abs))
 
-        if pos == 0 and cooldown == 0 and np.isfinite(score_ev[i - 1]) and np.isfinite(score_pctl[i - 1]):
-            if gp.volatility_filter_percentile > 0 and np.isfinite(vol_rank[i - 1]) and vol_rank[i - 1] < gp.volatility_filter_percentile:
-                continue
-            # Vol regime mode 2: skip entries in very high volatility periods
-            if gp.vol_regime_mode == 2 and np.isfinite(vol_rank[i - 1]) and vol_rank[i - 1] > 0.85:
-                continue
-            # Liquidity filter (ATR proxy)
-            if atr[i-1] < 0.01:
-                continue
-            # Min signal strength filter
-            if gp.min_signal_strength > 0:
-                if abs(score_ev[i - 1]) / score95 < gp.min_signal_strength:
-                    continue
-            # Entry score threshold filter (v4)
-            if gp.entry_score_threshold > 0:
-                if abs(score_ev[i - 1]) / score95 < gp.entry_score_threshold:
-                    continue
-            # Volume confirmation filter (v4)
-            if gp.volume_confirm_mode == 1 and vol_ma20 is not None and i - 1 < len(vol_ma20):
-                if np.isfinite(vol_ma20[i - 1]) and vol_data[i - 1] < vol_ma20[i - 1]:
-                    continue
-            elif gp.volume_confirm_mode == 2 and vol_ma50 is not None and i - 1 < len(vol_ma50):
-                if np.isfinite(vol_ma50[i - 1]) and vol_data[i - 1] < vol_ma50[i - 1]:
-                    continue
-            # Momentum confirmation filter (v4)
-            if mom_days > 0 and np.isfinite(mom_ret[i - 1]) and mom_ret[i - 1] < 0:
-                continue
-            # Regime filter (v4): continuous regime score replaces binary MA filter
-            if gp.regime_threshold > 0 and np.isfinite(regime_score[i - 1]):
-                if regime_score[i - 1] < gp.regime_threshold:
-                    continue  # market regime unfavorable for longs
+        # ------------------------------------------------------------------
+        # Signal: evaluated at the close of bar i-1, only when flat with no
+        # order live during bar i.
+        # ------------------------------------------------------------------
+        if rec is not None and pos == 0:
+            rec.update(
+                votes=float(votes_long[i - 1]), votes_needed=float(gp.vote_threshold_long),
+                score=float(score_ev[i - 1]), score_trigger=float(score_pctl[i - 1]),
+                strength=_strength(i - 1), regime=float(regime_score[i - 1]),
+                regime_needed=float(gp.regime_threshold), vol_rank=float(vol_rank[i - 1]),
+            )
+        reason = ""
+        if pos != 0:
+            reason = "in_position"
+        elif pend_side != 0:
+            reason = "order_live"
+        elif cooldown > 0:
+            reason = "cooldown"
+        elif not (np.isfinite(score_ev[i - 1]) and np.isfinite(score_pctl[i - 1]) and np.isfinite(score95_arr[i - 1])):
+            reason = "warmup"
+        elif gp.volatility_filter_percentile > 0 and np.isfinite(vol_rank[i - 1]) and vol_rank[i - 1] < gp.volatility_filter_percentile:
+            reason = "volatility_too_low"
+        elif gp.vol_regime_mode == 2 and np.isfinite(vol_rank[i - 1]) and vol_rank[i - 1] > 0.85:
+            reason = "volatility_too_high"
+        elif atr[i - 1] < 0.01:
+            reason = "illiquid"
+        elif gp.min_signal_strength > 0 and _strength(i - 1) < gp.min_signal_strength:
+            reason = "signal_too_weak"
+        elif gp.entry_score_threshold > 0 and _strength(i - 1) < gp.entry_score_threshold:
+            reason = "below_entry_threshold"
+        elif (gp.volume_confirm_mode == 1 and vol_ma20 is not None and np.isfinite(vol_ma20[i - 1])
+              and vol_data[i - 1] < vol_ma20[i - 1]):
+            reason = "volume_below_average"
+        elif (gp.volume_confirm_mode == 2 and vol_ma50 is not None and np.isfinite(vol_ma50[i - 1])
+              and vol_data[i - 1] < vol_ma50[i - 1]):
+            reason = "volume_below_average"
+        elif mom_days > 0 and np.isfinite(mom_ret[i - 1]) and mom_ret[i - 1] < 0:
+            reason = "negative_momentum"
+        elif gp.regime_threshold > 0 and np.isfinite(regime_score[i - 1]) and regime_score[i - 1] < gp.regime_threshold:
+            reason = "unfavourable_regime"
 
+        if reason == "":
             vl = votes_long[i - 1]
             vs = votes_short[i - 1]
             long_raw = (vl >= gp.vote_threshold_long) and (score_ev[i - 1] >= score_pctl[i - 1])
             short_raw = (vs >= gp.vote_threshold_short) and (-score_ev[i - 1] >= score_pctl[i - 1])
 
-            if long_raw:
-                consec_long += 1
-            else:
-                consec_long = 0
-            if short_raw:
-                consec_short += 1
-            else:
-                consec_short = 0
+            consec_long = consec_long + 1 if long_raw else 0
+            consec_short = consec_short + 1 if short_raw else 0
 
             long_ok = consec_long >= gp.entry_confirmation_days
             short_ok = consec_short >= gp.entry_confirmation_days
+            if not long_raw:
+                reason = "no_buy_vote"
+            elif not long_ok:
+                reason = "awaiting_confirmation"
 
             if gp.ma_filter_mode == 1 and np.isfinite(ma[i - 1]):
                 if c[i - 1] < ma[i - 1]:
                     long_ok = long_ok and (score_ev[i - 1] * 0.5 >= score_pctl[i - 1])
+                    if not long_ok and reason == "":
+                        reason = "below_long_average"
                 if c[i - 1] > ma[i - 1]:
                     short_ok = short_ok and (-score_ev[i - 1] * 0.5 >= score_pctl[i - 1])
             elif gp.ma_filter_mode == 2 and np.isfinite(ma[i - 1]):
                 if c[i - 1] < ma[i - 1]:
                     long_ok = False
+                    if reason == "":
+                        reason = "below_long_average"
                 if c[i - 1] > ma[i - 1]:
                     short_ok = False
 
-            # v5 pivot gate: bloqueia buy se close abaixo do pivot_prev (strict)
-            # gene=1.0 desliga (tolerance=ATR ~2% — raramente aciona em mercado normal).
-            # getattr p/ defensivo com SimpleNamespace de testes legados.
+            # v5 pivot gate: block buy when close is below pivot_prev by more than gene*ATR
             _ea = float(getattr(gp, "entry_aggressiveness", 1.0))
             if long_ok and _ea < 1.0 - 1e-9 and np.isfinite(pivot_prev[i - 1]):
-                tolerance = _ea * float(atr[i - 1])
-                if c[i - 1] < pivot_prev[i - 1] - tolerance:
+                if c[i - 1] < pivot_prev[i - 1] - _ea * float(atr[i - 1]):
                     long_ok = False
-            # v7 resistance gate (ATR-based): bloqueia buy se close > R1 + gene*ATR
+                    reason = "below_pivot"
+            # v7 resistance gate: block buy when close > R1 + gene*ATR
             _rog = float(getattr(gp, "resistance_overext_gate", 0.0))
             if long_ok and _rog > 1e-9 and np.isfinite(r1_prev[i - 1]):
                 if c[i - 1] > r1_prev[i - 1] + _rog * float(atr[i - 1]):
                     long_ok = False
-            # v7 support gate (ATR-based): bloqueia buy se close < S1 - gene*ATR
+                    reason = "overextended_above_resistance"
+            # v7 support gate: block buy when close < S1 - gene*ATR
             _sbg = float(getattr(gp, "support_broken_gate", 0.0))
             if long_ok and _sbg > 1e-9 and np.isfinite(s1_prev[i - 1]):
                 if c[i - 1] < s1_prev[i - 1] - _sbg * float(atr[i - 1]):
                     long_ok = False
+                    reason = "support_broken"
 
             side = 1 if long_ok else (-1 if (short_ok and not LONG_ONLY) else 0)
-            if side != 0 and np.isfinite(o[i]) and np.isfinite(atr[i]):
-                strength = float(np.clip(abs(score_ev[i - 1]) / score95, 0.0, 1.0))
-                # Support-adaptive discount: scale by distance to recent support
+            s = i - 1
+            if side != 0 and np.isfinite(c[s]) and np.isfinite(atr[s]) and c[s] > 0:
+                strength = _strength(s)
                 base_discount = gp.entry_discount_atr_frac * (1.0 - gp.score_strength_scaling * strength)
-                recent_low = np.nanmin(l[max(0, i - 10):i]) if i > 0 else l[i]
-                support_dist = (o[i] - recent_low) / max(atr[i], ATR_EPS) if np.isfinite(recent_low) else 1.0
+                recent_low = np.nanmin(l[max(0, s - 9):s + 1])
+                support_dist = (c[s] - recent_low) / max(atr[s], ATR_EPS) if np.isfinite(recent_low) else 1.0
                 support_factor = float(np.clip(support_dist / 3.0, 0.3, 1.5))
                 discount = base_discount * support_factor
-                limit_px = o[i] - side * discount * atr[i]
-                fill = (l[i] <= limit_px <= h[i])
-                if fill and limit_px > 0:
-                    pos = side
-                    entry_px = float(limit_px)
-                    entry_bar_idx = i
-                    entry_side = int(side)
-                    entry_take_abs = float(gp.reward_risk_ratio * max(ATR_EPS, gp.stop_atr_mult * max(atr[i], ATR_EPS)))
-                    realized_partial_ret = 0.0
-                    bars = 0
-                    partial_taken = False
-                    partial_taken_2 = False
+                limit_px = float(c[s] - side * discount * atr[s])
+                if limit_px > 0:
+                    pend_side = side
+                    pend_limit = limit_px
+                    pend_stop_abs = float(max(ATR_EPS, gp.stop_atr_mult * max(atr[s], ATR_EPS)))
+                    pend_take_abs = float(gp.reward_risk_ratio * pend_stop_abs)
+                    pend_bars_left = int(ORDER_VALIDITY_DAYS)
+                    pend_signal_idx = s
+                    pend_strength = strength
+                    n_orders += 1
+                    order_rec = {
+                        "signal_idx": int(s), "side": int(side), "limit": limit_px,
+                        "stop_px": float(limit_px - side * pend_stop_abs),
+                        "target_px": float(limit_px + side * pend_take_abs),
+                        "strength": float(strength), "status": "pending",
+                    }
+                    if trades_out is not None:
+                        trades_out.append(order_rec)
+                    if rec is not None:
+                        rec.update(event="order", limit=limit_px, stop_px=order_rec["stop_px"],
+                                   target_px=order_rec["target_px"])
+                    # The order is live from bar i: fall through to the fill check.
+
+        # ------------------------------------------------------------------
+        # Live order: try to fill during bar i.
+        # ------------------------------------------------------------------
+        if pos == 0 and pend_side != 0:
+            filled_px = np.nan
+            if pend_side > 0:
+                if np.isfinite(o[i]) and o[i] <= pend_limit:
+                    filled_px = float(o[i])
+                elif np.isfinite(l[i]) and l[i] <= pend_limit:
+                    filled_px = pend_limit
+            else:
+                if np.isfinite(o[i]) and o[i] >= pend_limit:
+                    filled_px = float(o[i])
+                elif np.isfinite(h[i]) and h[i] >= pend_limit:
+                    filled_px = pend_limit
+
+            if np.isfinite(filled_px) and filled_px > 0:
+                pos = float(pend_side)
+                entry_px = filled_px
+                entry_bar_idx = i
+                entry_side = int(pend_side)
+                entry_take_abs = pend_take_abs
+                realized_partial_ret = 0.0
+                bars = 0
+                partial_taken = False
+                partial_taken_2 = False
+                max_fav = 0.0
+                entry_score_strength = pend_strength if np.isfinite(pend_strength) else 0.0
+                if order_rec is not None:
+                    order_rec.update({"status": "filled", "fill_idx": int(i), "entry_px": filled_px})
+                if rec is not None:
+                    rec.update(event=(rec.get("event", "") + "+fill").lstrip("+"), fill_px=filled_px)
+                pend_side = 0
+                # Conservative intrabar order: if the fill bar also reaches the
+                # stop, assume the stop came after the fill.
+                stop_px_now = entry_px - pos * pend_stop_abs
+                if (pos > 0 and l[i] <= stop_px_now) or (pos < 0 and h[i] >= stop_px_now):
+                    net_ret = (stop_px_now / entry_px - 1.0) * pos - _final_leg_cost(pos)
+                    equity *= (1.0 + net_ret)
+                    _record_trade(float(net_ret), "stop", 1.0, i, float(stop_px_now))
+                    consec_stops += 1 if net_ret < 0 else 0
+                    if rec is not None:
+                        rec.update(event=rec["event"] + "+exit", exit_type="stop",
+                                   exit_px=float(stop_px_now), ret=float(net_ret))
+                    pos = 0.0
+                    entry_bar_idx = -1
+                    entry_side = 0
+                    entry_take_abs = 0.0
                     max_fav = 0.0
-                    entry_score_strength = strength
-                elif np.isfinite(o[i]) and o[i] > 0:
-                    pos = side
-                    entry_px = float(o[i])
-                    entry_bar_idx = i
-                    entry_side = int(side)
-                    entry_take_abs = float(gp.reward_risk_ratio * max(ATR_EPS, gp.stop_atr_mult * max(atr[i], ATR_EPS)))
-                    realized_partial_ret = 0.0
-                    bars = 0
-                    partial_taken = False
-                    partial_taken_2 = False
-                    max_fav = 0.0
-                    entry_score_strength = strength
+                    entry_score_strength = 0.0
+                    if gp.consecutive_loss_cooldown > 0 and consec_stops >= 2:
+                        cooldown = gp.consecutive_loss_cooldown
+            else:
+                crossed_stop = (
+                    (pend_side > 0 and c[i] < pend_limit - pend_stop_abs)
+                    or (pend_side < 0 and c[i] > pend_limit + pend_stop_abs)
+                )
+                pend_bars_left -= 1
+                if crossed_stop or pend_bars_left <= 0:
+                    status = "cancelled" if crossed_stop else "missed"
+                    if crossed_stop:
+                        n_cancelled += 1
+                    else:
+                        n_missed += 1
+                    if order_rec is not None:
+                        order_rec.update({"status": status, "exit_idx": int(i), "ret": 0.0})
+                        order_rec = None
+                    if rec is not None:
+                        rec.update(event=(rec.get("event", "") + "+" + status).lstrip("+"))
+                    pend_side = 0
+
+        if rec is not None:
+            rec.setdefault("state", "long" if pos > 0 else ("short" if pos < 0 else ("pending" if pend_side != 0 else "flat")))
+            rec.setdefault("event", "")
+            if reason and rec["event"] == "":
+                rec["reason"] = reason
+            trace.append(rec)
 
         peak = max(peak, equity)
         drawdown = (equity / max(peak, ATR_EPS)) - 1.0
@@ -1183,12 +1357,15 @@ def _backtest_stats_global_intraday(
             max_drawdown_duration = max(max_drawdown_duration, current_drawdown_duration)
         else:
             current_drawdown_duration = 0
-        # Equity drawdown circuit-breaker (progressive re-entry: 20 bars, was 30)
+        # Equity drawdown circuit-breaker (progressive re-entry: 20 bars)
         if gp.equity_drawdown_stop_pct > 0 and drawdown < -gp.equity_drawdown_stop_pct:
             cooldown = max(cooldown, 20)  # ~1 month pause after DD exceeds threshold
 
+    # An order still live at the end of the data is neither filled nor missed.
+    if pend_side != 0:
+        n_orders -= 1
     exposure = float(exposure_acc / max(1, n - 1))
-    return _finalize_backtest_stats(
+    stats = _finalize_backtest_stats(
         trade_rets=trade_rets,
         trade_exit_types=trade_exit_types,
         trade_hold_bars=trade_hold_bars,
@@ -1203,6 +1380,12 @@ def _backtest_stats_global_intraday(
         early_take_events=early_take_events,
         early_take_dependency_events=early_take_dependency_events,
     )
+    stats["n_orders"] = float(n_orders)
+    stats["n_missed"] = float(n_missed)
+    stats["n_cancelled"] = float(n_cancelled)
+    resolved = n_orders
+    stats["fill_rate"] = float((resolved - n_missed - n_cancelled) / resolved) if resolved > 0 else 0.0
+    return stats
 
 
 # ---------------------------------------------------------------------------
