@@ -92,6 +92,12 @@ window is a broken evaluation, not a bad result, and the fail-closed overfit
 guard in `apply_fullmetric_sweep_best.py` leans on the same machinery. Check
 `n_tickers_active` and the trade count before believing any holdout verdict.
 
+The mechanism is in `evaluate_genome_full` (`run_local_ga_staged.py`): every
+median is `np.median(xs) if xs else 0`, over tickers that traded in the
+window. An empty list scores WR 0, which the overfit stage reads as a
+catastrophic drop. A genome that simply trades rarely in a 90-day slice looks
+identical to one that lost every trade.
+
 ## Five genes are never exercised
 
 `GENE_CATEGORIES` defines seven categories; `sweep_matrix.yml` sweeps A-F. The

@@ -1,0 +1,1232 @@
+{
+ "snapshot_date": "2026-10-30",
+ "source": "api.nasdaq.com/api/nordic/screener/shares, market=STO, segment=LARGE_CAP",
+ "rules": {
+  "currency": "SEK only",
+  "excluded_instruments": "preferred shares (PREF); one non-SEK listing",
+  "share_class": "one per company: highest 12-month median daily turnover",
+  "liquidity_floor_msek": 10.0,
+  "turnover": "median of close*volume over the last 12 months, from Yahoo Finance",
+  "crypto": "excluded",
+  "survivorship_bias": "accepted; see docs/adr/0003"
+ },
+ "tickers": [
+  {
+   "yf_symbol": "INVE-B.ST",
+   "nasdaq_symbol": "INVE B",
+   "name": "Investor B",
+   "isin": "SE0015811963",
+   "sector": "Financials",
+   "median_turnover_msek": 1007.66,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "VOLV-B.ST",
+   "nasdaq_symbol": "VOLV B",
+   "name": "Volvo B",
+   "isin": "SE0000115446",
+   "sector": "Industrials",
+   "median_turnover_msek": 944.26,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "SAAB-B.ST",
+   "nasdaq_symbol": "SAAB B",
+   "name": "SAAB B",
+   "isin": "SE0021921269",
+   "sector": "Industrials",
+   "median_turnover_msek": 876.52,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "ATCO-A.ST",
+   "nasdaq_symbol": "ATCO A",
+   "name": "Atlas Copco A",
+   "isin": "SE0017486889",
+   "sector": "Industrials",
+   "median_turnover_msek": 791.26,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "ERIC-B.ST",
+   "nasdaq_symbol": "ERIC B",
+   "name": "Ericsson B",
+   "isin": "SE0000108656",
+   "sector": "Telecommunications",
+   "median_turnover_msek": 767.22,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "SAND.ST",
+   "nasdaq_symbol": "SAND",
+   "name": "Sandvik",
+   "isin": "SE0000667891",
+   "sector": "Industrials",
+   "median_turnover_msek": 677.94,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "SWED-A.ST",
+   "nasdaq_symbol": "SWED A",
+   "name": "Swedbank A",
+   "isin": "SE0000242455",
+   "sector": "Financials",
+   "median_turnover_msek": 641.84,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "SHB-A.ST",
+   "nasdaq_symbol": "SHB A",
+   "name": "Sv. Handelsbanken A",
+   "isin": "SE0007100599",
+   "sector": "Financials",
+   "median_turnover_msek": 632.29,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "BOL.ST",
+   "nasdaq_symbol": "BOL",
+   "name": "Boliden",
+   "isin": "SE0020050417",
+   "sector": "Basic Materials",
+   "median_turnover_msek": 581.09,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "ASSA-B.ST",
+   "nasdaq_symbol": "ASSA B",
+   "name": "ASSA ABLOY B",
+   "isin": "SE0007100581",
+   "sector": "Industrials",
+   "median_turnover_msek": 552.63,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "AZN.ST",
+   "nasdaq_symbol": "AZN",
+   "name": "AstraZeneca",
+   "isin": "GB0009895292",
+   "sector": "Health Care",
+   "median_turnover_msek": 525.87,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "SEB-A.ST",
+   "nasdaq_symbol": "SEB A",
+   "name": "SEB A",
+   "isin": "SE0000148884",
+   "sector": "Financials",
+   "median_turnover_msek": 457.65,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "EQT.ST",
+   "nasdaq_symbol": "EQT",
+   "name": "EQT",
+   "isin": "SE0012853455",
+   "sector": "Financials",
+   "median_turnover_msek": 452.98,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "ABB.ST",
+   "nasdaq_symbol": "ABB",
+   "name": "ABB Ltd",
+   "isin": "CH0012221716",
+   "sector": "Industrials",
+   "median_turnover_msek": 391.66,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "EVO.ST",
+   "nasdaq_symbol": "EVO",
+   "name": "Evolution",
+   "isin": "SE0012673267",
+   "sector": "Consumer Discretionary",
+   "median_turnover_msek": 391.45,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "EPI-A.ST",
+   "nasdaq_symbol": "EPI A",
+   "name": "Epiroc A",
+   "isin": "SE0015658109",
+   "sector": "Industrials",
+   "median_turnover_msek": 367.31,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "HEXA-B.ST",
+   "nasdaq_symbol": "HEXA B",
+   "name": "Hexagon B",
+   "isin": "SE0015961909",
+   "sector": "Technology",
+   "median_turnover_msek": 365.4,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "NDA-SE.ST",
+   "nasdaq_symbol": "NDA SE",
+   "name": "Nordea Bank Abp",
+   "isin": "FI4000297767",
+   "sector": "Financials",
+   "median_turnover_msek": 353.44,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "ESSITY-B.ST",
+   "nasdaq_symbol": "ESSITY B",
+   "name": "Essity B",
+   "isin": "SE0009922164",
+   "sector": "Consumer Staples",
+   "median_turnover_msek": 335.51,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "HM-B.ST",
+   "nasdaq_symbol": "HM B",
+   "name": "Hennes & Mauritz B",
+   "isin": "SE0000106270",
+   "sector": "Consumer Discretionary",
+   "median_turnover_msek": 329.31,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "ALFA.ST",
+   "nasdaq_symbol": "ALFA",
+   "name": "Alfa Laval",
+   "isin": "SE0000695876",
+   "sector": "Industrials",
+   "median_turnover_msek": 288.18,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "SKF-B.ST",
+   "nasdaq_symbol": "SKF B",
+   "name": "SKF B",
+   "isin": "SE0000108227",
+   "sector": "Basic Materials",
+   "median_turnover_msek": 272.89,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "TEL2-B.ST",
+   "nasdaq_symbol": "TEL2 B",
+   "name": "Tele2 B",
+   "isin": "SE0005190238",
+   "sector": "Telecommunications",
+   "median_turnover_msek": 270.17,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "TELIA.ST",
+   "nasdaq_symbol": "TELIA",
+   "name": "Telia Company",
+   "isin": "SE0000667925",
+   "sector": "Telecommunications",
+   "median_turnover_msek": 262.58,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "NIBE-B.ST",
+   "nasdaq_symbol": "NIBE B",
+   "name": "NIBE Industrier B",
+   "isin": "SE0015988019",
+   "sector": "Industrials",
+   "median_turnover_msek": 249.87,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "SSAB-B.ST",
+   "nasdaq_symbol": "SSAB B",
+   "name": "SSAB B",
+   "isin": "SE0000120669",
+   "sector": "Basic Materials",
+   "median_turnover_msek": 230.39,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "SCA-B.ST",
+   "nasdaq_symbol": "SCA B",
+   "name": "SCA B",
+   "isin": "SE0000112724",
+   "sector": "Basic Materials",
+   "median_turnover_msek": 183.76,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "INDU-C.ST",
+   "nasdaq_symbol": "INDU C",
+   "name": "Industrivärden C",
+   "isin": "SE0000107203",
+   "sector": "Financials",
+   "median_turnover_msek": 182.33,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "SKA-B.ST",
+   "nasdaq_symbol": "SKA B",
+   "name": "Skanska B",
+   "isin": "SE0000113250",
+   "sector": "Industrials",
+   "median_turnover_msek": 182.1,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "CAST.ST",
+   "nasdaq_symbol": "CAST",
+   "name": "Castellum",
+   "isin": "SE0000379190",
+   "sector": "Real Estate",
+   "median_turnover_msek": 154.31,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "SECU-B.ST",
+   "nasdaq_symbol": "SECU B",
+   "name": "Securitas B",
+   "isin": "SE0000163594",
+   "sector": "Industrials",
+   "median_turnover_msek": 146.17,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "OCTV-SDB.ST",
+   "nasdaq_symbol": "OCTV SDB",
+   "name": "Octave Intelligence SDB",
+   "isin": "SE0028329433",
+   "sector": "Technology",
+   "median_turnover_msek": 136.08,
+   "trading_days_12m": 114
+  },
+  {
+   "yf_symbol": "SOBI.ST",
+   "nasdaq_symbol": "SOBI",
+   "name": "Swedish Orphan Biovitrum",
+   "isin": "SE0000872095",
+   "sector": "Health Care",
+   "median_turnover_msek": 134.85,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "LUMI.ST",
+   "nasdaq_symbol": "LUMI",
+   "name": "Lundin Mining Corporation",
+   "isin": "CA5503721063",
+   "sector": "Basic Materials",
+   "median_turnover_msek": 129.79,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "AAK.ST",
+   "nasdaq_symbol": "AAK",
+   "name": "AAK",
+   "isin": "SE0011337708",
+   "sector": "Consumer Staples",
+   "median_turnover_msek": 118.81,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "TREL-B.ST",
+   "nasdaq_symbol": "TREL B",
+   "name": "Trelleborg B",
+   "isin": "SE0000114837",
+   "sector": "Industrials",
+   "median_turnover_msek": 116.71,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "LIFCO-B.ST",
+   "nasdaq_symbol": "LIFCO B",
+   "name": "Lifco B",
+   "isin": "SE0015949201",
+   "sector": "Industrials",
+   "median_turnover_msek": 116.42,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "ADDT-B.ST",
+   "nasdaq_symbol": "ADDT B",
+   "name": "Addtech B",
+   "isin": "SE0014781795",
+   "sector": "Industrials",
+   "median_turnover_msek": 113.82,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "LUG.ST",
+   "nasdaq_symbol": "LUG",
+   "name": "Lundin Gold",
+   "isin": "CA5503711080",
+   "sector": "Basic Materials",
+   "median_turnover_msek": 105.83,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "GETI-B.ST",
+   "nasdaq_symbol": "GETI B",
+   "name": "Getinge B",
+   "isin": "SE0000202624",
+   "sector": "Health Care",
+   "median_turnover_msek": 104.99,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "BEIJ-B.ST",
+   "nasdaq_symbol": "BEIJ B",
+   "name": "Beijer Ref B",
+   "isin": "SE0015949748",
+   "sector": "Industrials",
+   "median_turnover_msek": 104.14,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "BALD-B.ST",
+   "nasdaq_symbol": "BALD B",
+   "name": "Fast. Balder B",
+   "isin": "SE0017832488",
+   "sector": "Real Estate",
+   "median_turnover_msek": 103.86,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "SINCH.ST",
+   "nasdaq_symbol": "SINCH",
+   "name": "Sinch",
+   "isin": "SE0016101844",
+   "sector": "Technology",
+   "median_turnover_msek": 96.99,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "AZA.ST",
+   "nasdaq_symbol": "AZA",
+   "name": "Avanza Bank Holding",
+   "isin": "SE0012454072",
+   "sector": "Financials",
+   "median_turnover_msek": 95.01,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "VOLCAR-B.ST",
+   "nasdaq_symbol": "VOLCAR B",
+   "name": "Volvo Car B",
+   "isin": "SE0021628898",
+   "sector": "Consumer Discretionary",
+   "median_turnover_msek": 86.86,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "AXFO.ST",
+   "nasdaq_symbol": "AXFO",
+   "name": "Axfood",
+   "isin": "SE0006993770",
+   "sector": "Consumer Staples",
+   "median_turnover_msek": 85.83,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "ELUX-B.ST",
+   "nasdaq_symbol": "ELUX B",
+   "name": "Electrolux B",
+   "isin": "SE0016589188",
+   "sector": "Consumer Discretionary",
+   "median_turnover_msek": 84.89,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "MTRS.ST",
+   "nasdaq_symbol": "MTRS",
+   "name": "Munters Group",
+   "isin": "SE0009806607",
+   "sector": "Industrials",
+   "median_turnover_msek": 80.69,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "INDT.ST",
+   "nasdaq_symbol": "INDT",
+   "name": "Indutrade",
+   "isin": "SE0001515552",
+   "sector": "Industrials",
+   "median_turnover_msek": 79.37,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "SAVE.ST",
+   "nasdaq_symbol": "SAVE",
+   "name": "Nordnet",
+   "isin": "SE0015192067",
+   "sector": "Financials",
+   "median_turnover_msek": 72.9,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "LATO-B.ST",
+   "nasdaq_symbol": "LATO B",
+   "name": "Latour B",
+   "isin": "SE0010100958",
+   "sector": "Financials",
+   "median_turnover_msek": 69.2,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "SAGA-B.ST",
+   "nasdaq_symbol": "SAGA B",
+   "name": "Sagax B",
+   "isin": "SE0005127818",
+   "sector": "Real Estate",
+   "median_turnover_msek": 68.82,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "KINV-B.ST",
+   "nasdaq_symbol": "KINV B",
+   "name": "Kinnevik B",
+   "isin": "SE0022060521",
+   "sector": "Financials",
+   "median_turnover_msek": 63.92,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "ALIV-SDB.ST",
+   "nasdaq_symbol": "ALIV SDB",
+   "name": "Autoliv SDB",
+   "isin": "SE0021309614",
+   "sector": "Consumer Discretionary",
+   "median_turnover_msek": 63.66,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "HOLM-B.ST",
+   "nasdaq_symbol": "HOLM B",
+   "name": "Holmen B",
+   "isin": "SE0011090018",
+   "sector": "Basic Materials",
+   "median_turnover_msek": 62.43,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "MYCR.ST",
+   "nasdaq_symbol": "MYCR",
+   "name": "Mycronic",
+   "isin": "SE0025158629",
+   "sector": "Technology",
+   "median_turnover_msek": 59.13,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "EKTA-B.ST",
+   "nasdaq_symbol": "EKTA B",
+   "name": "Elekta B",
+   "isin": "SE0000163628",
+   "sector": "Health Care",
+   "median_turnover_msek": 56.98,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "LUND-B.ST",
+   "nasdaq_symbol": "LUND B",
+   "name": "Lundbergföretagen B",
+   "isin": "SE0000108847",
+   "sector": "Financials",
+   "median_turnover_msek": 56.53,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "CAMX.ST",
+   "nasdaq_symbol": "CAMX",
+   "name": "Camurus",
+   "isin": "SE0007692850",
+   "sector": "Health Care",
+   "median_turnover_msek": 51.9,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "THULE.ST",
+   "nasdaq_symbol": "THULE",
+   "name": "Thule Group",
+   "isin": "SE0006422390",
+   "sector": "Consumer Discretionary",
+   "median_turnover_msek": 50.7,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "BONEX.ST",
+   "nasdaq_symbol": "BONEX",
+   "name": "BONESUPPORT HOLDING",
+   "isin": "SE0009858152",
+   "sector": "Health Care",
+   "median_turnover_msek": 47.96,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "LAGR-B.ST",
+   "nasdaq_symbol": "LAGR B",
+   "name": "Lagercrantz Group B",
+   "isin": "SE0014990966",
+   "sector": "Technology",
+   "median_turnover_msek": 46.9,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "HEM.ST",
+   "nasdaq_symbol": "HEM",
+   "name": "Hemnet Group",
+   "isin": "SE0015671995",
+   "sector": "Real Estate",
+   "median_turnover_msek": 46.27,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "BIOA-B.ST",
+   "nasdaq_symbol": "BIOA B",
+   "name": "BioArctic B",
+   "isin": "SE0010323311",
+   "sector": "Health Care",
+   "median_turnover_msek": 44.79,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "BETS-B.ST",
+   "nasdaq_symbol": "BETS B",
+   "name": "Betsson B",
+   "isin": "SE0022726485",
+   "sector": "Consumer Discretionary",
+   "median_turnover_msek": 43.6,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "EMBRAC-B.ST",
+   "nasdaq_symbol": "EMBRAC B",
+   "name": "Embracer Group B",
+   "isin": "SE0023615885",
+   "sector": "Consumer Discretionary",
+   "median_turnover_msek": 42.63,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "HACK.ST",
+   "nasdaq_symbol": "HACK",
+   "name": "Hacksaw",
+   "isin": "SE0025138357",
+   "sector": "Technology",
+   "median_turnover_msek": 42.52,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "LOOMIS.ST",
+   "nasdaq_symbol": "LOOMIS",
+   "name": "Loomis",
+   "isin": "SE0014504817",
+   "sector": "Industrials",
+   "median_turnover_msek": 40.79,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "HUSQ-B.ST",
+   "nasdaq_symbol": "HUSQ B",
+   "name": "Husqvarna B",
+   "isin": "SE0001662230",
+   "sector": "Consumer Discretionary",
+   "median_turnover_msek": 40.04,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "BRAV.ST",
+   "nasdaq_symbol": "BRAV",
+   "name": "Bravida Holding",
+   "isin": "SE0007491303",
+   "sector": "Industrials",
+   "median_turnover_msek": 39.89,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "SWEC-B.ST",
+   "nasdaq_symbol": "SWEC B",
+   "name": "SWECO B",
+   "isin": "SE0014960373",
+   "sector": "Industrials",
+   "median_turnover_msek": 37.68,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "SECT-B.ST",
+   "nasdaq_symbol": "SECT B",
+   "name": "SECTRA B",
+   "isin": "SE0022419784",
+   "sector": "Health Care",
+   "median_turnover_msek": 35.3,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "IPCO.ST",
+   "nasdaq_symbol": "IPCO",
+   "name": "International Petroleum Corp.",
+   "isin": "CA46016U1084",
+   "sector": "Energy",
+   "median_turnover_msek": 35.25,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "8TRA.ST",
+   "nasdaq_symbol": "8TRA",
+   "name": "TRATON",
+   "isin": "DE000TRAT0N7",
+   "sector": "Industrials",
+   "median_turnover_msek": 34.66,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "FABG.ST",
+   "nasdaq_symbol": "FABG",
+   "name": "Fabege",
+   "isin": "SE0011166974",
+   "sector": "Real Estate",
+   "median_turnover_msek": 33.9,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "NCC-B.ST",
+   "nasdaq_symbol": "NCC B",
+   "name": "NCC B",
+   "isin": "SE0000117970",
+   "sector": "Industrials",
+   "median_turnover_msek": 33.86,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "HPOL-B.ST",
+   "nasdaq_symbol": "HPOL B",
+   "name": "HEXPOL B",
+   "isin": "SE0007074281",
+   "sector": "Basic Materials",
+   "median_turnover_msek": 32.39,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "WIHL.ST",
+   "nasdaq_symbol": "WIHL",
+   "name": "Wihlborgs Fastigheter",
+   "isin": "SE0018012635",
+   "sector": "Real Estate",
+   "median_turnover_msek": 31.06,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "BILL.ST",
+   "nasdaq_symbol": "BILL",
+   "name": "Billerud",
+   "isin": "SE0000862997",
+   "sector": "Basic Materials",
+   "median_turnover_msek": 30.55,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "ASMDEE-B.ST",
+   "nasdaq_symbol": "ASMDEE B",
+   "name": "Asmodee Group B",
+   "isin": "SE0023615638",
+   "sector": "Consumer Discretionary",
+   "median_turnover_msek": 28.8,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "TRUE-B.ST",
+   "nasdaq_symbol": "TRUE B",
+   "name": "Truecaller B",
+   "isin": "SE0016787071",
+   "sector": "Technology",
+   "median_turnover_msek": 28.79,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "SHOT.ST",
+   "nasdaq_symbol": "SHOT",
+   "name": "Scandic Hotels Group",
+   "isin": "SE0007640156",
+   "sector": "Consumer Discretionary",
+   "median_turnover_msek": 28.55,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "ALLEI.ST",
+   "nasdaq_symbol": "ALLEI",
+   "name": "Alleima",
+   "isin": "SE0017615644",
+   "sector": "Basic Materials",
+   "median_turnover_msek": 27.19,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "AFRY.ST",
+   "nasdaq_symbol": "AFRY",
+   "name": "AFRY",
+   "isin": "SE0005999836",
+   "sector": "Industrials",
+   "median_turnover_msek": 27.18,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "STOR-B.ST",
+   "nasdaq_symbol": "STOR B",
+   "name": "Storskogen Group B",
+   "isin": "SE0016797732",
+   "sector": "Financials",
+   "median_turnover_msek": 27.03,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "CLAS-B.ST",
+   "nasdaq_symbol": "CLAS B",
+   "name": "Clas Ohlson B",
+   "isin": "SE0000584948",
+   "sector": "Consumer Discretionary",
+   "median_turnover_msek": 26.97,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "STE-R.ST",
+   "nasdaq_symbol": "STE R",
+   "name": "Stora Enso R",
+   "isin": "FI0009007611",
+   "sector": "Industrials",
+   "median_turnover_msek": 26.46,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "NOBA.ST",
+   "nasdaq_symbol": "NOBA",
+   "name": "NOBA Bank Group",
+   "isin": "SE0023135298",
+   "sector": "Financials",
+   "median_turnover_msek": 26.46,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "MIPS.ST",
+   "nasdaq_symbol": "MIPS",
+   "name": "Mips",
+   "isin": "SE0009216278",
+   "sector": "Consumer Discretionary",
+   "median_turnover_msek": 26.24,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "ASKER.ST",
+   "nasdaq_symbol": "ASKER",
+   "name": "Asker Healthcare Group",
+   "isin": "SE0024171458",
+   "sector": "Health Care",
+   "median_turnover_msek": 24.84,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "VIT-B.ST",
+   "nasdaq_symbol": "VIT B",
+   "name": "Vitec Software Group B",
+   "isin": "SE0007871363",
+   "sector": "Technology",
+   "median_turnover_msek": 23.32,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "BURE.ST",
+   "nasdaq_symbol": "BURE",
+   "name": "Bure Equity",
+   "isin": "SE0000195810",
+   "sector": "Financials",
+   "median_turnover_msek": 23.26,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "CATE.ST",
+   "nasdaq_symbol": "CATE",
+   "name": "Catena",
+   "isin": "SE0001664707",
+   "sector": "Real Estate",
+   "median_turnover_msek": 23.11,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "WALL-B.ST",
+   "nasdaq_symbol": "WALL B",
+   "name": "Wallenstam B",
+   "isin": "SE0017780133",
+   "sector": "Real Estate",
+   "median_turnover_msek": 22.96,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "JM.ST",
+   "nasdaq_symbol": "JM",
+   "name": "JM",
+   "isin": "SE0000806994",
+   "sector": "Consumer Discretionary",
+   "median_turnover_msek": 22.74,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "PEAB-B.ST",
+   "nasdaq_symbol": "PEAB B",
+   "name": "Peab B",
+   "isin": "SE0000106205",
+   "sector": "Industrials",
+   "median_turnover_msek": 21.66,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "DOM.ST",
+   "nasdaq_symbol": "DOM",
+   "name": "Dometic Group",
+   "isin": "SE0007691613",
+   "sector": "Consumer Discretionary",
+   "median_turnover_msek": 21.1,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "ALTRA.ST",
+   "nasdaq_symbol": "ALTRA",
+   "name": "Altra Fastigheter",
+   "isin": "SE0011426428",
+   "sector": "Real Estate",
+   "median_turnover_msek": 20.7,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "GRNG.ST",
+   "nasdaq_symbol": "GRNG",
+   "name": "Gränges",
+   "isin": "SE0006288015",
+   "sector": "Basic Materials",
+   "median_turnover_msek": 20.53,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "HUFV-A.ST",
+   "nasdaq_symbol": "HUFV A",
+   "name": "Hufvudstaden A",
+   "isin": "SE0000170375",
+   "sector": "Real Estate",
+   "median_turnover_msek": 20.38,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "NEWA-B.ST",
+   "nasdaq_symbol": "NEWA B",
+   "name": "New Wave B",
+   "isin": "SE0020356970",
+   "sector": "Consumer Discretionary",
+   "median_turnover_msek": 19.92,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "IVSO.ST",
+   "nasdaq_symbol": "IVSO",
+   "name": "INVISIO",
+   "isin": "SE0001200015",
+   "sector": "Industrials",
+   "median_turnover_msek": 18.01,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "HMS.ST",
+   "nasdaq_symbol": "HMS",
+   "name": "HMS Networks",
+   "isin": "SE0009997018",
+   "sector": "Telecommunications",
+   "median_turnover_msek": 17.72,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "YUBICO.ST",
+   "nasdaq_symbol": "YUBICO",
+   "name": "Yubico",
+   "isin": "SE0015657788",
+   "sector": "Technology",
+   "median_turnover_msek": 17.66,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "PNDX-B.ST",
+   "nasdaq_symbol": "PNDX B",
+   "name": "Pandox B",
+   "isin": "SE0007100359",
+   "sector": "Real Estate",
+   "median_turnover_msek": 17.48,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "ROKO-B.ST",
+   "nasdaq_symbol": "ROKO B",
+   "name": "Röko B",
+   "isin": "SE0023950795",
+   "sector": "Financials",
+   "median_turnover_msek": 17.02,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "VITR.ST",
+   "nasdaq_symbol": "VITR",
+   "name": "Vitrolife",
+   "isin": "SE0011205202",
+   "sector": "Health Care",
+   "median_turnover_msek": 16.64,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "ALIF-B.ST",
+   "nasdaq_symbol": "ALIF B",
+   "name": "AddLife B",
+   "isin": "SE0014401378",
+   "sector": "Health Care",
+   "median_turnover_msek": 16.59,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "PDX.ST",
+   "nasdaq_symbol": "PDX",
+   "name": "Paradox Interactive",
+   "isin": "SE0008294953",
+   "sector": "Consumer Discretionary",
+   "median_turnover_msek": 16.45,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "ANOD-B.ST",
+   "nasdaq_symbol": "ANOD B",
+   "name": "Addnode Group B",
+   "isin": "SE0017885767",
+   "sector": "Technology",
+   "median_turnover_msek": 16.1,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "AQ.ST",
+   "nasdaq_symbol": "AQ",
+   "name": "AQ Group",
+   "isin": "SE0022062196",
+   "sector": "Industrials",
+   "median_turnover_msek": 15.03,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "PUBLI.ST",
+   "nasdaq_symbol": "PUBLI",
+   "name": "PPI Public Property Invest",
+   "isin": "SE0028799411",
+   "sector": "Real Estate",
+   "median_turnover_msek": 14.64,
+   "trading_days_12m": 117
+  },
+  {
+   "yf_symbol": "BUFAB.ST",
+   "nasdaq_symbol": "BUFAB",
+   "name": "Bufab",
+   "isin": "SE0025010671",
+   "sector": "Industrials",
+   "median_turnover_msek": 14.42,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "MCOV-B.ST",
+   "nasdaq_symbol": "MCOV B",
+   "name": "Medicover B",
+   "isin": "SE0009778848",
+   "sector": "Health Care",
+   "median_turnover_msek": 13.11,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "EPRO-B.ST",
+   "nasdaq_symbol": "EPRO B",
+   "name": "Electrolux Professional B",
+   "isin": "SE0013747870",
+   "sector": "Industrials",
+   "median_turnover_msek": 12.77,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "LIAB.ST",
+   "nasdaq_symbol": "LIAB",
+   "name": "Lindab International",
+   "isin": "SE0001852419",
+   "sector": "Industrials",
+   "median_turnover_msek": 11.63,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "BILI-A.ST",
+   "nasdaq_symbol": "BILI A",
+   "name": "Bilia A",
+   "isin": "SE0009921588",
+   "sector": "Consumer Discretionary",
+   "median_turnover_msek": 10.87,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "ALIG.ST",
+   "nasdaq_symbol": "ALIG",
+   "name": "Alimak Group",
+   "isin": "SE0007158910",
+   "sector": "Industrials",
+   "median_turnover_msek": 10.61,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "OEM-B.ST",
+   "nasdaq_symbol": "OEM B",
+   "name": "OEM International B",
+   "isin": "SE0017766843",
+   "sector": "Industrials",
+   "median_turnover_msek": 10.11,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "CORE-B.ST",
+   "nasdaq_symbol": "CORE B",
+   "name": "Corem Property Group B",
+   "isin": "SE0010714287",
+   "sector": "Real Estate",
+   "median_turnover_msek": 10.09,
+   "trading_days_12m": 250
+  }
+ ],
+ "below_floor": [
+  {
+   "yf_symbol": "NOLA-B.ST",
+   "nasdaq_symbol": "NOLA B",
+   "name": "Nolato B",
+   "isin": "SE0015962477",
+   "sector": "Industrials",
+   "median_turnover_msek": 9.51,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "BEIA-B.ST",
+   "nasdaq_symbol": "BEIA B",
+   "name": "Beijer Alma B",
+   "isin": "SE0011090547",
+   "sector": "Basic Materials",
+   "median_turnover_msek": 8.83,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "ATRLJ-B.ST",
+   "nasdaq_symbol": "ATRLJ B",
+   "name": "Atrium Ljungberg B",
+   "isin": "SE0024320832",
+   "sector": "Real Estate",
+   "median_turnover_msek": 8.05,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "ENGCON-B.ST",
+   "nasdaq_symbol": "ENGCON B",
+   "name": "engcon B",
+   "isin": "SE0017769847",
+   "sector": "Industrials",
+   "median_turnover_msek": 8.02,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "SKIS-B.ST",
+   "nasdaq_symbol": "SKIS B",
+   "name": "SkiStar B",
+   "isin": "SE0012141687",
+   "sector": "Consumer Discretionary",
+   "median_turnover_msek": 7.49,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "NP3.ST",
+   "nasdaq_symbol": "NP3",
+   "name": "NP3 Fastigheter",
+   "isin": "SE0006342333",
+   "sector": "Real Estate",
+   "median_turnover_msek": 7.48,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "VIMIAN.ST",
+   "nasdaq_symbol": "VIMIAN",
+   "name": "Vimian Group",
+   "isin": "SE0015961982",
+   "sector": "Health Care",
+   "median_turnover_msek": 6.81,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "SYSR.ST",
+   "nasdaq_symbol": "SYSR",
+   "name": "Systemair",
+   "isin": "SE0016609499",
+   "sector": "Industrials",
+   "median_turnover_msek": 5.21,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "TROAX.ST",
+   "nasdaq_symbol": "TROAX",
+   "name": "Troax Group",
+   "isin": "SE0012729366",
+   "sector": "Basic Materials",
+   "median_turnover_msek": 5.11,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "SAMPO-SEK.ST",
+   "nasdaq_symbol": "SAMPO SEK",
+   "name": "Sampo Oyj A",
+   "isin": "FI4000552500",
+   "sector": "Financials",
+   "median_turnover_msek": 4.41,
+   "trading_days_12m": 149
+  },
+  {
+   "yf_symbol": "FPAR-A.ST",
+   "nasdaq_symbol": "FPAR A",
+   "name": "Fastpartner A",
+   "isin": "SE0013512506",
+   "sector": "Real Estate",
+   "median_turnover_msek": 4.26,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "TIETOS.ST",
+   "nasdaq_symbol": "TIETOS",
+   "name": "Tieto Oyj",
+   "isin": "FI0009000277",
+   "sector": "Technology",
+   "median_turnover_msek": 1.51,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "FOI-B.ST",
+   "nasdaq_symbol": "FOI B",
+   "name": "Fenix Outdoor International B",
+   "isin": "CH0242214887",
+   "sector": "Consumer Discretionary",
+   "median_turnover_msek": 0.7,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "ALVO-SDB.ST",
+   "nasdaq_symbol": "ALVO SDB",
+   "name": "Alvotech SDB",
+   "isin": "SE0025011463",
+   "sector": "Health Care",
+   "median_turnover_msek": 0.62,
+   "trading_days_12m": 250
+  },
+  {
+   "yf_symbol": "ARION-SDB.ST",
+   "nasdaq_symbol": "ARION SDB",
+   "name": "Arion Banki SDB",
+   "isin": "SE0010413567",
+   "sector": "Financials",
+   "median_turnover_msek": 0.41,
+   "trading_days_12m": 250
+  }
+ ]
+}

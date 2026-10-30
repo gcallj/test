@@ -45,8 +45,8 @@ antes de qualquer dinheiro real. O Brasil fica congelado como está.
 
 | # | Fase | Entrega |
 |---|---|---|
-| 0 | Investigar por que o Run 2 (abr/2026) ficou CLEAN | Causa confirmada; decide se BIN/REG/FINAL é obrigatório |
-| 1 | Portar o mercado sueco para este branch | Universo, custos, ISK, índice `^OMXSPI`, ETL `.ST` |
+| 0 | Investigar por que o Run 2 (abr/2026) ficou CLEAN | **Feito** — ver "Resultado da Fase 0" |
+| 1 | Portar o mercado sueco para este branch | Universo **feito** (`data/universe_se.json`, 120 tickers); faltam custos, ISK, índice `^OMXSPI`, ETL `.ST` |
 | 2 | Regra de execução real no backtest | ADR 0001 implementado, com testes |
 | 3 | Walk-forward | 6 genomas, um por fold, treinados no CI |
 | 4 | Replay por ticker | Tabela pregão a pregão + gráfico + porquê de cada sinal |
@@ -54,6 +54,32 @@ antes de qualquer dinheiro real. O Brasil fica congelado como está.
 | 6 | Guia de execução local | Passo a passo em WSL2, em português |
 | 7 | Operação diária | Workflow no `main`, Telegram sueco |
 | 8 | Paper trading e ramp-up | Registro de execução e stop rules |
+
+## Resultado da Fase 0 (30/out/2026)
+
+Reproduzido neste container com o código exato do branch antigo (`a5606dd`),
+dados de hoje.
+
+- **Sem BIN/REG, o FINAL falha nas 309 janelas** (`Empty ENS chunk`), não
+  grava `history_consolidated.parquet` e ainda assim sai com código 0. Nos
+  Runs 0/1 o GA usou o histórico montado a partir do ETL.
+- **Esse histórico do ETL é saudável**: 44 tickers `.ST`, 2005 até hoje, sem
+  NaN no fim. Com o genoma de partida, as 3 janelas de holdout têm ~10 trades
+  por ticker e WR 0,60–0,65.
+- **"WR 0,000 no holdout" é um artefato de amostra vazia**: as medianas usam
+  só tickers com trades na janela e devolvem 0 quando a lista fica vazia.
+  Um genoma que opera pouco gera "WR 0" sem ter perdido trade algum.
+- **O BIN/REG não alimenta a fitness** — `EV_*`/`p_*` são bloqueados. O que
+  ele mudou no Run 2 foi **quais datas o GA viu**: só as cobertas pelos
+  modelos, um histórico bem mais curto e recente que os 21 anos do ETL.
+
+**Decisão**: BIN/REG/FINAL não são obrigatórios. A janela de treino é
+controlada explicitamente pelo walk-forward (4 anos móveis), e uma janela sem
+trades suficientes passa a ser reportada como amostra insuficiente, nunca
+como WR 0.
+
+O genoma BR aplicado à Suécia hoje: fitness −97,9, WR 0,576, alpha −13,8%.
+Não transfere; não deve ser o ponto de partida dos folds.
 
 ## Obstáculos conhecidos da execução anterior
 
