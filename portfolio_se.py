@@ -20,6 +20,7 @@ Regras da conta (docs/sweden/plano.md):
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -51,6 +52,7 @@ class Result:
     taken: pd.DataFrame
     skipped: int
     slots_used: pd.Series
+    open_book: pd.DataFrame = field(default_factory=pd.DataFrame)  # orders/positions live at the end
     notes: List[str] = field(default_factory=list)
 
 
@@ -145,9 +147,10 @@ def simulate(orders: pd.DataFrame, closes: pd.DataFrame, days: pd.DatetimeIndex,
         equity[t] = mtm
         slots[t] = len(live)
 
-    # positions still open at the end: count them at their last mark
     taken = pd.DataFrame([a for a in taken_rows])
-    return Result(pd.Series(equity).sort_index(), taken, skipped, pd.Series(slots).sort_index())
+    book = pd.DataFrame([dict(a["row"], estado=("posicao" if a["state"] == "position" else "ordem"))
+                         for a in live])
+    return Result(pd.Series(equity).sort_index(), taken, skipped, pd.Series(slots).sort_index(), book)
 
 
 def max_drawdown(series: pd.Series) -> float:
@@ -199,10 +202,12 @@ def verdict(res: Result, bench: pd.Series) -> Dict:
         t["resultado_liq"] = t["resultado_liq"].astype(float)
     for f in folds:
         g = t[t["fold"] == f.k] if not t.empty else t
+        eq_f = res.equity[(res.equity.index >= pd.Timestamp(f.trade_start)) & (res.equity.index <= pd.Timestamp(f.trade_end))]
         per_fold.append({
             "fold": f.k, "trades": int(len(g)),
             "expectancy": float(g["resultado_liq"].mean()) if len(g) else np.nan,
             "win_rate": float((g["resultado_liq"] > 0).mean()) if len(g) else np.nan,
+            "mdd": max_drawdown(eq_f) if len(eq_f) > 1 else np.nan,
         })
     pos_folds = sum(1 for r in per_fold if np.isfinite(r["expectancy"]) and r["expectancy"] > 0)
     out = {
@@ -214,6 +219,7 @@ def verdict(res: Result, bench: pd.Series) -> Dict:
         "trades": int(len(t)), "skipped": res.skipped,
         "avg_slots": float(res.slots_used.mean()),
         "per_fold": per_fold, "positive_folds": pos_folds,
+        "worst_fold_mdd": float(np.nanmin([r["mdd"] for r in per_fold])) if per_fold else np.nan,
         "bench_equity": bench_eq,
     }
     out["crit_beats_index"] = out["total_return"] > out["bench_return"]
@@ -245,9 +251,9 @@ def markdown(base: Dict, optimistic: Optional[Dict]) -> str:
          f"- CAGR: {_p(base['cagr'])} (indice: {_p(base['bench_cagr'])})",
          f"- Trades executados: {base['trades']} · ordens sem vaga: {base['skipped']} · "
          f"vagas ocupadas em media: {base['avg_slots']:.1f} de {market_se.MAX_POSITIONS}", "",
-         "## Por fold", "", "| Fold | Trades | Win rate | Expectancy |", "|---:|---:|---:|---:|"]
+         "## Por fold", "", "| Fold | Trades | Win rate | Expectancy | Max drawdown da conta |", "|---:|---:|---:|---:|---:|"]
     for r in base["per_fold"]:
-        L.append(f"| {r['fold']} | {r['trades']} | {_p(r['win_rate'])} | {_p(r['expectancy'])} |")
+        L.append(f"| {r['fold']} | {r['trades']} | {_p(r['win_rate'])} | {_p(r['expectancy'])} | {_p(r['mdd'])} |")
     if optimistic is not None:
         L += ["", "## Cenario otimista (courtage zero)", "",
               f"Retorno {_p(optimistic['total_return'])} vs indice {_p(optimistic['bench_return'])} · "
@@ -301,6 +307,12 @@ def main(argv=None) -> int:
     if not res.taken.empty:
         res.taken.to_csv(REPORT_DIR / "portfolio_trades.csv", index=False)
     (REPORT_DIR / "portfolio.md").write_text(markdown(base, opt), encoding="utf-8")
+    fill = orders[orders["status"].isin(["executada", "perdida", "cancelada"])]
+    summary = {k: v for k, v in base.items() if k != "bench_equity"}
+    summary["replay_fill_rate"] = float((fill["status"] == "executada").mean()) if len(fill) else None
+    summary["slippage_assumed_per_side"] = market_se.SLIPPAGE_PCT_PER_SIDE
+    summary["optimistic_pass"] = opt["pass"]
+    (REPORT_DIR / "portfolio.json").write_text(json.dumps(summary, indent=2, default=float), encoding="utf-8")
     chart(base, res, REPORT_DIR / "portfolio.png")
     print(markdown(base, opt))
     return 0

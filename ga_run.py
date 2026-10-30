@@ -3363,10 +3363,16 @@ def run():
     # Cap features to prevent search space explosion (>100 features degrades GA convergence)
     MAX_CAUSAL_FEATURES = 80
     if len(base_feat_cols) > MAX_CAUSAL_FEATURES:
-        # Pre-filter: keep only features with sufficient variance across tickers
+        # Pre-filter: keep only features with sufficient variance across tickers.
+        # Variance is measured on the first 3 years only (the same early slice
+        # the hybrid selection uses), so a walk-forward fold — whose history
+        # ends at its cut — picks exactly the features the replay sees, and no
+        # later data influences the choice.
+        _dates_all = pd.to_datetime(df[DATE_COL], errors="coerce")
+        _var_mask = (_dates_all <= _dates_all.min() + pd.DateOffset(years=3)).to_numpy()
         _var_scores = []
         for c in base_feat_cols:
-            _v = pd.to_numeric(df[c], errors="coerce")
+            _v = pd.to_numeric(df.loc[_var_mask, c], errors="coerce")
             _std = float(_v.std(skipna=True)) if _v.notna().mean() > 0.3 else 0.0
             _var_scores.append((c, _std))
         _var_scores.sort(key=lambda x: x[1], reverse=True)

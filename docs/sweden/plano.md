@@ -46,14 +46,31 @@ antes de qualquer dinheiro real. O Brasil fica congelado como está.
 | # | Fase | Entrega |
 |---|---|---|
 | 0 | Investigar por que o Run 2 (abr/2026) ficou CLEAN | **Feito** — ver "Resultado da Fase 0" |
-| 1 | Portar o mercado sueco para este branch | Universo **feito** (`data/universe_se.json`, 120 tickers); faltam custos, ISK, índice `^OMXSPI`, ETL `.ST` |
-| 2 | Regra de execução real no backtest | ADR 0001 implementado, com testes |
-| 3 | Walk-forward | 6 genomas, um por fold, treinados no CI |
-| 4 | Replay por ticker | Tabela pregão a pregão + gráfico + porquê de cada sinal |
-| 5 | Replay de carteira | Curva da conta vs index benchmark; veredito do critério 1 |
-| 6 | Guia de execução local | Passo a passo em WSL2, em português |
-| 7 | Operação diária | Workflow no `main`, Telegram sueco |
-| 8 | Paper trading e ramp-up | Registro de execução e stop rules |
+| 1 | Portar o mercado sueco para este branch | **Feito** — `market_se.py`, `data/universe_se.json`, ETL e metadados suecos |
+| 2 | Regra de execução real no backtest | **Feito** — motor único, ADR 0001, `tests/test_execution_rule.py` |
+| 3 | Walk-forward | Código feito (`walkforward.py`, workflow `SE Walk-forward`); genomas: ver `walkforward.py status` |
+| 4 | Replay por ticker | **Feito** — `replay_se.py` (tabela + gráfico + porquê) |
+| 5 | Replay de carteira | **Feito** — `portfolio_se.py`, veredito em `reports/se/portfolio.md` |
+| 6 | Guia de execução local | **Feito** — `docs/sweden/guia.md` |
+| 7 | Operação diária | **Feito** — `daily_se.py`; workflow diário em `docs/sweden/se_daily.yml`, aguarda ir para o `main` |
+| 8 | Paper trading e ramp-up | **Feito** — `paper_se.py` (registro, stop rules, etapas) |
+
+## Decisões tomadas durante a implementação
+
+- **Motor único** (`ga_run_modular_final`): havia duas cópias do backtest, uma
+  usada no treino do GA e outra na avaliação; agora o `ga_run` delega.
+- **Sem informação do futuro no motor**: além da regra de execução, o stop do
+  dia usa o ATR da véspera e a força do sinal usa o percentil do último ano
+  (antes: percentil da série inteira).
+- **Fundamentos trimestrais desligados no ETL**: eram indexados pela data do
+  trimestre, não pela de divulgação (~30–60 dias depois).
+- **Index benchmark = `^OMXSBGI`** (com dividendos). `^OMXSPI` é índice de
+  preço e daria ~3 pp/ano de vantagem falsa à estratégia.
+- **ADR 0004**: as ordens diárias são exatamente as ordens do motor; os
+  ajustes pós-backtest do Brasil (Minervini, gates de WR/confiança, tier) não
+  são usados.
+- **Livro da conta sem estado escondido**: a conta de paper/real é a
+  continuação do portfolio replay a partir da data de início.
 
 ## Resultado da Fase 0 (30/out/2026)
 
@@ -74,9 +91,9 @@ dados de hoje.
   modelos, um histórico bem mais curto e recente que os 21 anos do ETL.
 
 **Decisão**: BIN/REG/FINAL não são obrigatórios. A janela de treino é
-controlada explicitamente pelo walk-forward (4 anos móveis), e uma janela sem
-trades suficientes passa a ser reportada como amostra insuficiente, nunca
-como WR 0.
+controlada explicitamente pelo walk-forward (4 anos móveis), e os relatórios
+suecos mostram o número de trades de cada janela, com "-" quando não houve
+trade — nunca WR 0.
 
 O genoma BR aplicado à Suécia hoje: fitness −97,9, WR 0,576, alpha −13,8%.
 Não transfere; não deve ser o ponto de partida dos folds.

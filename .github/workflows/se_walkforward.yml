@@ -1,7 +1,8 @@
 name: SE Walk-forward
 
-# Treina os 6 genomas do walk-forward sueco (docs/adr/0002) em paralelo, um
-# job por fold, e commita data/walkforward/fold_<k>.json no branch que disparou.
+# Treina os 6 genomas do walk-forward sueco (docs/adr/0002) e o genoma de uso
+# diario em paralelo, um job cada, e commita data/walkforward/*.json no branch
+# que disparou.
 #
 # Disparo: editar e dar push em data/walkforward/REQUEST. (workflow_dispatch so
 # funciona com o workflow no branch padrao, e este vive num branch de feature.)
@@ -61,7 +62,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        fold: [1, 2, 3, 4, 5, 6]
+        # 6 folds do walk-forward + o genoma de uso diario (4 anos ate hoje)
+        target: ["1", "2", "3", "4", "5", "6", "live"]
     env:
       GA_EVAL_WORKERS: "4"
       GA_TIME_BUDGET_HOURS: "4.0"
@@ -87,13 +89,20 @@ jobs:
           name: se-etl
           path: output/data/
 
-      - name: Train fold ${{ matrix.fold }}
-        run: python -u walkforward.py train --fold ${{ matrix.fold }}
+      - name: Train ${{ matrix.target }}
+        run: |
+          if [ "${{ matrix.target }}" = "live" ]; then
+            python -u walkforward.py train --live
+          else
+            python -u walkforward.py train --fold ${{ matrix.target }}
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
-          name: fold-${{ matrix.fold }}
-          path: data/walkforward/fold_${{ matrix.fold }}.json
+          name: fold-${{ matrix.target }}
+          # So o arquivo deste job: o checkout pode trazer genomas antigos ja
+          # commitados, que nao podem sobrescrever os novos no collect.
+          path: data/walkforward/${{ matrix.target == 'live' && 'live' || format('fold_{0}', matrix.target) }}.json
           retention-days: 7
           if-no-files-found: error
 
@@ -117,7 +126,7 @@ jobs:
           ls -la data/walkforward/
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
-          git add data/walkforward/fold_*.json
+          git add data/walkforward/*.json
           if git diff --cached --quiet; then
             echo "Nenhum genoma novo"
             exit 0

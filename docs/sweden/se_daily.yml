@@ -1,0 +1,71 @@
+# Workflow diario do mercado sueco — PRONTO PARA IR PARA O MAIN.
+#
+# O cron do GitHub so roda workflows do branch padrao. Este arquivo deve ser
+# copiado para .github/workflows/se_daily.yml no `main` (unica mudanca no main,
+# decisao Q20 do plano). Ele faz checkout do branch sueco e roda la.
+#
+# Secrets necessarios (Settings > Secrets and variables > Actions):
+#   SE_TELEGRAM_BOT_TOKEN, SE_TELEGRAM_CHAT_ID   (opcionais; sem eles nao envia)
+
+name: SE Daily
+
+on:
+  schedule:
+    # 17:15 UTC, seg-sex: depois do fechamento de Estocolmo (17:30 CET = 16:30
+    # UTC no inverno; 17:30 CEST = 15:30 UTC no verao).
+    - cron: "15 17 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: se-daily
+  cancel-in-progress: false
+
+env:
+  SE_BRANCH: claude/jolly-dijkstra-8clsp4
+
+jobs:
+  daily:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      SE_TELEGRAM_BOT_TOKEN: ${{ secrets.SE_TELEGRAM_BOT_TOKEN }}
+      SE_TELEGRAM_CHAT_ID: ${{ secrets.SE_TELEGRAM_CHAT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SE_BRANCH }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ hashFiles('requirements.txt') }}
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Ordens do dia (ETL + payloads + relatorio + Telegram)
+        run: python -u daily_se.py run
+
+      - name: Commit do relatorio no branch sueco
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add reports/se/daily/
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "[se-daily] ordens $(date -u +%Y-%m-%d)"
+          for i in 1 2 3; do
+            if git -c rebase.autoStash=true pull --rebase origin "$SE_BRANCH" && git push origin "HEAD:$SE_BRANCH"; then
+              exit 0
+            fi
+            sleep $(( (RANDOM % 10) + 3 ))
+          done
+          exit 1

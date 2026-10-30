@@ -9,6 +9,8 @@ genoma treinado so com os 4 anos anteriores ao seu inicio.
     python walkforward.py train --fold 3        # treina um fold (ga_run em modo fold)
     python walkforward.py train --all           # treina os 6 em sequencia
     python walkforward.py status                # quais folds ja tem genoma
+    python walkforward.py train --live          # genoma de uso diario (4 anos ate hoje)
+    python walkforward.py accept                # aceita data/walkforward/live.json para uso diario
 
 Os genomas ficam em data/walkforward/fold_<k>.json e sao a entrada dos replays.
 """
@@ -29,6 +31,7 @@ import pandas as pd
 
 REPO_ROOT = Path(__file__).resolve().parent
 FOLD_DIR = REPO_ROOT / "data" / "walkforward"
+GENOME_PATH = REPO_ROOT / "data" / "genome_se.json"   # genoma aceito para uso diario
 
 # Data ancora do calendario: o ultimo fold termina aqui. Fixa para que o
 # calendario seja reproduzivel; mude-a de proposito quando quiser refazer o
@@ -48,7 +51,8 @@ class Fold:
 
     @property
     def path(self) -> Path:
-        return FOLD_DIR / f"fold_{self.k}.json"
+        # k=0 is the live genome: same procedure, trained up to today.
+        return FOLD_DIR / ("live.json" if self.k == 0 else f"fold_{self.k}.json")
 
 
 def folds(anchor_end: pd.Timestamp = ANCHOR_END) -> List[Fold]:
@@ -73,6 +77,23 @@ def get_fold(k: int) -> Fold:
         if f.k == k:
             return f
     raise SystemExit(f"fold {k} nao existe (1..{N_FOLDS})")
+
+
+def live_fold(today: Optional[pd.Timestamp] = None) -> Fold:
+    """O genoma de uso diario: mesmo procedimento dos folds, treinado ate hoje."""
+    t = (today or pd.Timestamp.today()).normalize()
+    nxt = t + pd.offsets.BDay(1)
+    return Fold(k=0, train_end=str(t.date()), trade_start=str(nxt.date()),
+                trade_end=str((nxt + pd.DateOffset(months=FOLD_MONTHS) - pd.Timedelta(days=1)).date()))
+
+
+def accept(path: Path) -> dict:
+    """Aceite manual (docs/adr/0002): copia o genoma para data/genome_se.json."""
+    g = json.loads(Path(path).read_text(encoding="utf-8"))
+    g["accepted_on"] = str(pd.Timestamp.today().date())
+    g["accepted_from"] = str(Path(path))
+    GENOME_PATH.write_text(json.dumps(g, indent=2), encoding="utf-8")
+    return g
 
 
 def load_fold_genome(k: int) -> Optional[dict]:
@@ -125,7 +146,16 @@ def main(argv=None) -> int:
     g = tr.add_mutually_exclusive_group(required=True)
     g.add_argument("--fold", type=int)
     g.add_argument("--all", action="store_true")
+    g.add_argument("--live", action="store_true", help="genoma de uso diario, treinado ate hoje")
+    ac = sub.add_parser("accept", help="aceita um genoma para uso diario (depois de ler o replay)")
+    ac.add_argument("path", nargs="?", default=str(FOLD_DIR / "live.json"))
     args = ap.parse_args(argv)
+
+    if args.cmd == "accept":
+        g = accept(Path(args.path))
+        print(f"[walkforward] aceito {args.path} -> {GENOME_PATH} (fit={g.get('fitness', float('nan')):.4f}, "
+              f"treino ate {g.get('train_end', '?')}). Retreine e reaceite a cada {FOLD_MONTHS} meses.")
+        return 0
 
     if args.cmd == "plan":
         for f in folds():
@@ -136,7 +166,10 @@ def main(argv=None) -> int:
             g = load_fold_genome(f.k)
             print(f"fold {f.k}: " + (f"fit={g['fitness']:.4f}" if g else "sem genoma"))
         return 0
-    targets = folds() if args.all else [get_fold(args.fold)]
+    if args.live:
+        targets = [live_fold()]
+    else:
+        targets = folds() if args.all else [get_fold(args.fold)]
     rc = 0
     for f in targets:
         rc = rc or train(f)
