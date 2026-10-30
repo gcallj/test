@@ -112,15 +112,21 @@ def build_report(cache: Dict, genome: dict, account: dict) -> Tuple[str, pd.Data
     book = res.open_book.copy()
     today = last_day.date().isoformat()
 
+    def _day(v) -> str:
+        return pd.Timestamp(v).date().isoformat() if pd.notna(v) and v != "" else ""
+
     rows = []
     for _, r in book.iterrows():
         tk = r["ticker"]
         if r["estado"] == "posicao":
             lv = tomorrow_levels(augmented[tk], gp)
-            rows.append({"tipo": "posicao", "ticker": tk, "desde": r["data_compra"], "preco_compra": r["preco_compra"],
-                         "fechamento": float(closes[tk].dropna().iloc[-1]),
-                         "stop_amanha": lv.get("stop_px"), "alvo_amanha": lv.get("target_px")})
-        elif r["data_sinal"] == today:
+            close = float(closes[tk].dropna().iloc[-1])
+            stop_next = lv.get("stop_px")
+            note = "stop acima do fechamento: sai na abertura" if stop_next is not None and stop_next >= close else ""
+            rows.append({"tipo": "posicao", "ticker": tk, "desde": _day(r["data_compra"]), "preco_compra": r["preco_compra"],
+                         "fechamento": close, "stop_amanha": stop_next, "alvo_amanha": lv.get("target_px"),
+                         "obs": note})
+        elif _day(r["data_sinal"]) == today:
             rows.append({"tipo": "ordem_nova", "ticker": tk, "limite": r["limite"], "stop": r["stop"],
                          "alvo": r["alvo"], "forca": r["forca"], "validade": market_se.ORDER_VALIDITY_DAYS})
         else:
@@ -128,10 +134,10 @@ def build_report(cache: Dict, genome: dict, account: dict) -> Tuple[str, pd.Data
             used = int(((days > sig) & (days <= last_day)).sum())
             rows.append({"tipo": "ordem_ativa", "ticker": tk, "limite": r["limite"], "stop": r["stop"],
                          "alvo": r["alvo"], "forca": r["forca"],
-                         "validade": max(0, market_se.ORDER_VALIDITY_DAYS - used), "data_sinal": r["data_sinal"]})
+                         "validade": max(0, market_se.ORDER_VALIDITY_DAYS - used), "data_sinal": _day(r["data_sinal"])})
     book_df = pd.DataFrame(rows)
 
-    signals_today = orders[orders["data_sinal"] == today] if not orders.empty else orders
+    signals_today = orders[orders["data_sinal"].astype(str).str[:10] == today] if not orders.empty else orders
     accepted = set(book_df.loc[book_df.get("tipo", pd.Series(dtype=str)) == "ordem_nova", "ticker"]) if not book_df.empty else set()
     left_out = signals_today[~signals_today["ticker"].isin(accepted)] if len(signals_today) else signals_today
 
@@ -140,7 +146,7 @@ def build_report(cache: Dict, genome: dict, account: dict) -> Tuple[str, pd.Data
     used = int(len(book_df)) if not book_df.empty else 0
 
     L = [f"# Ordens para o pregao seguinte a {today}", "",
-         f"Etapa: **{account['stage']}** · conta {acct.capital:,.0f} SEK · patrimonio {equity:,.0f} SEK · "
+         f"Etapa: **{account['stage']}** · conta {acct.capital:,.0f} SEK desde {start.date()} · patrimonio {equity:,.0f} SEK · "
          f"drawdown desde o inicio {100 * mdd:.1f}% · vagas {used}/{acct.max_positions}", ""]
     def table(kind, cols, title):
         sub = book_df[book_df["tipo"] == kind] if not book_df.empty else book_df
@@ -158,7 +164,7 @@ def build_report(cache: Dict, genome: dict, account: dict) -> Tuple[str, pd.Data
           "Novas ordens (comprar com ordem limitada, valida pelos pregoes indicados)")
     table("ordem_ativa", ["ticker", "limite", "stop", "alvo", "validade", "data_sinal"],
           "Ordens de dias anteriores que continuam ativas")
-    table("posicao", ["ticker", "desde", "preco_compra", "fechamento", "stop_amanha", "alvo_amanha"],
+    table("posicao", ["ticker", "desde", "preco_compra", "fechamento", "stop_amanha", "alvo_amanha", "obs"],
           "Posicoes abertas (atualizar stop e alvo para amanha)")
     if len(left_out):
         L += ["## Sinais que ficaram de fora por falta de vaga", "",
@@ -172,6 +178,8 @@ def build_report(cache: Dict, genome: dict, account: dict) -> Tuple[str, pd.Data
 def _fmt(v) -> str:
     if v is None or (isinstance(v, float) and not np.isfinite(v)):
         return "-"
+    if isinstance(v, float) and v.is_integer() and abs(v) < 100:
+        return str(int(v))
     if isinstance(v, float):
         return f"{v:.2f}"
     return str(v)

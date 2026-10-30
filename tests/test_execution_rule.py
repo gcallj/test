@@ -116,6 +116,28 @@ class ExecutionRuleTest(unittest.TestCase):
         self.assertAlmostEqual(with_trace["total_return"], without["total_return"], places=12)
         self.assertEqual(len(trace), len(self.c) - 1)
 
+    def test_warmup_bars_never_trade(self):
+        warm = 300
+        trades = []
+        stats = gr.backtest_stats_global_intraday(
+            self.o, self.h, self.l, self.c, self.x, self.atr, self.gp, trades_out=trades, warmup=warm)
+        self.assertGreater(len(trades), 0)
+        self.assertTrue(all(t["signal_idx"] >= warm for t in trades))
+        self.assertEqual(stats["n_orders"], len([t for t in trades if t["status"] != "pending"]))
+
+    def test_drawdown_pause_ends(self):
+        # A tight breaker trips often; each pause must end so trading resumes.
+        gp = dataclasses.replace(self.gp, equity_drawdown_stop_pct=0.04, consecutive_loss_cooldown=5.0)
+        trace = []
+        gr.backtest_stats_global_intraday(self.o, self.h, self.l, self.c, self.x, self.atr, gp, trace=trace)
+        longest = run = 0
+        for r in trace:
+            run = run + 1 if r.get("reason") == "cooldown" else 0
+            longest = max(longest, run)
+        self.assertLess(longest, 60)
+        late = [r for r in trace if r["i"] > len(self.c) // 2 and "order" in r.get("event", "")]
+        self.assertGreater(len(late), 0)
+
     def test_ga_trainer_and_evaluator_share_one_engine(self):
         a = gr.backtest_stats_global_intraday(self.o, self.h, self.l, self.c, self.x, self.atr, self.gp,
                                               stage_gate="off")

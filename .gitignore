@@ -47,3 +47,6 @@ Thumbs.db
 .local_ga_backups/
 catboost_info/
 ga_checkpoints_H*/
+
+# Replays ilustrativos (in-sample): gerados localmente, nao validam nada
+reports/se_insample/

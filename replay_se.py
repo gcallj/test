@@ -33,6 +33,7 @@ REPO_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(REPO_ROOT))
 
 import walkforward as wf  # noqa: E402
+from ga_run_modular_final import ENGINE_WARMUP_BARS  # noqa: E402
 
 REPORT_DIR = REPO_ROOT / "reports" / "se"
 INSAMPLE_DIR = REPO_ROOT / "reports" / "se_insample"
@@ -121,6 +122,21 @@ def _fmt_pct(x: Optional[float]) -> str:
     return "" if x is None or not np.isfinite(x) else f"{100 * x:+.2f}%"
 
 
+EXIT_TAIL_BARS = 60  # bars after a period's end for its open positions to exit
+
+
+def slice_payload(p: Dict, s0: int, e0: int) -> Dict:
+    """Payload restrito aos pregoes [s0, e0)."""
+    n = len(p["close"])
+    out = {}
+    for k, v in p.items():
+        if hasattr(v, "__len__") and not isinstance(v, (str, list)) and len(v) == n:
+            out[k] = v[s0:e0]
+        else:
+            out[k] = v
+    return out
+
+
 def replay_ticker(tk: str, p: Dict, plan: List[Tuple[wf.Fold, dict]]) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Retorna (tabela diaria, ordens) do ticker ao longo dos folds."""
     import ga_run as gr
@@ -136,12 +152,24 @@ def replay_ticker(tk: str, p: Dict, plan: List[Tuple[wf.Fold, dict]]) -> Tuple[p
         if len(idx) == 0:
             continue
         lo, hi = int(idx[0]), int(idx[-1])
+        # Same convention as GA training and the daily run: the period starts
+        # with fresh equity after ENGINE_WARMUP_BARS of indicator history. A
+        # tail lets positions opened in the period run to their exit.
+        s0 = max(0, lo - ENGINE_WARMUP_BARS)
+        e0 = min(n, hi + 1 + EXIT_TAIL_BARS)
+        q = slice_payload(p, s0, e0)
         trace: List[Dict] = []
         orders: List[Dict] = []
         gr.backtest_stats_global_intraday(
-            p["open"], p["high"], p["low"], p["close"], p["score_matrix"], p["atr"],
-            _params(g["genome"]), precomputed=p, trace=trace, trades_out=orders,
+            q["open"], q["high"], q["low"], q["close"], q["score_matrix"], q["atr"],
+            _params(g["genome"]), precomputed=q, trace=trace, trades_out=orders, warmup=lo - s0,
         )
+        for r in trace:
+            r["i"] += s0
+        for o in orders:
+            for key in ("signal_idx", "fill_idx", "exit_idx"):
+                if key in o:
+                    o[key] += s0
         by_i = {r["i"]: r for r in trace}
 
         for j in range(lo, hi + 1):
@@ -256,11 +284,12 @@ def ticker_markdown(tk: str, daily: pd.DataFrame, orders: pd.DataFrame, mode: st
         fs = fold_summary(orders)
         lines += ["| Fold | Ordens | Executadas | Perdidas | Canceladas | Fill rate | Trades | Win rate | Expectancy |",
                   "|---:|---:|---:|---:|---:|---:|---:|---:|---:|"]
-        for _, r in fs.iterrows():
-            lines.append(f"| {r.fold} | {r.ordens} | {r.executadas} | {r.perdidas} | {r.canceladas} | "
-                         f"{_fmt_pct(r.fill_rate) if np.isfinite(r.fill_rate) else '-'} | {r.trades_fechados} | "
-                         f"{_fmt_pct(r.win_rate) if np.isfinite(r.win_rate) else '-'} | "
-                         f"{_fmt_pct(r.expectancy) if np.isfinite(r.expectancy) else '-'} |")
+        def rate(x):
+            return f"{100 * x:.0f}%" if np.isfinite(x) else "-"
+        for r in fs.itertuples():
+            lines.append(f"| {int(r.fold)} | {int(r.ordens)} | {int(r.executadas)} | {int(r.perdidas)} | "
+                         f"{int(r.canceladas)} | {rate(r.fill_rate)} | {int(r.trades_fechados)} | "
+                         f"{rate(r.win_rate)} | {_fmt_pct(r.expectancy) or '-'} |")
         lines.append("")
     flat = daily[daily["decisao_no_fechamento"].str.startswith("nao compra")]
     if len(flat):

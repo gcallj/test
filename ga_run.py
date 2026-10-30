@@ -1509,7 +1509,7 @@ def _finalize_backtest_stats(
     return base_stats
 
 
-def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalParams, precomputed: Optional[Dict[str, np.ndarray]] = None, stage_gate: Optional[str] = None, trace: Optional[List[Dict[str, Any]]] = None, trades_out: Optional[List[Dict[str, Any]]] = None) -> Dict[str, float]:
+def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalParams, precomputed: Optional[Dict[str, np.ndarray]] = None, stage_gate: Optional[str] = None, trace: Optional[List[Dict[str, Any]]] = None, trades_out: Optional[List[Dict[str, Any]]] = None, warmup: int = 0) -> Dict[str, float]:
     """Per-ticker backtest under the real execution rule (docs/adr/0001).
 
     The single implementation lives in ga_run_modular_final, which the GA
@@ -1521,7 +1521,8 @@ def backtest_stats_global_intraday(o, h, l, c, score_matrix, atr, gp: GlobalPara
     _gate = stage_gate if stage_gate is not None else GA_STAGE_GATE
     if _gate != "off" and x.ndim == 2 and x.shape[0] == len(c_arr) and len(c_arr) >= 5:
         x = _apply_stage_gate_to_score_matrix(x, c_arr, _gate)
-    return _gm_backtest(o, h, l, c_arr, x, atr, gp, precomputed=precomputed, trace=trace, trades_out=trades_out)
+    return _gm_backtest(o, h, l, c_arr, x, atr, gp, precomputed=precomputed, trace=trace, trades_out=trades_out,
+                        warmup=warmup)
 
 
 def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float:

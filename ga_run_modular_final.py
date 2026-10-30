@@ -783,6 +783,7 @@ def _backtest_stats_global_intraday(
     precomputed: Optional[Dict[str, np.ndarray]] = None,
     trace: Optional[List[Dict[str, Any]]] = None,
     trades_out: Optional[List[Dict[str, Any]]] = None,
+    warmup: int = 0,
 ) -> Dict[str, float]:
     """Per-ticker backtest under the real execution rule (docs/adr/0001).
 
@@ -793,10 +794,16 @@ def _backtest_stats_global_intraday(
     trades through it, and is cancelled when a close crosses the stop before
     it fills. An order that never fills is a missed entry: no trade.
 
+    `warmup` bars at the start only feed the indicators: no order is placed
+    for them and every statistic starts after them. GA training, the replays
+    and the daily run all use ENGINE_WARMUP_BARS, so a period always starts
+    with fresh equity and warm indicators.
+
     `trace` receives one record per bar explaining the decision and
     `trades_out` one record per order (filled, missed or cancelled). Both feed
     the replays and cost nothing when left as None.
     """
+    warmup = int(max(0, warmup))
     o = np.asarray(o, dtype=np.float64)
     h = np.asarray(h, dtype=np.float64)
     l = np.asarray(l, dtype=np.float64)
@@ -871,6 +878,7 @@ def _backtest_stats_global_intraday(
 
     equity = 1.0
     peak = 1.0
+    breaker_peak = 1.0  # reference of the drawdown circuit-breaker, re-armed after each pause
     mdd = 0.0
     trade_rets = []
     trade_exit_types = []  # "take", "stop", "trailing", "time", "hard_loss"
@@ -1164,6 +1172,8 @@ def _backtest_stats_global_intraday(
             reason = "in_position"
         elif pend_side != 0:
             reason = "order_live"
+        elif i - 1 < warmup:
+            reason = "warmup"
         elif cooldown > 0:
             reason = "cooldown"
         elif not (np.isfinite(score_ev[i - 1]) and np.isfinite(score_pctl[i - 1]) and np.isfinite(score95_arr[i - 1])):
@@ -1357,14 +1367,18 @@ def _backtest_stats_global_intraday(
             max_drawdown_duration = max(max_drawdown_duration, current_drawdown_duration)
         else:
             current_drawdown_duration = 0
-        # Equity drawdown circuit-breaker (progressive re-entry: 20 bars)
-        if gp.equity_drawdown_stop_pct > 0 and drawdown < -gp.equity_drawdown_stop_pct:
-            cooldown = max(cooldown, 20)  # ~1 month pause after DD exceeds threshold
+        # Equity drawdown circuit-breaker: ~1 month pause, then re-entry. The
+        # reference is re-armed at the pause, otherwise the frozen equity keeps
+        # the drawdown above the threshold and the pause renews forever.
+        breaker_peak = max(breaker_peak, equity)
+        if gp.equity_drawdown_stop_pct > 0 and (equity / max(breaker_peak, ATR_EPS)) - 1.0 < -gp.equity_drawdown_stop_pct:
+            cooldown = max(cooldown, 20)
+            breaker_peak = equity
 
     # An order still live at the end of the data is neither filled nor missed.
     if pend_side != 0:
         n_orders -= 1
-    exposure = float(exposure_acc / max(1, n - 1))
+    exposure = float(exposure_acc / max(1, n - 1 - warmup))
     stats = _finalize_backtest_stats(
         trade_rets=trade_rets,
         trade_exit_types=trade_exit_types,
@@ -1372,7 +1386,7 @@ def _backtest_stats_global_intraday(
         exposure=exposure,
         total_return=float(equity - 1.0),
         mdd=float(mdd),
-        n_bars=n,
+        n_bars=max(5, n - warmup),
         max_drawdown_duration=max_drawdown_duration,
         early_take_deferred_events=early_take_deferred_events,
         trade_rets_after_3=trade_rets_after_3,
@@ -1802,6 +1816,29 @@ def global_fitness_from_stats(per_ticker_stats: List[Dict[str, float]]) -> float
 # ---------------------------------------------------------------------------
 # Genome evaluation on payloads
 # ---------------------------------------------------------------------------
+ENGINE_WARMUP_BARS = 260  # ~1 year: trailing-year signal strength and 200-day averages are warm
+
+
+def _window_payloads_with_warmup(store: PayloadStore, wp: WindowPlan, warmup: int = ENGINE_WARMUP_BARS):
+    """Window payloads extended backwards by `warmup` bars of indicator history.
+
+    The extra bars only warm the engine's rolling statistics (no orders,
+    no statistics), so a window is scored exactly like a replay period or the
+    daily run: fresh equity, warm indicators.
+    """
+    def _get(slices):
+        out = {}
+        for tk, ts in slices.items():
+            if ts.end_idx <= ts.start_idx:
+                continue
+            s0 = max(0, ts.start_idx - int(warmup))
+            p = dict(store.get_ticker_arrays(tk, s0, ts.end_idx))
+            p["warmup"] = ts.start_idx - s0
+            out[tk] = p
+        return out
+    return _get(wp.train_slices), _get(wp.test_slices)
+
+
 def _evaluate_genome_on_payloads(
     gp: GlobalParams,
     ticker_payloads: Dict[str, Dict[str, np.ndarray]],
@@ -1810,11 +1847,12 @@ def _evaluate_genome_on_payloads(
     Returns (fitness_scalar, list_of_per_ticker_stats)."""
     stats = []
     for _, payload in ticker_payloads.items():
+        w = int(payload.get("warmup", 0) or 0)
         st = _backtest_stats_global_intraday(
             payload["open"], payload["high"], payload["low"], payload["close"],
-            payload["score_matrix"], payload["atr"], gp, precomputed=payload,
+            payload["score_matrix"], payload["atr"], gp, precomputed=payload, warmup=w,
         )
-        st["buy_hold_return"] = buyhold_capped(payload["close"])
+        st["buy_hold_return"] = buyhold_capped(np.asarray(payload["close"])[w:])
         st["excess_return"] = st["total_return"] - st["buy_hold_return"]
         stats.append(st)
     return global_fitness_from_stats(stats), stats
@@ -1833,7 +1871,7 @@ def _evaluate_walkforward(
 
     for wi in window_indices:
         wp = window_plans[wi]
-        train_payloads, test_payloads = store.get_window_payloads(wp)
+        train_payloads, test_payloads = _window_payloads_with_warmup(store, wp)
         if train_payloads and test_payloads:
             tr_fit, _ = _evaluate_genome_on_payloads(gp, train_payloads)
             te_fit, _ = _evaluate_genome_on_payloads(gp, test_payloads)

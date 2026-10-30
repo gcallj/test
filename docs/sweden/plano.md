@@ -71,6 +71,16 @@ antes de qualquer dinheiro real. O Brasil fica congelado como está.
   são usados.
 - **Livro da conta sem estado escondido**: a conta de paper/real é a
   continuação do portfolio replay a partir da data de início.
+- **Aquecimento igual em todo lugar**: o GA treinava em janelas fatiadas a
+  frio (o primeiro mês de cada janela quase não operava) e o replay rodava
+  desde 2005. Agora treino, replay e operação diária começam cada período com
+  capital zerado e 260 pregões de aquecimento dos indicadores.
+- **Trava do circuit breaker corrigida**: a pausa por drawdown se renovava
+  para sempre (sem trades o capital não se recupera); agora a referência é
+  rearmada na pausa e o ticker volta a operar depois de 20 pregões.
+- **Corte de 80 features pela variância dos 3 primeiros anos**: antes usava o
+  histórico inteiro, e um fold (histórico truncado) podia escolher features
+  diferentes das do replay.
 
 ## Resultado da Fase 0 (30/out/2026)
 

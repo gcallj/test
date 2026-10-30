@@ -218,6 +218,12 @@ trained only on data from before that fold began.
 One train-then-trade segment of a walk-forward replay: a training span ending
 at a cutoff date, followed by the trading span the resulting genome replays.
 
+**Warmup**:
+The bars before a period that only feed the indicators: no order is placed on
+them and every statistic starts after them. Training windows, replay periods
+and the live account all start this way.
+_Avoid_: burn-in, lookback (when the no-trading rule is meant)
+
 **Holdout**:
 A span of dates withheld from the optimizer, used to judge a genome on data it
 has never seen.
