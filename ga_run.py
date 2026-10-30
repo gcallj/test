@@ -315,6 +315,11 @@ else:
     GA_STAGE2_NGEN     = 15
     GA_MAX_WINDOWS     = 4     # max stable on 16GB
     GA_MAX_WINDOWS_STAGE2 = 4
+# Overrides for quick local runs (used only with GA_AUTO_TUNE=0).
+GA_STAGE1_POP_SIZE = int(os.getenv("GA_STAGE1_POP_SIZE", GA_STAGE1_POP_SIZE))
+GA_STAGE1_NGEN = int(os.getenv("GA_STAGE1_NGEN", GA_STAGE1_NGEN))
+GA_STAGE2_POP_SIZE = int(os.getenv("GA_STAGE2_POP_SIZE", GA_STAGE2_POP_SIZE))
+GA_STAGE2_NGEN = int(os.getenv("GA_STAGE2_NGEN", GA_STAGE2_NGEN))
 
 # --- Modular pipeline config ---
 GA_AUTO_TUNE = int(os.environ.get("GA_AUTO_TUNE", "1"))
@@ -3762,7 +3767,9 @@ def run():
                 ram_reserve_gb=GA_RAM_RESERVE_GB,
             )
 
-        checkpoint_dir = os.path.join(OUTPUT_DIR, f"ga_checkpoints_H{FWD_H}")
+        # Per-generation resume checkpoints. Walk-forward folds get their own
+        # directory: resuming from another fold would leak its training data.
+        checkpoint_dir = os.environ.get("GA_CHECKPOINT_DIR") or os.path.join(OUTPUT_DIR, f"ga_checkpoints_H{FWD_H}")
         global_params, global_genome, global_fit = run_global_ga_two_stage(
             store_path=store.store_path,
             window_plans=window_plans,

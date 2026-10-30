@@ -35,6 +35,7 @@ class FoldCalendarTest(unittest.TestCase):
         self.assertEqual(env["GA_NO_SEED"], "1")
         self.assertEqual(env["GA_HOLDOUT_DAYS"], "0")
         self.assertIn("ga_memmap_fold3", env["GA_MEMMAP_DIR"])
+        self.assertIn("ga_checkpoints_fold3", env["GA_CHECKPOINT_DIR"])
 
 
 if __name__ == "__main__":

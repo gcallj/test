@@ -117,6 +117,8 @@ def fold_env(f: Fold, base: Optional[dict] = None) -> dict:
         # Store proprio do fold (dados truncados): nunca confundir com o store
         # completo que os replays usam em output/ga_memmap.
         "GA_MEMMAP_DIR": str(REPO_ROOT / "output" / f"ga_memmap_fold{f.k}"),
+        # Checkpoints de geracao proprios: retomar de outro fold vazaria dados.
+        "GA_CHECKPOINT_DIR": str(REPO_ROOT / "output" / f"ga_checkpoints_fold{f.k}"),
     })
     env.setdefault("GA_TIME_BUDGET_HOURS", "3.5")
     return env
@@ -127,8 +129,12 @@ def train(f: Fold) -> int:
     print(f"[walkforward] fold {f.k}: treino ate {f.train_end} ({TRAIN_YEARS} anos), "
           f"opera {f.trade_start} .. {f.trade_end}", flush=True)
     env = fold_env(f)
+    # Nunca retomar de um treino anterior deste fold com outro corte/codigo.
+    shutil.rmtree(env["GA_CHECKPOINT_DIR"], ignore_errors=True)
     proc = subprocess.run([sys.executable, "-u", "ga_run.py"], cwd=REPO_ROOT, env=env)
     shutil.rmtree(env["GA_MEMMAP_DIR"], ignore_errors=True)
+    if proc.returncode == 0:
+        shutil.rmtree(env["GA_CHECKPOINT_DIR"], ignore_errors=True)
     if proc.returncode == 0 and f.path.exists():
         g = json.loads(f.path.read_text(encoding="utf-8"))
         g.update(asdict(f))
