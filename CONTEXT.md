@@ -189,7 +189,26 @@ on open positions.
 
 **Paper trading**:
 Forward recording of each day's real signals and the fills a trader would have
-got, without real money.
+got, without real money. Its job is a mechanics check, not proof of edge.
+
+**Mechanics check**:
+Verifying that operating the system works in practice: signals arrive in
+time, orders can be placed, and fill rate and slippage match what the replay
+assumed.
+
+**Index benchmark**:
+Holding a broad Swedish index fund in the same account; the passive
+alternative a portfolio replay must beat after costs.
+_Avoid_: benchmark (alone), market return
+
+**Ramp-up**:
+The staged move from paper trading to reduced real capital to full real
+capital.
+
+**Stop rule**:
+A measured condition that, when breached, sends live trading back to paper
+trading for investigation.
+_Avoid_: kill switch, circuit breaker
 
 **Walk-forward replay**:
 A replay split into consecutive folds, where each fold is traded by a genome
