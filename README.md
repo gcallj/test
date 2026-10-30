@@ -1,4 +1,13 @@
-# Pipeline de Sinais de Trading — B3
+# Pipeline de Sinais de Trading — Suécia (este branch) / B3 (main)
+
+> **Este branch opera Nasdaq Stockholm.** Comece por `docs/sweden/guia.md`
+> (como o sistema decide, instalação no WSL2, replays, rotina diária) e
+> `docs/sweden/plano.md` (decisões, critério de sucesso, ramp-up). O texto
+> abaixo descreve a versão brasileira congelada no `main`; seus números são de
+> abril/2026 e não valem para a Suécia.
+
+---
+
 
 Sistema de geracao de sinais de compra/venda para ~119 ativos brasileiros (acoes, FIIs, crypto). Pipeline com otimizacao genetica (GA) walk-forward, custos realistas (corretagem + B3 + slippage + IR 15%) e **auditoria causal** que bloqueia features contaminadas.
 
