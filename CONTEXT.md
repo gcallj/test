@@ -1,111 +1,188 @@
-# CONTEXT
+# Trading signals
 
-Domain glossary for this repo. Use these terms as spelled here — in issue
-titles, test names, log lines, and commit messages — so the vocabulary stays
-one language across code and docs.
+Daily buy/hold/sell signals for one stock market, produced by a tuned trading
+policy and validated by simulation before anyone trades on them. Brazil (B3) is
+frozen as it is; Sweden (Nasdaq Stockholm) is the market under active
+development.
 
-Column names, metric keys and tier names are literal identifiers: they appear
-exactly like this in the code, the sweep JSONs, and the `Apply` sheet.
+## Language
 
-## Instrument universe
+### Markets and instruments
 
-- **ticker** — a B3 symbol in yfinance spelling (`PETR4.SA`, `HGRE11.SA`).
-  `ticker_metadata.py` maps 119 tickers to 11 sectors; recent runs report
-  `n_tickers_total` 116 and `n_tickers_active` ~105, because a ticker needs
-  enough history and trades to be evaluated.
-- **universe tier** — a per-ticker live-trading classification recomputed from
-  current backtest stats by `classify_operational_universe_tier` in
-  `ga_run.py`:
-  - **PREMIUM** — `n_trades >= 30`, WR >= 0.74, WR alvo >= 0.72,
-    `alpha_ann >= -0.12`, MDD <= 0.13
-  - **HIGH_QUAL** — `n_trades >= 20`, WR >= 0.67, WR alvo >= 0.65,
-    `alpha_ann >= -0.20`, MDD <= 0.16
-  - **REGULAR** — everything else; its signals are downgraded to HOLD/OBSERVAR
-- **operable** — PREMIUM or HIGH_QUAL (`is_operational_stat`). Metric keys
-  suffixed `_operable` aggregate only these tickers and are the ones the
-  promotion gates read; `_all` variants cover every active ticker.
+**Market**:
+An exchange together with its currency, costs, tax regime and index, run as
+one independent instance of the system.
+_Avoid_: bolsa, exchange (when costs or tax are meant)
 
-## Policy and search
+**Ticker**:
+One listed share class, identified by its market-data symbol.
+_Avoid_: ativo, papel, stock
 
-- **genome** — the ordered list of floats encoding one trading policy.
-  `GLOBAL_PARAM_SPECS` in `ga_run.py` defines 38 genes as
-  `(name, lo, hi, step, is_int)`. `sanitize_global_genome` clips to range,
-  snaps to step, and pads a short genome from `_LEGACY_GENE_DEFAULTS`, so an
-  older 33-gene checkpoint still loads.
-- **gene** — one named parameter of the genome (`regime_threshold`,
-  `consecutive_loss_cooldown`, `partial_take_level`, ...).
-- **gene category** — the A-G grouping in `run_continuous_improvement.py`
-  (`GENE_CATEGORIES`) that one sweep cycle explores: `A_risk_management`,
-  `B_take_profit`, `C_timing`, `D_entry_filter`, `E_regime_vol`, `F_trailing`,
-  `G_exit_quality`.
-- **sweep** — one neighbourhood search over a category: each focus gene moved
-  +/- one step (`single_results`), plus multi-gene combinations up to
-  `combo_budget` (`combo_results`). Output is one
-  `local_fullmetric_sweep_continuous_<CATEGORY>_<timestamp>.json`.
-- **promotion** — a candidate passing every gate and being written into
-  `global_ga_checkpoint.json`. See `docs/agents/promotion-gates.md`.
-- **graveyard** — gene moves attempted repeatedly with zero promotions. The
-  table in `analysis/sweep_learnings_summary.md` is the live list; skip those
-  genes unless the surrounding context changed.
-- **hot zone** — a gene that has promoted at least once, worth revisiting with
-  new neighbours. Same file.
-- **drift** — a gene promoted repeatedly in one direction (e.g. three
-  consecutive increases). `_detect_parameter_drift` flags it and, with
-  `GA_DRIFT_GUARD=1`, blocks the promotion.
+**Universe**:
+The set of tickers a market evaluates, fixed by objective criteria decided
+before looking at any model result.
+_Avoid_: curated list, watchlist
 
-## Comparison points
+**Universe tier**:
+A ticker's live-trading grade — PREMIUM, HIGH_QUAL or REGULAR — derived from
+the quality of its recent backtest.
 
-A sweep and an apply both compare four genomes. Keep the names distinct:
+**Operable**:
+A ticker whose universe tier is PREMIUM or HIGH_QUAL: one the system would
+actually trade. REGULAR tickers are downgraded to hold.
 
-- **baseline** — the genome on `git:main`, re-evaluated on current data
-  (`base_metrics`, `baseline_info.ref`).
-- **seed** / **incumbent** — the genome currently in
-  `global_ga_checkpoint.json` (`seed_metrics`).
-- **candidate** — a genome produced by moving one or more genes from the seed.
-- **best_ever** — the best metrics ever recorded, in
-  `analysis/best_ever_tracker.json`, used as a long-term regression floor.
+### Account and costs
 
-## Metrics
+**ISK**:
+The Swedish investment savings account assumed for Sweden: taxed by a yearly
+charge on account value, never per trade.
+_Avoid_: depå, AF-konto (different tax regime)
 
-- **fit** / **fitness** — the GA objective, a composite of WR, WR alvo, alpha,
-  MDD, trade count and consistency. Comparable only between genomes scored on
-  the same dataset in the same run.
-- **WR** (`wr_med_all`, `wr_med_operable`) — median per-ticker share of
-  profitable trades, trailing-stop exits included.
-- **WR alvo** (`wr_target_med_all`, `wr_target_med_operable`) — median share of
-  trades that reached the take-profit target. Stricter than WR.
-- **alpha_ann** (`mean_alpha_ann`, `alpha_ann_mean_operable`) — annualised
-  excess return over buy-and-hold for the same ticker. Negative across this
-  repo's recorded history.
-- **alpha_ann_pos_rate** — share of tickers with positive alpha.
-- **MDD** (`mdd_med`, `mdd_p75`, `mdd_duration_med`) — max drawdown, as a
-  positive fraction.
-- **trades_med** — median trades per ticker. Small values (~35) make WR
-  medians coarse; see `docs/agents/promotion-gates.md`.
-- **expectancy_net** — mean net result per trade, after modeled costs.
-- **n_ge_70** — count of tickers with WR >= 70%.
-- **expected_hold_score** — 0-100 score for whether a ticker's edge survives a
-  3-day-plus hold (`expected_hold_score_from_stat`).
+**Position size**:
+The amount of currency committed to one trade; 10,000 SEK for Sweden.
 
-## Signals
+**Brokerage**:
+The broker's fee per order, paid on entry and again on exit.
+_Avoid_: courtage, corretagem
 
-- **Apply** — the sheet in `summary_latest.xlsx` carrying one row per ticker
-  per date, and the `apply_last_5d__H5.csv` export.
-- **signal** — final `buy` / `hold` / `sell` after overrides and quality gates;
-  **signal_ga** is the raw GA output before them.
-- **Minervini Stage** — trend classification from price versus MA50/MA200,
-  driving the `recomendacao` text and the hold-to-buy promotion.
-- **pivot levels** — Woodie pivot, S1 (support) and R1 (resistance), from which
-  `entrada` (entry), `stop` and `alvo` (target) are derived.
-- **confidence** — 0-100 blend of 11 factors; **rank** — weighted score used to
-  order the daily BUY list.
-- **causal feature** — an input derived only from OHLCV or the ETL, never from
-  a model output or a retroactively applied fundamental snapshot.
+**Slippage**:
+The gap between the price a trade was planned at and the price it filled at.
 
-## Infrastructure
+**Round-trip cost**:
+Brokerage on both orders plus exchange fees plus slippage on both sides,
+expressed as a fraction of position size.
 
-- **PayloadStore** — per-ticker arrays in a memmap under `output/ga_memmap/`
-  (`payload_store.py`), built once and reused so parallel sweeps skip the ETL.
-  `meta.json` present means the store is ready.
-- **load mode** — `GA_RUN_MODE=load`: score the checkpoint genome and emit
-  signals, no evolution. The daily job and the store build both use it.
+### Policy and search
+
+**Genome**:
+One complete trading policy, expressed as an ordered set of gene values.
+
+**Gene**:
+One tunable parameter of the policy, such as a stop distance or a cooldown
+after losses.
+
+**Gene category**:
+A group of related genes searched together in one sweep (risk management,
+take profit, timing, entry filter, regime/volatility, trailing, exit quality).
+
+**Sweep**:
+A neighbourhood search that moves the genes of one category a step at a time,
+alone and in combinations, and scores every result.
+
+**Promotion**:
+Replacing the incumbent with a candidate after it passes every gate.
+
+**Gate**:
+A pass/fail condition a candidate must meet to be promoted.
+
+**Graveyard**:
+Genes tried many times without a single promotion.
+
+**Hot zone**:
+Genes that have produced at least one promotion.
+
+**Drift**:
+A gene promoted repeatedly in the same direction, a sign of fitting noise.
+
+### Comparison points
+
+**Baseline**:
+The genome on the main line of history, re-scored on current data.
+
+**Incumbent**:
+The genome currently in use for signals.
+_Avoid_: seed, current model
+
+**Candidate**:
+A genome derived from the incumbent by moving one or more genes.
+
+**Best ever**:
+The best metrics ever recorded, used as a long-term floor against slow
+degradation.
+
+### Metrics
+
+**Fitness**:
+The single composite score the optimizer maximises.
+_Avoid_: score (overloaded)
+
+**Data vintage**:
+The dataset snapshot a metric was computed on. Fitness is comparable only
+within one vintage.
+
+**Win rate**:
+Median across tickers of the share of profitable trades.
+_Avoid_: hit rate, accuracy
+
+**Target win rate**:
+Median across tickers of the share of trades that reached the take-profit
+target. Stricter than win rate.
+_Avoid_: WR alvo (in prose)
+
+**Alpha**:
+Annualised return in excess of simply holding the same ticker.
+
+**Max drawdown**:
+The largest peak-to-trough fall of an equity curve.
+_Avoid_: MDD (in prose)
+
+**Expectancy**:
+The mean net result per trade, after costs.
+
+### Signals
+
+**Daily run**:
+The once-per-trading-day job that refreshes market data and emits that day's
+signals.
+
+**Signal**:
+The final buy, hold or sell for a ticker on a date, after every override and
+quality gate.
+
+**Raw signal**:
+The policy's output before overrides and quality gates.
+
+**Entry, stop, target**:
+The planned purchase price, the price that exits at a loss, and the price that
+takes profit, emitted with every buy signal.
+_Avoid_: entrada/alvo (in prose)
+
+**Execution rule**:
+How a signal becomes an order and an order becomes a fill: order type, price,
+validity, and what happens when it does not fill.
+
+**Minervini stage**:
+A ticker's trend phase from its price against its 50- and 200-day averages.
+
+**Pivot levels**:
+Support and resistance derived from the previous bar, from which entry, stop
+and target are placed.
+
+**Causal feature**:
+An input derived only from prices, volumes and other market data available on
+the day, never from a model output or a fact learned later.
+
+### Simulation
+
+**Backtest**:
+The per-ticker historical simulation the optimizer scores genomes with; every
+ticker trades its own independent equity.
+_Avoid_: simulação (too broad)
+
+**Replay**:
+A day-by-day reconstruction of the signals the daily run would have emitted,
+using only information available on each day, traded under the real
+execution rule. Run per ticker unless stated otherwise.
+
+**Portfolio replay**:
+A replay in which all tickers share one account with fixed capital and a limit
+on open positions.
+
+**Paper trading**:
+Forward recording of each day's real signals and the fills a trader would have
+got, without real money.
+
+**Holdout**:
+A span of dates withheld from the optimizer, used to judge a genome on data it
+has never seen.
+_Avoid_: pristine window, OOS window
