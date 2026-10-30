@@ -1,4 +1,4 @@
 # Editar e dar push neste arquivo dispara o workflow "SE Walk-forward":
-# 6 folds + genoma de uso diario, 4h de GA cada, em paralelo.
-requested_at: 2026-10-30T21:30Z
-reason: primeiro walk-forward com regra de execucao real, aquecimento de 260 pregoes e breaker corrigido
+# 6 folds + genoma de uso diario, em paralelo.
+requested_at: 2026-10-30T22:45Z
+run: oficial (GA fixo: S1 80x25, S2 40x30; ver docs/sweden/plano.md)
