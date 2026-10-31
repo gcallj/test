@@ -1,0 +1,69 @@
+{
+  "version": 6,
+  "frozen_on": "2026-10-31",
+  "adr": "docs/adr/0010-strategy-v6-robust-swing-derived-from-v1.md",
+  "note": "Derivada da v1 a pedido do dono: otimizador mais robusto e entradas mais relevantes. Congelada antes da rodada; uma unica execucao de `python swing_se.py evaluate`. O periodo 2023-2026 ja foi usado para julgar v1-v5: uma aprovacao aqui so leva ao paper trading.",
+  "universe": "data/universe_se.json (120 Large Caps, snapshot 2026-10-30)",
+  "inputs": {
+    "price": ["mom12_1", "resid5", "resid21", "hi52", "vol63", "gap200"],
+    "alternative": ["insider60", "short_si", "short_chg20", "analyst_rating20", "analyst_target20", "tone60", "ear60"],
+    "definitions": {
+      "mom12_1": "retorno de 12 meses sem o ultimo mes",
+      "resid5/resid21": "retorno de 1 semana / 1 mes menos beta x universo",
+      "hi52": "distancia da maxima de 52 semanas",
+      "vol63": "volatilidade de 63 pregoes",
+      "gap200": "distancia da media de 200 pregoes",
+      "insider60": "log(1 + SEK de compras de insiders nos ultimos 60 pregoes), regras da H1 da v4",
+      "short_si": "soma das posicoes vendidas divulgadas (painel da v4: posicao de T a partir de T+2)",
+      "short_chg20": "variacao de short_si em 20 pregoes",
+      "analyst_rating20": "elevacoes + inicios com compra - rebaixamentos - inicios com venda nos ultimos 20 pregoes (corretoras, v5)",
+      "analyst_target20": "precos-alvo elevados - cortados nos ultimos 20 pregoes (corretoras, v5)",
+      "tone60": "tom FinBERT do ultimo balanco/informacao privilegiada, valido por 60 pregoes",
+      "ear60": "reacao de 3 dias ao ultimo balanco (r-2 a r+1), conhecida no fechamento de r+1, valida por 60 pregoes"
+    },
+    "timing": "fato publicado no dia D entra no fechamento de D (a ordem e para D+1)",
+    "scaling": "percentil entre as acoes elegiveis no dia, em [-0,5; 0,5]; ausente = 0",
+    "score": "soma ponderada das 13 entradas; os pesos sao genes em [-1, 1] (19 genes no total)"
+  },
+  "engine": {
+    "slots": 6,
+    "slot_size": "patrimonio do fechamento anterior / 6",
+    "fill": "vagas livres no fundo de indice (^OMXSBGI, sem courtage, cota do dia)",
+    "entry": "no fechamento, as acoes elegiveis com percentil do score >= entry_q, do maior score para baixo, ate encher as vagas; ordem limite = fechamento - discount_atr x ATR(14), valida 3 pregoes; executa na abertura se abrir abaixo do limite, ou no limite se a minima tocar",
+    "exit": "time stop (abertura depois de time_stop pregoes); score abaixo de exit_q depois de min_hold pregoes (abertura); stop = limite - stop_atr x ATR e alvo = limite + reward_risk x (limite - stop) no pregao (gap pela abertura); stop checado no proprio dia da compra",
+    "min_hold": 10,
+    "costs": "market_se: brokerage 0,25% por ordem, slippage 0,10% por lado (tambem nas ordens limite)"
+  },
+  "genes": "13 pesos em [-1, 1] + entry_q [0,80; 0,99], exit_q [0,20; 0,70], discount_atr [0; 1], stop_atr [1,5; 5], reward_risk [1,5; 6], time_stop [10; 60] inteiro",
+  "optimizer": {
+    "algorithm": "CMA-ES (optuna CmaEsSampler, sem restart)",
+    "trials": 600,
+    "startup_trials": 20,
+    "seed": 600,
+    "seed_rule": "seed + numero do fold",
+    "train_years": 4,
+    "fitness": "4 blocos contiguos do treino; em cada um, 252 x media do excesso diario sobre o indice - dd_weight x max(0, |MDD da conta| - |MDD do indice|); fitness = media - std_weight x desvio-padrao dos blocos",
+    "blocks": 4,
+    "dd_weight": 0.5,
+    "std_weight": 1.0,
+    "robust_selection": "entre os 10 melhores trials, o de maior fitness media em 8 perturbacoes gaussianas de cada gene (desvio = 5% da faixa)",
+    "top_for_robustness": 10,
+    "perturbations": 8,
+    "perturbation_sd": 0.05
+  },
+  "walk_forward": "walkforward.folds(): 6 folds de 6 meses de 2023-10-31 a 2026-10-30; genoma do fold k treinado nos 4 anos ate a vespera do fold; uma conta continua, o genoma troca no inicio de cada fold (posicoes abertas mantem stop, alvo e time stop da entrada)",
+  "tests": {
+    "C1": "criterio 1 do plano: render mais que o ^OMXSBGI depois de custos, expectativa positiva em >= 4 de 6 folds e max drawdown menor que o do indice",
+    "S": "excesso diario sobre o indice nos 3 anos com p < 0,05 (bootstrap estacionario, bloco medio 20, unilateral)",
+    "alpha": 0.05,
+    "bootstrap_reps": 5000,
+    "pass_rule": "C1 e S -> paper trading; senao reprovada"
+  },
+  "diagnostics_announced": ["genomas e pesos por fold", "fitness de treino e robusta por fold", "trades por ano, prazo medio, resultado bruto e liquido por trade, motivos de saida, exposicao media"],
+  "data_vintage": {
+    "downloaded": "2026-10-31",
+    "prices_se.parquet_sha256_16": "a773d44491513e6e",
+    "highs_lows": "output/prices_se_hl.parquet (Yahoo, 2026-10-31)",
+    "alternative": "output/altdata/* (v4) e output/analyst/actions.parquet (v5)"
+  }
+}
