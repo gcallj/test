@@ -1,0 +1,92 @@
+{
+  "name": "selecao-ativa-v3",
+  "frozen_at": "2026-10-31",
+  "chosen_with_data_up_to": "2019-12-31",
+  "spec": {
+    "model": "combo5",
+    "horizon": 20,
+    "entry_q": 0.03,
+    "timing": false,
+    "k": 6,
+    "exit_rank": 0.5,
+    "max_hold_mult": 2.0
+  },
+  "composite_signs": {
+    "resid5": -1,
+    "resid21": -1,
+    "mom12_1": 1,
+    "vol21": -1,
+    "tsurge": -1
+  },
+  "selection_rule": "entre as 40 variacoes de reports/se_v3/dev_grid.csv (2010-2019): IC de desenvolvimento com t Newey-West >= 2 e no maximo 80 trades/ano; maior Sharpe diario do excesso sobre o indice (2013-03..2019-12); empate -> menos trades",
+  "development_metrics": {
+    "ic": 0.03643363525510869,
+    "ic_t": 3.241712664375764,
+    "cagr": 0.18035620312373135,
+    "ew_cagr": 0.16667808351776325,
+    "cagr_vs_bench_window": 0.21443867442933517,
+    "bench_cagr": 0.1153298448244795,
+    "mdd": -0.2793074287560193,
+    "bench_mdd": -0.24658244964394171,
+    "trades_per_year": 46.77042774883466,
+    "invested": 0.9360295460325591,
+    "excess_sr_daily": 0.04863624541578515
+  },
+  "dev_trial_excess_sr_daily": [
+    -0.0018424506562553376,
+    -0.034504334491713834,
+    -0.0006680904069796296,
+    -0.03152914528051285,
+    0.04125019750723783,
+    0.0030054021776410116,
+    0.04248171615941829,
+    0.009465433804488181,
+    -0.03196931816017004,
+    -0.05127282410991464,
+    -0.02656831865441172,
+    -0.03805043610042831,
+    -0.007835427394394875,
+    -0.019382315088693876,
+    -0.0097191287338792,
+    -0.016456017983801613,
+    0.0013004065145565868,
+    -0.032384728705139504,
+    0.002291912744431642,
+    -0.036733284388844226,
+    0.007173299471549992,
+    -0.035627959026267884,
+    -0.005957748637776396,
+    -0.01782723076264802,
+    0.027638974565916467,
+    -0.01995372800941003,
+    0.031974166651907825,
+    -0.009003590474040627,
+    0.03940745806302859,
+    0.020950532723195334,
+    0.024093377627052354,
+    0.015636109809880925,
+    0.009971225493544188,
+    -0.007400924827566172,
+    0.04487638813707775,
+    0.013474141248468083,
+    0.04863624541578515,
+    0.03222528227303513,
+    0.04449109249952169,
+    0.0035357994730803796
+  ],
+  "holdout": {
+    "period": [
+      "2020-01-01",
+      "2026-10-30"
+    ],
+    "runs_allowed": 1,
+    "tests": {
+      "S1": "IC semanal medio com t Newey-West >= 2",
+      "S2": "excesso diario sobre ^OMXSBGI com p < 0,05 (bootstrap estacionario, blocos de 20 dias)",
+      "S3": "Deflated Sharpe do excesso > 0,95 sobre as 40 tentativas de desenvolvimento",
+      "C1": "criterio 1 do plano nos 6 folds 2023-10-31..2026-10-30"
+    },
+    "pass": "S1 e S2 e S3 e C1",
+    "diagnostics": "excesso sobre o universo de peso igual (contribuicao do sinal vs. do universo), trades/ano"
+  }
+}

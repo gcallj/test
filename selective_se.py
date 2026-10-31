@@ -227,8 +227,34 @@ def market_walk_forward(d: Data, horizon: int, start, end) -> pd.Series:
     return pd.concat(out).sort_index() if out else pd.Series(dtype=float)
 
 
+# Fixed-sign composites from the literature: no parameter is fitted. Signs
+# follow short-term reversal, 12-1 momentum, low volatility and attention
+# (turnover surge) effects; they were set from published evidence and the
+# development univariate ICs (2010-2019), never from holdout data.
+COMPOSITES: Dict[str, Dict[str, float]] = {
+    "rev": {"resid5": -1.0},
+    "combo4": {"resid5": -1.0, "resid21": -1.0, "mom12_1": 1.0, "vol21": -1.0},
+    "combo5": {"resid5": -1.0, "resid21": -1.0, "mom12_1": 1.0, "vol21": -1.0, "tsurge": -1.0},
+}
+
+
+def composite_predictions(d: Data, kind: str, start, end) -> pd.Series:
+    wd = weekly_dates(d.days, start, end)
+    w = COMPOSITES[kind]
+    score = sum(sign * d.stock[f].loc[wd] for f, sign in w.items()) / len(w)
+    s = score.where(d.eligible.loc[wd]).stack(future_stack=True).dropna()
+    s.index.names = ["date", "ticker"]
+    return s.sort_index()
+
+
 def cached_predictions(d: Data, kind: str, horizon: int, start, end) -> Tuple[pd.Series, pd.Series]:
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    if kind in COMPOSITES:
+        fm = CACHE_DIR / f"mkt_H{horizon}_{start}_{end}.pkl"
+        mpred = pd.read_pickle(fm) if fm.exists() else market_walk_forward(d, horizon, start, end)
+        if not fm.exists():
+            mpred.to_pickle(fm)
+        return composite_predictions(d, kind, start, end), mpred
     tag = f"{kind}_H{horizon}_{start}_{end}"
     fp, fm = CACHE_DIR / f"pred_{tag}.pkl", CACHE_DIR / f"mkt_H{horizon}_{start}_{end}.pkl"
     if fp.exists() and fm.exists():
@@ -428,7 +454,8 @@ def load() -> Data:
 # Development, pre-registration and the single holdout run
 # --------------------------------------------------------------------------
 GRID = [Spec3(model=m, horizon=h, entry_q=q, timing=tm)
-        for m in ("ridge", "lgbm") for h in (10, 20) for q in (0.03, 0.08) for tm in (False, True)]
+        for m in ("ridge", "lgbm", "rev", "combo4", "combo5") for h in (10, 20) for q in (0.03, 0.08)
+        for tm in (False, True)]
 MAX_TRADES_PER_YEAR = 80
 MIN_DEV_IC_T = 2.0
 # Selection rule (fixed before the development results were seen): among the
