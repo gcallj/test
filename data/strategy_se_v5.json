@@ -1,0 +1,59 @@
+{
+  "version": 5,
+  "frozen_on": "2026-10-31",
+  "adr": "docs/adr/0009-strategy-v5-analyst-revisions-frozen-before-first-run.md",
+  "note": "Congelado antes de qualquer revisao de analista ser ligada a um retorno. Uma unica rodada de `python revisions_se.py evaluate`.",
+  "period": ["2020-01-01", "2026-10-30"],
+  "period_rule": "primeiro ano com pelo menos 100 acoes de corretoras sobre Large Caps no Börsvärlden (2020: 109; 2019: 23), medido so por contagem",
+  "source": {
+    "site": "borsvarlden.com (sitemap publico, datePublished de cada artigo)",
+    "selection": "enderecos com termos de analista e uma empresa do universo; sem 'motiverat varde', revistas e consenso",
+    "parser": "analyst_parse.py: oracoes; empresa citada na oracao ou a ultima citada; alta/baixa de recomendacao, inicio de cobertura, preco-alvo novo vs. antigo; corretora 'desconhecida' do titulo-resumo descartada quando o texto nomeia corretoras",
+    "sources_used": ["broker"],
+    "sources_excluded": ["commissioned (motiverat varde)", "media (Affarsvarlden, Borsveckan, Aktiespararna...)"]
+  },
+  "execution": "entrada na abertura do primeiro pregao depois do dia da publicacao (hora de Estocolmo); saida na abertura H pregoes depois; sem stop",
+  "control": "acoes elegiveis do mesmo quintil de retorno de 63 dias na vespera da entrada, mesmas datas, sem a propria acao (minimo 3)",
+  "aggregation": "por ticker e pregao de entrada: rating_net = elevacoes + inicios com compra - rebaixamentos - inicios com venda; target_net = precos-alvo elevados - cortados (corretoras distintas por artigo)",
+  "signals": {
+    "R1": {"name": "elevacao de recomendacao ou inicio com compra", "min_rating_net": 1, "cooldown_sessions": 20,
+           "horizon": 20, "direction": "+", "literature": "Womack 1996; Irvine 2003; Jegadeesh & Kim 2006"},
+    "R2": {"name": "rebaixamento ou inicio com venda", "min_rating_net": 1, "cooldown_sessions": 60, "horizon": 60,
+           "direction": "-", "use": "filtro: nome rebaixado nao e comprado por 60 pregoes", "literature": "Womack 1996"},
+    "R3": {"name": "mais precos-alvo elevados que cortados, sem mudanca de recomendacao", "min_target_net": 1,
+           "cooldown_sessions": 20, "horizon": 20, "direction": "+",
+           "literature": "Brav & Lehavy 2003; Asquith, Mikhail & Au 2005"}
+  },
+  "tests": {
+    "series": "media semanal (semana ISO da entrada) dos retornos anormais, com o sinal da direcao prevista",
+    "nw_lags": "H/5",
+    "bootstrap": "estacionario, bloco medio H/5 semanas, unilateral",
+    "bootstrap_reps": 5000,
+    "alpha": 0.05,
+    "multiple_testing": "Holm sobre R1-R3",
+    "nw_t_min": 2.0,
+    "min_mean_ar_long": 0.007,
+    "pass_rule": "Holm(p) < 0,05, t NW >= 2 e, para R1/R3, retorno anormal medio >= 0,70%"
+  },
+  "strategy": {
+    "k": 6,
+    "priority": ["R1", "R3"],
+    "families_used": "so as hipoteses longas (R1, R3) que passaram; R2 vira filtro se passou",
+    "fill": "vagas sem evento no fundo de indice (^OMXSBGI, sem courtage, cota do dia)",
+    "exit": "abertura H pregoes depois da entrada; sem stop",
+    "costs": "market_se: brokerage 0,25% por ordem, slippage 0,10% por lado"
+  },
+  "criterion1": "docs/sweden/plano.md: nos 6 folds (2023-10-31 a 2026-10-30) render mais que o ^OMXSBGI depois de custos, expectativa positiva em >= 4 de 6 folds e max drawdown menor que o do indice",
+  "overall_pass": "pelo menos uma hipotese longa passa E o criterio 1 passa -> paper trading; senao reprovada",
+  "diagnostics_announced": [
+    "carteira R1+R3 com filtro R2 independentemente dos testes, na prioridade da especificacao (so informativo)",
+    "retorno anormal medio contra o universo de peso igual",
+    "retorno anormal medio por ano"
+  ],
+  "data_vintage": {
+    "downloaded": "2026-10-31",
+    "articles": 2885,
+    "prices_se.parquet_sha256_16": "a773d44491513e6e",
+    "universe": "data/universe_se.json (snapshot 2026-10-30)"
+  }
+}

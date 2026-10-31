@@ -66,7 +66,7 @@ def build_events(mkt: v4.Mkt, acts: pd.DataFrame, s: Dict) -> Dict[str, pd.DataF
     sel = {
         "R1": g[g["rating_net"] >= c["R1"]["min_rating_net"]],
         "R2": g[g["rating_net"] <= -c["R2"]["min_rating_net"]],
-        "R3": g[(g["target_net"] >= c["R3"]["min_target_net"]) & (g["rating_net"] >= 0)],
+        "R3": g[(g["target_net"] >= c["R3"]["min_target_net"]) & (g["rating_net"] == 0)],
     }
     out = {}
     for f, e in sel.items():

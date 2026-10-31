@@ -37,9 +37,9 @@ BROKERS = [
 ]
 MEDIA = ["Affärsvärlden", "Börsveckan", "Aktiespararna", "Dagens industri", "Dagens Industri", "Privata Affärer",
          "Placera", "Stockpicker", "Analysguiden", "Veckans Affärer", "Realtid"]
-POS = r"köp|köpa|öka|övervikt|outperform|buy|add|accumulate|ackumulera"
+POS = r"köp|köpa|öka|övervikt|outperform|buy|add|accumulate|ackumulera|köprek\w*"
 NEU = r"neutral|behåll|marknadsvikt|jämvikt|hold|equal[- ]weight|market perform|sector perform|reducera"
-NEG = r"sälj|sälja|minska|undervikt|underperform|sell|reduce"
+NEG = r"sälj|sälja|minska|undervikt|underperform|sell|reduce|säljrek\w*"
 RATING = rf"(?:{POS}|{NEU}|{NEG})"
 NUM = r"\d[\d\s]*(?:[.,]\d+)?"
 CUR = r"(?:(?:svenska |danska |norska )?kronor|kr|sek|euro|eur|dollar|usd|pence|pund|gbp|chf|franc|nok|dkk)"
@@ -177,9 +177,11 @@ def _clean_body(body: str) -> str:
 
 
 def parse_article(rec: Dict, aliases) -> List[Dict]:
-    headline = str(rec.get("headline") or "")
-    text = headline + ". " + str(rec.get("lead") or "") + ". " + _clean_body(str(rec.get("body") or ""))
-    source = "commissioned" if RX_COMMISSIONED.search(headline + " " + str(rec.get("lead") or "")) else \
+    import html
+    headline = html.unescape(str(rec.get("headline") or ""))
+    lead = html.unescape(str(rec.get("lead") or ""))
+    text = headline + ". " + lead + ". " + _clean_body(html.unescape(str(rec.get("body") or "")))
+    source = "commissioned" if RX_COMMISSIONED.search(headline + " " + lead) else \
         ("media" if MEDIA_RX.search(headline) else "broker")
     clauses = re.split(r"(?<=[.;!?])\s+|,\s+|\s+–\s+|\s+-\s+|\s+och\s+(?=(?:höjer|sänker|upprepar|uppgraderar|nedgraderar|"
                        r"inleder|lyfter)\b)", text)
