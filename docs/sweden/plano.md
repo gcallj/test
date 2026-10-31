@@ -1,6 +1,6 @@
 # Plano — mercado sueco
 
-> **Estado em 31/out/2026**: v1 (swing), v2 (rotação por momentum), v3 (seleção ativa por previsão), v4 (eventos de informação pública: insiders, posições vendidas, tom dos comunicados, balanços) v5 (revisões de analistas) e v6 (swing derivado da v1 com CMA-ES e entradas novas) avaliadas; as seis reprovadas. Ver "Estratégia v6", "Estratégia v5", "Estratégia v4", "Estratégia v3" e "Estratégia v2".
+> **Estado em 31/out/2026**: v1 (swing), v2 (rotação por momentum), v3 (seleção ativa por previsão), v4 (eventos de informação pública: insiders, posições vendidas, tom dos comunicados, balanços) v5 (revisões de analistas) v6 (swing derivado da v1 com CMA-ES e entradas novas) e v7 (calendário: Halloween e mês do dividendo) avaliadas; as sete reprovadas. Ver "Estratégia v7", "Estratégia v6", "Estratégia v5", "Estratégia v4", "Estratégia v3" e "Estratégia v2".
 
 Decisões tomadas em sessão de design em 30/out/2026. Termos em negrito seguem
 o glossário em `CONTEXT.md`; decisões difíceis de reverter estão em
@@ -83,6 +83,30 @@ antes de qualquer dinheiro real. O Brasil fica congelado como está.
 - **Corte de 80 features pela variância dos 3 primeiros anos**: antes usava o
   histórico inteiro, e um fold (histórico truncado) podia escolher features
   diferentes das do replay.
+
+## Estratégia v7 — calendário, com pouquíssimos trades (31/out/2026)
+
+Pedido: uma alternativa, mesmo com menos trades. Família de calendário, sem
+nenhum parâmetro a ajustar (`seasonal_se.py`, ADR 0011), congelada antes de
+qualquer retorno (commit `180fd05`) e rodada uma vez em 2013-04 a 2026-10.
+
+- **T1 Halloween**: fundo de índice de novembro a abril, caixa a juro do
+  Riksbank de maio a outubro; 2 trocas de fundo por ano, sem courtage.
+- **T2 mês do dividendo**: a cada mês, as 6 ações com ex-dividendo esperado
+  (mesmo mês do ano anterior), pelo maior yield; o resto no fundo.
+
+| Hipótese | Amostra | Efeito | t | |
+|---|---:|---:|---:|---|
+| T1 inverno − verão (`^OMXSPI` mensal) | 162 meses | +0,66%/mês (inverno +1,03%, verão +0,36%) | 0,91 (p 0,16) | não passa |
+| T2 retorno anormal no mês do dividendo | 484 eventos | −0,67%/evento (acerto 42,6%) | −1,87 | não passa |
+
+**v7 reprovada.** O inverno rendeu mais que o verão, mas com 13,5 anos de
+índice a diferença não é distinguível de sorte. No universo de peso igual
+desde 2006 (diagnóstico, viés de sobrevivência) ela é maior e significativa
+(+1,49%/mês, t 2,19). Mesmo assim, ficar fora no verão custou caro em
+2023–2026: T1 sozinha rendeu +39,1% contra +63,6% do índice, porque os verões
+de 2025 e 2026 foram fortes. O mês do dividendo foi na direção contrária à
+da literatura.
 
 ## Estratégia v6 — swing derivado da v1, otimizador robusto e entradas novas (31/out/2026)
 

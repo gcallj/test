@@ -19,7 +19,9 @@ Depois dela, foram testadas e reprovadas:
 - a v5 (`revisions_se.py`, revisões de analistas do Börsvärlden coletadas por
   `analyst_se.py`);
 - a v6 (`swing_se.py`, swing derivado da v1 numa conta única, com CMA-ES e as
-  entradas da v4/v5).
+  entradas da v4/v5);
+- a v7 (`seasonal_se.py`, calendário: fundo de índice só no inverno e mês do
+  dividendo; 2 trocas de fundo por ano).
 
 A v2 continua sendo a referência. Para atualizar os dados alternativos e
 refazer as contagens sem olhar retornos:

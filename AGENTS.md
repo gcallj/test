@@ -3,8 +3,8 @@
 This branch runs the system on Nasdaq Stockholm. `main` holds the frozen
 Brazilian (B3) version; do not port changes between them.
 
-Six Swedish strategies have been built and judged out of sample, and all
-six failed:
+Seven Swedish strategies have been built and judged out of sample, and all
+seven failed:
 - v1, swing GA (`ga_run*.py`);
 - v2, monthly momentum rotation (`rotation_se.py`, ADR 0005);
 - v3, active selection by forecasts (`selective_se.py`, ADR 0007);
@@ -12,7 +12,13 @@ six failed:
 - v5, analyst revisions from Börsvärlden (`revisions_se.py` on `analyst_se.py`
   and `analyst_parse.py`, ADR 0009);
 - v6, a v1-style swing on one account with a CMA-ES search and the v4/v5
-  inputs (`swing_se.py`, ADR 0010).
+  inputs (`swing_se.py`, ADR 0010);
+- v7, calendar effects with no tunable parameter: Halloween timing of the
+  index fund and the dividend month (`seasonal_se.py`, ADR 0011).
+
+v7's winter-minus-summer gap on the index was +0.66%/month (t 0.91 over
+13.5 years); the dividend month was negative. Being in cash each summer
+would have cost 24 points against the index in 2023–2026.
 
 v6 returned +54.5% against +63.6% for the index in 2023–2026, with lower
 drawdown. Its per-trade edge decayed from fold 1 to negative in folds 4–6, and
@@ -64,7 +70,8 @@ costs, the walk-forward or the daily run.
 
 Entry points, env knobs, CI topology, and which artifacts are generated versus
 committed, written for the Brazilian pipeline on `main`; the Swedish entry
-points — v6: `swing_se.py` (download highs/lows, smoke, evaluate, report);
+points — v7: `seasonal_se.py` (dry-run, evaluate; Riksbank rate cached under `output/`);
+v6: `swing_se.py` (download highs/lows, smoke, evaluate, report);
 v5: `analyst_se.py` (Börsvärlden, rate-limited: cached, 2 workers),
 `analyst_parse.py`, `revisions_se.py`; v4: `altdata_se.py` (FI registers, Nasdaq announcements, FinBERT
 tone), `events_se.py`; v3: `selective_se.py`; v2: `prices_se.py`, `rotation_se.py`; v1: `walkforward.py`,
