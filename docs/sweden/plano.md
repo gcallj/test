@@ -1,6 +1,6 @@
 # Plano — mercado sueco
 
-> **Estado em 31/out/2026**: v1 (swing), v2 (rotação por momentum), v3 (seleção ativa por previsão) e v4 (eventos de informação pública: insiders, posições vendidas, tom dos comunicados, balanços) avaliadas; as quatro reprovadas. Ver "Estratégia v4", "Estratégia v3" e "Estratégia v2".
+> **Estado em 31/out/2026**: v1 (swing), v2 (rotação por momentum), v3 (seleção ativa por previsão), v4 (eventos de informação pública: insiders, posições vendidas, tom dos comunicados, balanços) e v5 (revisões de analistas) avaliadas; as cinco reprovadas. Ver "Estratégia v5", "Estratégia v4", "Estratégia v3" e "Estratégia v2".
 
 Decisões tomadas em sessão de design em 30/out/2026. Termos em negrito seguem
 o glossário em `CONTEXT.md`; decisões difíceis de reverter estão em
@@ -83,6 +83,30 @@ antes de qualquer dinheiro real. O Brasil fica congelado como está.
 - **Corte de 80 features pela variância dos 3 primeiros anos**: antes usava o
   histórico inteiro, e um fold (histórico truncado) podia escolher features
   diferentes das do replay.
+
+## Estratégia v5 — revisões de analistas (31/out/2026)
+
+Depois da investigação em `docs/sweden/possibilidades_v5.md`, você escolheu
+testar as revisões de analistas publicadas pelo Börsvärlden. Os dados vêm de
+`analyst_se.py`: 2.885 artigos de corretoras sobre Large Caps, com hora de
+publicação. `analyst_parse.py` lê o texto em sueco. A estratégia está em
+`revisions_se.py` (ADR 0009). O protocolo é o da v4:
+- período fixado pela cobertura (2020-01 a 2026-10);
+- especificação congelada antes de ligar qualquer revisão a retorno (commit
+  `34d375a`);
+- uma rodada.
+
+| Hipótese | Eventos | Retorno anormal médio | t | |
+|---|---:|---:|---:|---|
+| R1 elevação de recomendação (20 pregões) | 347 | +0,41% | 1,31 | não passa |
+| R2 rebaixamento (60 pregões, previsto negativo) | 244 | −0,16% | −0,42 | não passa |
+| R3 preço-alvo elevado sem mudar recomendação (20 pregões) | 432 | −0,82% | −1,31 | não passa |
+
+**v5 reprovada.** A carteira diagnóstica (R1+R3 com filtro, sem passar nos
+testes) teria rendido +17,6% contra +63,6% do índice em 2023–2026. Só a
+elevação de recomendação aponta na direção certa, e ainda assim abaixo do
+custo de ida e volta. A revisão chega às corretoras antes da abertura e o
+artigo sai depois; quando o sinal fica público, o preço já reagiu.
 
 ## Estratégia v4 — eventos de informação pública (31/out/2026)
 

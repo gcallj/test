@@ -15,7 +15,9 @@ Depois dela, foram testadas e reprovadas:
 - a v3 (`selective_se.py`, seleção semanal por previsão);
 - a v4 (`events_se.py`, eventos de insiders, posições vendidas, tom dos
   comunicados e balanços, com dados de `altdata_se.py`; fontes em
-  `docs/sweden/dados_alternativos.md`).
+  `docs/sweden/dados_alternativos.md`);
+- a v5 (`revisions_se.py`, revisões de analistas do Börsvärlden coletadas por
+  `analyst_se.py`).
 
 A v2 continua sendo a referência. Para atualizar os dados alternativos e
 refazer as contagens sem olhar retornos:

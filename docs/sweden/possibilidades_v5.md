@@ -91,6 +91,11 @@ Fontes possíveis de preços de deslistadas:
 D a H não compensam: têm poucos eventos, nenhum poder estatístico, ou usam
 dados que já falharam.
 
+**Escolha e resultado**: você escolheu a C, que virou a v5
+(`reports/se_v5/verdict.md`) e foi reprovada. A elevação de recomendação deu
++0,41% por evento (t 1,31), o rebaixamento −0,16% e o preço-alvo elevado
+−0,82%. A A e a B continuam em aberto.
+
 ## Fontes
 
 - [Börsvärlden, revisões de analistas (exemplo)](https://borsvarlden.com/artiklar/flera-analytiker-hojer-sina-riktkurser-for-sandvik)

@@ -3,12 +3,16 @@
 This branch runs the system on Nasdaq Stockholm. `main` holds the frozen
 Brazilian (B3) version; do not port changes between them.
 
-Four Swedish strategies have been built and judged out of sample, and all
-four failed:
+Five Swedish strategies have been built and judged out of sample, and all
+five failed:
 - v1, swing GA (`ga_run*.py`);
 - v2, monthly momentum rotation (`rotation_se.py`, ADR 0005);
 - v3, active selection by forecasts (`selective_se.py`, ADR 0007);
-- v4, public-information events (`events_se.py` on `altdata_se.py`, ADR 0008).
+- v4, public-information events (`events_se.py` on `altdata_se.py`, ADR 0008);
+- v5, analyst revisions from Börsvärlden (`revisions_se.py` on `analyst_se.py`
+  and `analyst_parse.py`, ADR 0009).
+
+Unused options are in `docs/sweden/possibilidades_v5.md`.
 
 v4 traded insider purchases, disclosed short positions, announcement tone and
 earnings reactions, from the Finansinspektionen registers and Nasdaq Nordic
@@ -34,7 +38,8 @@ Match the surrounding language when editing a file.
 All Swedish history from 2010 to 2026-10-30 has now been used to develop or
 judge v1–v3 (ADR 0006, 0007). The insider, short-position and announcement
 data from 2016-07 to 2026-10-30 have also been joined to Large Cap returns,
-by v4 (ADR 0008). Changing a strategy and re-running it on that history until
+by v4 (ADR 0008), and so have the Börsvärlden analyst revisions from 2020 to
+2026-10-30, by v5 (ADR 0009). Changing a strategy and re-running it on that history until
 it passes manufactures a result. A new idea needs data that has not been used
 yet (paper trading, future data, another universe) or information prices do
 not already contain, with its spec and tests frozen before the first run. Run
@@ -53,7 +58,8 @@ costs, the walk-forward or the daily run.
 
 Entry points, env knobs, CI topology, and which artifacts are generated versus
 committed, written for the Brazilian pipeline on `main`; the Swedish entry
-points — v4: `altdata_se.py` (FI registers, Nasdaq announcements, FinBERT
+points — v5: `analyst_se.py` (Börsvärlden, rate-limited: cached, 2 workers),
+`analyst_parse.py`, `revisions_se.py`; v4: `altdata_se.py` (FI registers, Nasdaq announcements, FinBERT
 tone), `events_se.py`; v3: `selective_se.py`; v2: `prices_se.py`, `rotation_se.py`; v1: `walkforward.py`,
 `replay_se.py`, `portfolio_se.py`, `daily_se.py`, `paper_se.py` — are in the
 guide: `docs/agents/pipeline.md`.
