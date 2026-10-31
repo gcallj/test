@@ -18,3 +18,7 @@ catboost
 deap
 optuna
 numba
+requests
+beautifulsoup4
+lxml
+transformers

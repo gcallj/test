@@ -202,6 +202,35 @@ _Avoid_: test set (when it has been reused)
 The exact parameters and selection rule committed before the evaluation
 period is touched.
 
+### Strategy v4
+
+**Public-information event**:
+A dated fact from an official register or a company announcement that a
+v4 hypothesis trades on, at the first open after it became public.
+
+**Insider purchase**:
+An open-market share purchase by a person in a leading position or a person
+related to them, from the Finansinspektionen insider register, outside any
+share programme.
+_Avoid_: insider trade (when sales or allotments are not meant)
+
+**Disclosed short position**:
+A net short position of 0.5% of the share capital or more, published by
+Finansinspektionen the day after it was taken; v4 sums them per ticker.
+_Avoid_: short interest (that is the total, most of which is never disclosed)
+
+**Announcement tone**:
+The mean FinBERT positive-minus-negative score of an announcement's headline
+and opening sentences, ranked against the previous year's announcements.
+
+**Earnings reaction**:
+A ticker's three-day return around an earnings report minus the
+equal-weight universe; a strong one is expected to drift on.
+
+**Matched control**:
+The stocks in the same 63-day-return quintile on the same dates, against
+which a v4 event's abnormal return is measured.
+
 ### Simulation
 
 **Backtest**:

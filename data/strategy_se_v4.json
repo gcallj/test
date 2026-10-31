@@ -1,0 +1,107 @@
+{
+  "version": 4,
+  "frozen_on": "2026-10-31",
+  "adr": "docs/adr/0008-strategy-v4-public-information-events-frozen-before-first-run.md",
+  "note": "Congelado antes de qualquer dado alternativo ser ligado a um retorno. Uma unica rodada de `python events_se.py evaluate`.",
+  "period": ["2016-07-01", "2026-10-30"],
+  "execution": "entrada na abertura do primeiro pregao em que a informacao ja era publica; saida na abertura H pregoes depois; sem stop",
+  "control": "acoes elegiveis do mesmo quintil de retorno de 63 dias no fechamento da vespera da entrada, mesmas datas, sem a propria acao (minimo 3)",
+  "signals": {
+    "H1": {
+      "name": "compras de insiders",
+      "source": "FI insynshandel",
+      "nature": ["Förvärv"],
+      "instrument_type": ["Aktie"],
+      "status": ["Aktuell"],
+      "volume_unit": ["Antal"],
+      "currency": ["SEK"],
+      "exclude_venue": ["Utanför handelsplats"],
+      "exclude_share_program": true,
+      "aggregate": "soma por ticker e pregao de entrada (todas as pessoas, incluindo ligadas)",
+      "min_value_sek": 250000,
+      "cooldown_sessions": 60,
+      "horizon": 60,
+      "direction": "+",
+      "literature": "Lakonishok & Lee 2001; Jeng, Metrick & Zeckhauser 2003; Cohen, Malloy & Pomorski 2012"
+    },
+    "H2": {
+      "name": "posicao vendida divulgada alta",
+      "source": "FI blankningsregistret",
+      "publication_lag_sessions": 2,
+      "covered_isin_prefix": ["SE"],
+      "rebalance": "semanal (ultimo pregao da semana), entrada no pregao seguinte",
+      "top_fraction": 0.1,
+      "min_pct": 0.5,
+      "horizon": 20,
+      "direction": "-",
+      "use": "filtro: nao comprar nomes do grupo da semana (ISK nao vende a descoberto)",
+      "literature": "Desai et al. 2002; Boehmer, Jones & Zhang 2008; Jones, Reed & Waller 2016"
+    },
+    "H3": {
+      "name": "tom positivo dos comunicados",
+      "source": "Nasdaq Nordic + FinBERT",
+      "model": "ProsusAI/finbert",
+      "model_revision": "0bc2ac10dda6929bcb1f77ccc43c7ec5c424f031",
+      "language": "en",
+      "text": "titulo + ate 12 frases dos primeiros 2000 caracteres; tom = media de P(positivo) - P(negativo)",
+      "categories": ["Interim report (Q1 and Q3)", "Half Year financial report", "Financial Statement Release",
+                     "Quarterly report", "Inside information"],
+      "aggregate": "media do tom por ticker e pregao de entrada",
+      "tercile_window_days": 365,
+      "min_history_events": 100,
+      "top_fraction": 0.3333333333,
+      "cooldown_sessions": 20,
+      "horizon": 20,
+      "direction": "+",
+      "literature": "Tetlock, Saar-Tsechansky & Macskassy 2008; Loughran & McDonald 2011; Heston & Sinha 2017"
+    },
+    "H4": {
+      "name": "reacao positiva ao balanco (deriva)",
+      "source": "Nasdaq Nordic (datas dos balancos)",
+      "categories": ["Interim report (Q1 and Q3)", "Half Year financial report", "Financial Statement Release",
+                     "Quarterly report"],
+      "close_time": "17:30",
+      "ear": "fechamento de r-2 ao fechamento de r+1 menos o universo de peso igual; r = pregao cujo fechamento ja reflete o balanco; entrada em r+2",
+      "tercile_window_days": 365,
+      "min_history_events": 100,
+      "top_fraction": 0.3333333333,
+      "cooldown_sessions": 20,
+      "horizon": 60,
+      "direction": "+",
+      "literature": "Bernard & Thomas 1989; Chan, Jegadeesh & Lakonishok 1996; Brandt, Kishore, Santa-Clara & Venkatachalam 2008"
+    }
+  },
+  "tests": {
+    "series": "media semanal (semana ISO da entrada) dos retornos anormais, com o sinal da direcao prevista",
+    "nw_lags": "H/5",
+    "bootstrap": "estacionario, bloco medio H/5 semanas, unilateral no sentido previsto",
+    "bootstrap_reps": 5000,
+    "alpha": 0.05,
+    "multiple_testing": "Holm sobre H1-H4",
+    "nw_t_min": 2.0,
+    "min_mean_ar_long": 0.007,
+    "pass_rule": "uma hipotese passa se Holm(p) < 0,05, t NW >= 2 e, para H1/H3/H4, retorno anormal medio >= 0,70% (custo de ida e volta)"
+  },
+  "strategy": {
+    "k": 6,
+    "priority": ["H1", "H4", "H3"],
+    "families_used": "so as hipoteses longas (H1, H3, H4) que passaram; H2 vira filtro se passou",
+    "slot": "patrimonio do fechamento anterior / 6",
+    "fill": "vagas sem evento no fundo de indice (^OMXSBGI, sem courtage, cota do dia)",
+    "exit": "abertura H pregoes depois da entrada (H da familia); sem stop; evento novo de um nome ja em carteira e ignorado",
+    "costs": "market_se: brokerage 0,25% por ordem, slippage 0,10% por lado"
+  },
+  "criterion1": "docs/sweden/plano.md: nos 6 folds (2023-10-31 a 2026-10-30) render mais que o ^OMXSBGI depois de custos, expectativa positiva em >= 4 de 6 folds e max drawdown menor que o do indice",
+  "overall_pass": "pelo menos uma hipotese longa passa E o criterio 1 passa -> paper trading; senao reprovada",
+  "diagnostics_announced": [
+    "carteira com H1+H3+H4 e filtro H2 independentemente dos testes (criterio 1), so informativo",
+    "retorno anormal medio contra o universo de peso igual (sem o controle por quintil)",
+    "retorno anormal medio por ano"
+  ],
+  "data_vintage": {
+    "downloaded": "2026-10-31",
+    "prices_se.parquet_sha256_16": "a773d44491513e6e",
+    "prices_range": ["2005-01-03", "2026-10-30"],
+    "universe": "data/universe_se.json (snapshot 2026-10-30)"
+  }
+}

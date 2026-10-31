@@ -84,6 +84,31 @@ antes de qualquer dinheiro real. O Brasil fica congelado como está.
   histórico inteiro, e um fold (histórico truncado) podia escolher features
   diferentes das do replay.
 
+## Estratégia v4 — eventos de informação pública (31/out/2026)
+
+Pedido: seguir a opção 3 (registros da Finansinspektionen) e investigar outros
+dados públicos e análise de sentimento de notícias. O levantamento das fontes,
+a cobertura medida e a literatura estão em `docs/sweden/dados_alternativos.md`.
+O desenho está em `events_se.py` e `altdata_se.py` (ADR 0008).
+
+| Hipótese | Dado | Evento | Prazo |
+|---|---|---|---|
+| H1 | registro de insiders (FI, desde 2016-07) | compras em bolsa ≥ 250 kSEK no dia, fora de programas de ações | 60 pregões |
+| H2 | posições vendidas (FI, desde 2012-11) | 10% mais vendidas entre as cobertas (≥ 0,5%), previsto **negativo**; vira filtro | 20 pregões |
+| H3 | comunicados Nasdaq + FinBERT | balanço/informação privilegiada com tom no terço superior do ano anterior | 20 pregões |
+| H4 | datas dos balanços | reação de 3 dias no terço superior do ano anterior (deriva) | 60 pregões |
+
+**Protocolo**:
+- Hipóteses, prazos, limites e regra de aprovação foram tirados da
+  literatura e congelados em `data/strategy_se_v4.json` antes de qualquer dado
+  alternativo ser ligado a retornos.
+- Rodada única em 2016-07 a 2026-10.
+- Retorno anormal contra ações do mesmo quintil de retorno de 63 dias.
+- Holm sobre as quatro hipóteses, t de Newey-West ≥ 2 e retorno médio acima de
+  0,70% (ida e volta).
+- A carteira (6 vagas, fundo de índice nas vagas livres) usa só o que passou e
+  precisa cumprir o critério 1.
+
 ## Estratégia v3 — seleção ativa por previsão (31/out/2026)
 
 Pedido: estratégia ativa como a v1, que antecipe altas e quedas, faça poucos
