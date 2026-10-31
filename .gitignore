@@ -50,3 +50,7 @@ ga_checkpoints_H*/
 
 # Replays ilustrativos (in-sample): gerados localmente, nao validam nada
 reports/se_insample/
+
+# Tabelas diarias do replay (~100 KB cada): regeneradas por replay_se.py;
+# so a selecao com grafico e versionada (git add -f).
+reports/se/tickers/*_diario.csv

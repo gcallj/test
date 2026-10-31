@@ -48,9 +48,9 @@ antes de qualquer dinheiro real. O Brasil fica congelado como está.
 | 0 | Investigar por que o Run 2 (abr/2026) ficou CLEAN | **Feito** — ver "Resultado da Fase 0" |
 | 1 | Portar o mercado sueco para este branch | **Feito** — `market_se.py`, `data/universe_se.json`, ETL e metadados suecos |
 | 2 | Regra de execução real no backtest | **Feito** — motor único, ADR 0001, `tests/test_execution_rule.py` |
-| 3 | Walk-forward | Código feito (`walkforward.py`, workflow `SE Walk-forward`); genomas: ver `walkforward.py status` |
+| 3 | Walk-forward | **Feito** — 6 genomas + genoma diário (run 41139471106) |
 | 4 | Replay por ticker | **Feito** — `replay_se.py` (tabela + gráfico + porquê) |
-| 5 | Replay de carteira | **Feito** — `portfolio_se.py`, veredito em `reports/se/portfolio.md` |
+| 5 | Replay de carteira | **Feito** — veredito: **reprovado** (ver "Resultado do walk-forward") |
 | 6 | Guia de execução local | **Feito** — `docs/sweden/guia.md` |
 | 7 | Operação diária | **Feito** — `daily_se.py`; workflow diário em `docs/sweden/se_daily.yml`, aguarda ir para o `main` |
 | 8 | Paper trading e ramp-up | **Feito** — `paper_se.py` (registro, stop rules, etapas) |
@@ -81,6 +81,38 @@ antes de qualquer dinheiro real. O Brasil fica congelado como está.
 - **Corte de 80 features pela variância dos 3 primeiros anos**: antes usava o
   histórico inteiro, e um fold (histórico truncado) podia escolher features
   diferentes das do replay.
+
+## Resultado do walk-forward (31/out/2026)
+
+Execução oficial: run 41139471106 (genomas em `data/walkforward/`). Relatórios
+em `reports/se/` — `portfolio.md` tem o veredito; `tickers/` tem ordens e
+resumo de cada ticker, com tabela diária e gráfico para uma seleção.
+
+| Critério 1 | Sistema | Índice `^OMXSBGI` | |
+|---|---:|---:|---|
+| Retorno em 3 anos, depois de custos | −26,2% | +63,6% | não passa |
+| Folds com expectancy positiva | 2 de 6 | precisa ≥ 4 | não passa |
+| Max drawdown da conta | −45,6% | −21,3% | não passa |
+
+Com courtage zero: +16,4% contra +63,6% — também não passaria.
+
+**Veredito: reprovado. Pelo critério fixado antes do teste, a resposta é o
+fundo de índice, e o sistema não vai para paper trading.**
+
+O que os números mostram:
+
+- **Custos decidem boa parte**: ~550 trades em 3 anos a ~0,70% cada. O mesmo
+  sistema vai de −26% para +16% só zerando a courtage.
+- **Mesmo sem custos não chega perto do índice**: o motor captura movimentos
+  curtos (alvos de 1–2 ATR, poucos pregões) e fica fora das tendências longas,
+  que é de onde veio o retorno do mercado sueco no período (+17,8% ao ano).
+- **Instável entre folds**: só os folds 1 e 6 têm expectancy positiva; o fold
+  1 sozinho sobe a conta a ~36 kSEK e os folds 2–5 a derrubam.
+
+Se você quiser continuar pesquisando (decisão sua): mudanças entram no
+motor e passam por um novo walk-forward com critério fixado antes. Cada nova
+tentativa sobre os mesmos 3 anos "gasta" esse período como fora da amostra;
+depois de algumas, só um período novo (paper trading ou o futuro) valida.
 
 ## Walk-forward: execução oficial
 

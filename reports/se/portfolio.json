@@ -1,0 +1,68 @@
+{
+  "start": "2023-10-31",
+  "end": "2026-10-30",
+  "final_equity": 22136.77369261567,
+  "total_return": -0.26210754357947774,
+  "cagr": -0.09641804010284694,
+  "mdd": -0.45646432077684174,
+  "bench_final": 49079.55622339279,
+  "bench_return": 0.6359852074464265,
+  "bench_cagr": 0.17844304851668746,
+  "bench_mdd": -0.21291241085656065,
+  "trades": 550,
+  "skipped": 1990,
+  "avg_slots": 4.448453608247423,
+  "per_fold": [
+    {
+      "fold": 1,
+      "trades": 62,
+      "expectancy": 0.014835371879096398,
+      "win_rate": 0.7580645161290323,
+      "mdd": -0.039865851823728815
+    },
+    {
+      "fold": 2,
+      "trades": 115,
+      "expectancy": -0.00527609170305918,
+      "win_rate": 0.5304347826086957,
+      "mdd": -0.11233624431643208
+    },
+    {
+      "fold": 3,
+      "trades": 97,
+      "expectancy": -0.01102584824318486,
+      "win_rate": 0.422680412371134,
+      "mdd": -0.22854408812730787
+    },
+    {
+      "fold": 4,
+      "trades": 103,
+      "expectancy": -0.005423812255526411,
+      "win_rate": 0.5825242718446602,
+      "mdd": -0.15468110935884105
+    },
+    {
+      "fold": 5,
+      "trades": 86,
+      "expectancy": -0.00801449764742509,
+      "win_rate": 0.5581395348837209,
+      "mdd": -0.17672271007855356
+    },
+    {
+      "fold": 6,
+      "trades": 87,
+      "expectancy": 0.0049882978814085235,
+      "win_rate": 0.6436781609195402,
+      "mdd": -0.041134575103980664
+    }
+  ],
+  "positive_folds": 2,
+  "worst_fold_mdd": -0.22854408812730787,
+  "crit_beats_index": false,
+  "crit_folds": false,
+  "crit_mdd": false,
+  "pass": false,
+  "replay_fill_rate": 0.7283172720533728,
+  "slippage_assumed_per_side": 0.001,
+  "optimistic_pass": false
+}
