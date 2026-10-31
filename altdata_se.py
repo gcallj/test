@@ -472,19 +472,41 @@ def split_sentences(text: str) -> List[str]:
     return [p.strip() for p in parts if len(p.strip()) >= 25][:MAX_SENTENCES]
 
 
-def tone_documents(news: pd.DataFrame, bodies: Dict[int, str], batch_size: int = 32) -> pd.DataFrame:
-    """Tom FinBERT de cada comunicado: media de P(positivo) - P(negativo) sobre o titulo e as frases iniciais."""
+SENTENCE_CACHE = OUT / "tone_sentences.parquet"
+
+
+def tone_documents(news: pd.DataFrame, bodies: Dict[int, str], batch_size: int = 32, chunk: int = 4000) -> pd.DataFrame:
+    """Tom FinBERT de cada comunicado: media de P(positivo) - P(negativo) sobre o titulo e as frases iniciais.
+
+    As frases sao pontuadas em blocos ordenados por tamanho (menos preenchimento) e
+    gravadas em `tone_sentences.parquet` a cada bloco, para retomar se o processo cair.
+    """
     from transformers import pipeline
-    clf = pipeline("text-classification", model=FINBERT, revision=FINBERT_REVISION, top_k=None, truncation=True,
-                   max_length=256)
     texts, owner = [], []
     for row in news.itertuples():
         sents = [str(row.headline)] + split_sentences(bodies.get(int(row.id), ""))
         texts += sents
         owner += [int(row.id)] * len(sents)
-    scores = clf(texts, batch_size=batch_size)
-    s = pd.DataFrame({"id": owner, "pos": [next(d["score"] for d in o if d["label"] == "positive") for o in scores],
-                      "neg": [next(d["score"] for d in o if d["label"] == "negative") for o in scores]})
+    allx = pd.DataFrame({"id": owner, "k": [0] * len(owner), "text": texts})
+    allx["k"] = allx.groupby("id").cumcount()
+    done = pd.read_parquet(SENTENCE_CACHE) if SENTENCE_CACHE.exists() else pd.DataFrame(columns=["id", "k", "pos", "neg"])
+    key = set(zip(done["id"].astype(int), done["k"].astype(int)))
+    todo = allx[[(i, k) not in key for i, k in zip(allx["id"], allx["k"])]]
+    if len(todo):
+        clf = pipeline("text-classification", model=FINBERT, revision=FINBERT_REVISION, top_k=None, truncation=True,
+                       max_length=256)
+        todo = todo.assign(n=todo["text"].str.len()).sort_values("n")
+        parts = [done]
+        for a in range(0, len(todo), chunk):
+            blk = todo.iloc[a:a + chunk]
+            scores = clf(blk["text"].tolist(), batch_size=batch_size)
+            parts.append(pd.DataFrame({"id": blk["id"].values, "k": blk["k"].values,
+                                       "pos": [next(d["score"] for d in o if d["label"] == "positive") for o in scores],
+                                       "neg": [next(d["score"] for d in o if d["label"] == "negative") for o in scores]}))
+            pd.concat(parts, ignore_index=True).to_parquet(SENTENCE_CACHE, index=False)
+            print(f"  frases: {min(a + chunk, len(todo))}/{len(todo)}", flush=True)
+        done = pd.concat(parts, ignore_index=True)
+    s = done[done["id"].isin(set(owner))].copy()
     s["net"] = s["pos"] - s["neg"]
     agg = s.groupby("id").agg(tone=("net", "mean"), n_sent=("net", "size"))
     out = news.set_index("id").join(agg, how="inner").reset_index()
