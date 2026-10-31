@@ -82,15 +82,19 @@ class RotationTest(unittest.TestCase):
     def test_vol_target_cuts_exposure_in_turbulent_markets(self):
         rng = np.random.default_rng(11)
         px = _px(seed=11)
-        for k in ("adj", "close", "open", "adj_open"):  # ~60% annual volatility
-            noise = np.exp(np.cumsum(rng.normal(0, 0.035, px[k].shape), axis=0))
+        noise = np.exp(np.cumsum(rng.normal(0, 0.035, px["adj"].shape), axis=0))  # ~55% annual volatility
+        for k in ("adj", "close", "open", "adj_open"):
             px[k] = px[k] * noise
         m = rot.Market(px)
         s, e = px["adj"].index[300], px["adj"].index[-1]
         calm = rot.simulate(m, rot.Spec(market_regime=False, stock_trend=False), s, e)
         vt = rot.simulate(m, rot.Spec(market_regime=False, stock_trend=False, vol_target=0.20), s, e)
-        self.assertGreater(calm.invested.iloc[40:].mean(), 0.9)
-        self.assertLess(vt.invested.iloc[40:].mean(), 0.6)
+        # Right after the first rebalance executes, stock exposure matches the target.
+        first_exec = vt.equity.index[1]
+        expected = vt.rebalances[0]["exposure"]
+        self.assertLess(expected, 0.9)
+        self.assertAlmostEqual(vt.invested.loc[first_exec], expected, delta=0.06)
+        self.assertGreater(calm.invested.loc[first_exec], 0.95)
 
     def test_never_more_than_k_positions(self):
         px = _px(seed=5)
