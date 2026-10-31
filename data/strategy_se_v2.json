@@ -1,0 +1,33 @@
+{
+  "name": "rotacao-momentum-v2",
+  "frozen_at": "2026-10-31",
+  "chosen_with_data_up_to": "2023-10-30",
+  "spec": {
+    "lookback": 252,
+    "skip": 21,
+    "risk_adjust": false,
+    "k": 6,
+    "buffer": 20,
+    "stock_trend": false,
+    "market_regime": false,
+    "regime_rule": "sma200",
+    "vol_target": 0.20,
+    "resize_band": 0.25,
+    "fill": "index"
+  },
+  "selection_rule": "entre as 216 variacoes de reports/se_v2/dev_grid.csv (2014-01-01 a 2023-10-30), a de maior excesso sobre o indice entre as que tiveram excesso positivo E drawdown menor que o do indice em cada um dos 3 subperiodos e no periodo inteiro",
+  "development_metrics": {
+    "period": "2014-01-01..2023-10-30",
+    "cagr": 0.168,
+    "benchmark_cagr": 0.087,
+    "max_drawdown": -0.296,
+    "benchmark_max_drawdown": -0.332,
+    "excess_cagr_by_subperiod": [0.043, 0.078, 0.123]
+  },
+  "evaluation": {
+    "period": "2023-10-31..2026-10-30",
+    "folds": "walkforward.folds()",
+    "criteria": "docs/sweden/plano.md, criterio 1",
+    "runs_allowed": 1
+  }
+}
