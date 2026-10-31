@@ -3,10 +3,19 @@
 This branch runs the system on Nasdaq Stockholm. `main` holds the frozen
 Brazilian (B3) version; do not port changes between them.
 
-Three Swedish strategies have been built and judged out of sample, and all
-three failed: v1 swing GA (`ga_run*.py`), v2 monthly momentum rotation
-(`rotation_se.py`, ADR 0005) and v3 active selection by forecasts
-(`selective_se.py`, ADR 0007). v2 is the reference strategy: a monthly
+Four Swedish strategies have been built and judged out of sample, and all
+four failed:
+- v1, swing GA (`ga_run*.py`);
+- v2, monthly momentum rotation (`rotation_se.py`, ADR 0005);
+- v3, active selection by forecasts (`selective_se.py`, ADR 0007);
+- v4, public-information events (`events_se.py` on `altdata_se.py`, ADR 0008).
+
+v4 traded insider purchases, disclosed short positions, announcement tone and
+earnings reactions, from the Finansinspektionen registers and Nasdaq Nordic
+announcements scored by FinBERT. Its mean abnormal return per event stayed
+between −1.2% and +0.05%.
+
+v2 is the reference strategy: a monthly
 rotation into the six Large Cap names with the best 12-1 month momentum, a
 20-name buffer and a 20% volatility target, on dividend-adjusted prices
 (`prices_se.py`). Costs model an ISK account (0.25% brokerage per order,
@@ -23,10 +32,14 @@ Match the surrounding language when editing a file.
 ### Evaluation protocol
 
 All Swedish history from 2010 to 2026-10-30 has now been used to develop or
-judge v1–v3 (ADR 0006, 0007). Changing a strategy and re-running it on that
-history until it passes manufactures a result. A new idea needs data that has
-not been used yet (paper trading, future data) or information prices do not
-already contain, with its spec and tests frozen before the first run.
+judge v1–v3 (ADR 0006, 0007). The insider, short-position and announcement
+data from 2016-07 to 2026-10-30 have also been joined to Large Cap returns,
+by v4 (ADR 0008). Changing a strategy and re-running it on that history until
+it passes manufactures a result. A new idea needs data that has not been used
+yet (paper trading, future data, another universe) or information prices do
+not already contain, with its spec and tests frozen before the first run. Run
+`events_se.py dry-run`, which gives counts only, to find data bugs before
+the frozen run.
 Read before proposing any strategy change.
 
 ### Swedish plan and guide
@@ -40,7 +53,8 @@ costs, the walk-forward or the daily run.
 
 Entry points, env knobs, CI topology, and which artifacts are generated versus
 committed, written for the Brazilian pipeline on `main`; the Swedish entry
-points — v3: `selective_se.py`; v2: `prices_se.py`, `rotation_se.py`; v1: `walkforward.py`,
+points — v4: `altdata_se.py` (FI registers, Nasdaq announcements, FinBERT
+tone), `events_se.py`; v3: `selective_se.py`; v2: `prices_se.py`, `rotation_se.py`; v1: `walkforward.py`,
 `replay_se.py`, `portfolio_se.py`, `daily_se.py`, `paper_se.py` — are in the
 guide: `docs/agents/pipeline.md`.
 
@@ -76,6 +90,11 @@ you.
   results never add or remove a ticker (ADR 0003).
 - Feed the GA only causal features: the allowlist in `ga_run.py` blocks model
   outputs and snapshot fundamentals; quarterly fundamentals stay off in the ETL.
+- Alternative data is usable only from the first open after it became
+  public (`altdata_se.next_session_after`). Short positions dated T are used
+  from T+2. Issuer→ticker mapping needs two of ISIN, LEI and issuer name to
+  agree, because the FI insider register has mistyped LEIs.
+  `tests/test_events_se.py` checks this; keep it green.
 - Compare the system with `^OMXSBGI` (dividends reinvested), never with the
   price index `^OMXSPI`.
 - State the data vintage whenever you quote a fitness number.

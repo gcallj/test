@@ -11,6 +11,26 @@ A v2 (`rotation_se.py`, ADR 0005) substituiu o swing trade das seções 1, 3 e
 critério de retorno** (+35,7% contra +63,6% do índice em 3 anos), com drawdown
 menor que o do índice — detalhes em `docs/sweden/plano.md`.
 
+Depois dela, foram testadas e reprovadas:
+- a v3 (`selective_se.py`, seleção semanal por previsão);
+- a v4 (`events_se.py`, eventos de insiders, posições vendidas, tom dos
+  comunicados e balanços, com dados de `altdata_se.py`; fontes em
+  `docs/sweden/dados_alternativos.md`).
+
+A v2 continua sendo a referência. Para atualizar os dados alternativos e
+refazer as contagens sem olhar retornos:
+
+```bash
+python altdata_se.py insiders && python altdata_se.py shorts && python altdata_se.py news && python altdata_se.py tone
+```
+
+```bash
+python events_se.py dry-run
+```
+
+`python events_se.py evaluate` é a rodada registrada (ADR 0008); não refazer
+para escolher variações.
+
 ### Como ela decide (no último pregão de cada mês, depois do fechamento)
 
 1. **Quem pode entrar**: ações do universo com ~1 ano de histórico e giro

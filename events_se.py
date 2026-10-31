@@ -545,7 +545,9 @@ def evaluate(mkt: Mkt, data: Dict[str, pd.DataFrame], s: Dict, out_dir: Path = R
     x = v3.excess_series(full.equity, mkt.bench)
     out["full_period"]["excess_p_bootstrap"] = float(v3.stationary_bootstrap_p(x, reps=s["tests"]["bootstrap_reps"])) if len(x) > 50 else float("nan")
     # Diagnostico anunciado antes da rodada (nao decide nada): todas as familias, com filtro.
-    diag = run(LONG_FAMILIES, True, c_start, c_end)
+    # A rodada de 2026-10-31 usou a ordem H1>H3>H4 aqui, diferente da prioridade da
+    # especificacao (H1>H4>H3); corrigido depois da rodada, ver reports/se_v4/verdict.md.
+    diag = run(s["strategy"]["priority"], True, c_start, c_end)
     diag.trades = rot.assign_folds(diag.trades)
     vd = ps.verdict(diag, mkt.bench)
     out["diag_all_signals_criterion1"] = {k2: vd[k2] for k2 in ("total_return", "bench_return", "mdd", "bench_mdd",

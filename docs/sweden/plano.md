@@ -1,6 +1,6 @@
 # Plano — mercado sueco
 
-> **Estado em 31/out/2026**: v1 (swing), v2 (rotação por momentum) e v3 (seleção ativa por previsão) avaliadas fora da amostra; as três reprovadas. Ver "Estratégia v3" e "Estratégia v2".
+> **Estado em 31/out/2026**: v1 (swing), v2 (rotação por momentum), v3 (seleção ativa por previsão) e v4 (eventos de informação pública: insiders, posições vendidas, tom dos comunicados, balanços) avaliadas; as quatro reprovadas. Ver "Estratégia v4", "Estratégia v3" e "Estratégia v2".
 
 Decisões tomadas em sessão de design em 30/out/2026. Termos em negrito seguem
 o glossário em `CONTEXT.md`; decisões difíceis de reverter estão em
@@ -108,6 +108,36 @@ O desenho está em `events_se.py` e `altdata_se.py` (ADR 0008).
   0,70% (ida e volta).
 - A carteira (6 vagas, fundo de índice nas vagas livres) usa só o que passou e
   precisa cumprir o critério 1.
+
+O dry-run (só contagens de eventos) achou dois problemas de dados, corrigidos
+antes de calcular qualquer retorno e registrados no JSON:
+- o FI deixava o tipo de instrumento vazio até 2018;
+- detentores de posições vendidas aparecem com grafias diferentes, e faltam
+  avisos de encerramento.
+
+**Resultado** (`reports/se_v4/verdict.md`):
+
+| Hipótese | Eventos | Retorno anormal médio | t | |
+|---|---:|---:|---:|---|
+| H1 compras de insiders | 1.253 | +0,05% | 1,45 | não passa |
+| H2 posição vendida alta (previsto negativo) | 4.770 | −0,29% | 0,98 | não passa |
+| H3 tom positivo | 1.349 | −0,32% | −0,09 | não passa |
+| H4 reação ao balanço | 1.167 | −1,21% (sinal contrário) | −0,77 | não passa |
+
+Nenhuma hipótese passa, então a carteira ficaria 100% no fundo de índice
+(critério 1 reprovado: zero trades, drawdown igual ao do índice). **v4
+reprovada.**
+
+A carteira diagnóstica (todas as famílias, sem passar nos testes) vai de
++18% a +81% em 2023–2026, dependendo só da ordem de prioridade, contra +63,6%
+do índice. Com a ordem da especificação, fica em +56,6%. Por trade, o retorno
+bruto (+3,7%) empata com o do fundo de índice nas mesmas janelas (+3,6%).
+
+**Conclusão das quatro tentativas**: nem preço e volume (v1–v3) nem os
+registros públicos de insiders, posições vendidas, tom dos comunicados e
+reação a balanços (v4) mostram, nas ~120 large caps suecas de 2016 a 2026,
+uma vantagem que cubra 0,70% de custo de ida e volta. A alternativa que o
+próprio critério de sucesso aponta é o fundo de índice.
 
 ## Estratégia v3 — seleção ativa por previsão (31/out/2026)
 

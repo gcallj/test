@@ -68,6 +68,22 @@ grandes, em empresas menores e com custos institucionais. Com 0,70% de custo
 de ida e volta e um universo Large Cap, o mais provável é que no máximo uma
 das quatro hipóteses passe.
 
+**Resultado (rodada única, `reports/se_v4/verdict.md`)**: nenhuma passou.
+Retorno anormal médio por evento:
+
+| Hipótese | Retorno anormal médio | t |
+|---|---:|---:|
+| Compras de insiders | +0,05% | 1,45 |
+| Posições vendidas altas | −0,29% | 0,98 |
+| Tom positivo | −0,32% | — |
+| Reação forte ao balanço | −1,21% | — |
+
+A reação forte ao balanço foi na direção contrária à da literatura.
+
+Nos dados que ainda não foram usados contra retornos, a pista que sobra é a
+dos estudos suecos: o efeito dos insiders aparece em small e mid caps, fora
+deste universo, com custos e spreads maiores.
+
 ## Fontes
 
 - Lakonishok & Lee (2001), *Are Insider Trades Informative?*, RFS 14(1).
