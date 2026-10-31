@@ -28,6 +28,7 @@ Custos: courtage + slippage por ordem de acao (market_se.py). Precos
 ajustados por dividendos (prices_se.py).
 
     python rotation_se.py run --start 2014-01-01 --end 2023-10-30 [--spec '{...}']
+    python rotation_se.py evaluate      # avaliacao unica da especificacao congelada
 """
 
 from __future__ import annotations
@@ -335,6 +336,114 @@ def metrics(eq: pd.Series, bench: pd.Series) -> Dict[str, float]:
     return out
 
 
+SPEC_PATH = REPO_ROOT / "data" / "strategy_se_v2.json"
+REPORT_DIR = REPO_ROOT / "reports" / "se_v2"
+
+
+def frozen_spec() -> Spec:
+    """A especificacao congelada (docs/adr/0006)."""
+    return Spec(**json.loads(SPEC_PATH.read_text(encoding="utf-8"))["spec"])
+
+
+def assign_folds(trades: pd.DataFrame) -> pd.DataFrame:
+    import walkforward as wf
+    out = trades.copy()
+    if out.empty:
+        out["fold"] = []
+        return out
+    entry = pd.to_datetime(out["data_compra"])
+    out["fold"] = 0
+    for f in wf.folds():
+        m = (entry >= pd.Timestamp(f.trade_start)) & (entry <= pd.Timestamp(f.trade_end))
+        out.loc[m, "fold"] = f.k
+    return out
+
+
+def evaluate(mkt: Market, spec: Spec, out_dir: Path = REPORT_DIR) -> Dict:
+    """Roda o periodo de avaliacao (6 folds) e escreve o veredito do criterio 1."""
+    import portfolio_se as ps
+    import walkforward as wf
+
+    folds = wf.folds()
+    start, end = folds[0].trade_start, folds[-1].trade_end
+    out = {}
+    for name, costs in (("base", Costs()), ("courtage_zero", Costs(brokerage=0.0))):
+        res = simulate(mkt, spec, start, end, costs=costs)
+        res.trades = assign_folds(res.trades)
+        out[name] = (res, ps.verdict(res, mkt.bench))
+    res, v = out["base"]
+    _, v0 = out["courtage_zero"]
+    out_dir.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame({"sistema": res.equity, "indice": v["bench_equity"]}).to_csv(out_dir / "equity.csv")
+    res.trades.to_csv(out_dir / "trades.csv", index=False)
+    pd.DataFrame([{**r, "keep": ", ".join(r.get("keep", [])), "buy": ", ".join(r.get("buy", [])),
+                   "sell": ", ".join(r.get("sell", [])),
+                   "top": ", ".join(f"{t} ({sc:.2f})" for t, sc in r.get("top", []))}
+                  for r in res.rebalances]).to_csv(out_dir / "rebalances.csv", index=False)
+    (out_dir / "verdict.md").write_text(verdict_markdown(spec, res, v, v0), encoding="utf-8")
+    summary = {k: x for k, x in v.items() if k != "bench_equity"}
+    summary["optimistic_pass"] = v0["pass"]
+    summary["optimistic_total_return"] = v0["total_return"]
+    (out_dir / "verdict.json").write_text(json.dumps(summary, indent=2, default=float), encoding="utf-8")
+    _chart(res, v, out_dir / "equity.png")
+    return v
+
+
+def verdict_markdown(spec: Spec, res: SimResult, v: Dict, v0: Dict) -> str:
+    def p(x):
+        return "-" if x is None or not np.isfinite(x) else f"{100 * x:+.1f}%"
+    def ok(b):
+        return "PASSA" if b else "NAO PASSA"
+    t = res.trades
+    yrs = (res.equity.index[-1] - res.equity.index[0]).days / 365.25
+    full = t[t["status"] != "parcial"] if not t.empty else t
+    L = ["# Avaliacao da estrategia v2 — rotacao mensal por momentum", "",
+         f"Especificacao congelada em `data/strategy_se_v2.json` (`{spec.label()}`), escolhida so com dados ate "
+         f"2023-10-30 e avaliada aqui uma unica vez (ADR 0006).", "",
+         f"Periodo: {v['start']} a {v['end']} · conta ISK de {market_se.CAPITAL_SEK:,.0f} SEK · "
+         f"index benchmark `{market_se.BENCHMARK_SYMBOL}` (com dividendos)", "",
+         "## Veredito (criterio 1 do plano)", "",
+         "| Criterio | Sistema | Indice | Resultado |", "|---|---:|---:|---|",
+         f"| Retorno total depois de custos | {p(v['total_return'])} | {p(v['bench_return'])} | {ok(v['crit_beats_index'])} |",
+         f"| Folds com expectancy positiva | {v['positive_folds']} de 6 | precisa >= 4 | {ok(v['crit_folds'])} |",
+         f"| Max drawdown da conta | {p(v['mdd'])} | {p(v['bench_mdd'])} | {ok(v['crit_mdd'])} |", "",
+         f"**{'APROVADO para paper trading' if v['pass'] else 'REPROVADO'}**", "",
+         "## Conta", "",
+         f"- Patrimonio final: {v['final_equity']:,.0f} SEK (indice: {v['bench_final']:,.0f} SEK)",
+         f"- CAGR: {p(v['cagr'])} (indice: {p(v['bench_cagr'])})",
+         f"- Posicoes abertas por ano: {len(full) / yrs:.1f} · exposicao media em acoes: {100 * res.invested.mean():.0f}%",
+         "", "## Por fold (trades pela data de compra; posicoes abertas no fim marcadas a mercado)", "",
+         "| Fold | Trades | Win rate | Expectancy | Max drawdown da conta |", "|---:|---:|---:|---:|---:|"]
+    for r in v["per_fold"]:
+        L.append(f"| {r['fold']} | {r['trades']} | {p(r['win_rate'])} | {p(r['expectancy'])} | {p(r['mdd'])} |")
+    L += ["", "## Cenario com courtage zero", "",
+          f"Retorno {p(v0['total_return'])} · folds positivos {v0['positive_folds']} de 6 · MDD {p(v0['mdd'])} · "
+          f"{'passaria' if v0['pass'] else 'nao passaria'} no criterio 1.", "",
+          "Arquivos: `equity.csv`, `equity.png`, `trades.csv`, `rebalances.csv` (o que foi decidido em cada "
+          "fim de mes e por que).", ""]
+    return "\n".join(L)
+
+
+def _chart(res: SimResult, v: Dict, path: Path) -> None:
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import walkforward as wf
+    fig, ax = plt.subplots(figsize=(14, 6))
+    ax.plot(res.equity.index, res.equity.values, label="Estrategia v2 (conta ISK)", color="#1565c0")
+    be = v["bench_equity"]
+    ax.plot(be.index, be.values, label=f"Indice {market_se.BENCHMARK_SYMBOL} (com dividendos)", color="#9e9e9e")
+    for f in wf.folds():
+        ax.axvline(pd.Timestamp(f.trade_start), color="#bdbdbd", linestyle="--", linewidth=0.8)
+    ax.set_ylabel("SEK")
+    ax.set_title("Estrategia v2 — avaliacao fora da amostra vs index benchmark")
+    ax.legend()
+    ax.grid(alpha=0.2)
+    fig.tight_layout()
+    fig.savefig(path, dpi=110)
+    plt.close(fig)
+
+
 def load_market() -> Market:
     import prices_se
     return Market(prices_se.load())
@@ -347,8 +456,13 @@ def main(argv=None) -> int:
     r.add_argument("--start", required=True)
     r.add_argument("--end", required=True)
     r.add_argument("--spec", help="JSON com campos de Spec")
+    sub.add_parser("evaluate", help="avaliacao unica da especificacao congelada (ADR 0006)")
     args = ap.parse_args(argv)
     mkt = load_market()
+    if args.cmd == "evaluate":
+        v = evaluate(mkt, frozen_spec())
+        print((REPORT_DIR / "verdict.md").read_text(encoding="utf-8"))
+        return 0
     spec = Spec(**json.loads(args.spec)) if args.spec else Spec()
     res = simulate(mkt, spec, args.start, args.end)
     m = metrics(res.equity, mkt.bench)

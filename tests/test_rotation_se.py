@@ -79,6 +79,19 @@ class RotationTest(unittest.TestCase):
         loose = rot.simulate(m, rot.Spec(k=3, buffer=8, market_regime=False, stock_trend=False), s, e)
         self.assertLessEqual(len(loose.trades), len(tight.trades))
 
+    def test_vol_target_cuts_exposure_in_turbulent_markets(self):
+        rng = np.random.default_rng(11)
+        px = _px(seed=11)
+        for k in ("adj", "close", "open", "adj_open"):  # ~60% annual volatility
+            noise = np.exp(np.cumsum(rng.normal(0, 0.035, px[k].shape), axis=0))
+            px[k] = px[k] * noise
+        m = rot.Market(px)
+        s, e = px["adj"].index[300], px["adj"].index[-1]
+        calm = rot.simulate(m, rot.Spec(market_regime=False, stock_trend=False), s, e)
+        vt = rot.simulate(m, rot.Spec(market_regime=False, stock_trend=False, vol_target=0.20), s, e)
+        self.assertGreater(calm.invested.iloc[40:].mean(), 0.9)
+        self.assertLess(vt.invested.iloc[40:].mean(), 0.6)
+
     def test_never_more_than_k_positions(self):
         px = _px(seed=5)
         res = rot.simulate(rot.Market(px), rot.Spec(k=4, market_regime=False), px["adj"].index[260], px["adj"].index[-1])
