@@ -551,14 +551,53 @@ def holdout(d: Data, spec: Spec3, trial_srs: List[float]) -> Dict:
         "C1_criterion1": bool(v["pass"]),
     }
     out["pass"] = all(out["tests"].values())
+    # Diagnostic (announced before the run, not a pass/fail test): how much of
+    # the excess is the signal and how much is holding the equal-weight universe.
+    ew_eq = (1 + d.mkt_ret.reindex(res.equity.index).fillna(0)).cumprod()
+    xu = excess_series(res.equity, ew_eq)
+    out["diag_excess_vs_universe_daily_mean"] = float(xu.mean())
+    out["diag_excess_vs_universe_p_bootstrap"] = stationary_bootstrap_p(xu)
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     pd.DataFrame({"sistema": res.equity, "indice": d.bench.reindex(res.equity.index).ffill()}).to_csv(REPORT_DIR / "equity.csv")
     res.trades.to_csv(REPORT_DIR / "trades.csv", index=False)
     pd.DataFrame(res.decisions).to_csv(REPORT_DIR / "decisions.csv", index=False)
     ic.rename("ic").to_csv(REPORT_DIR / "ic_weekly.csv")
     (REPORT_DIR / "verdict.json").write_text(json.dumps(out, indent=2, default=float), encoding="utf-8")
+    (REPORT_DIR / "verdict.md").write_text(verdict_markdown(out), encoding="utf-8")
     _chart(res, d.bench, REPORT_DIR / "equity.png", spec)
     return out
+
+
+def verdict_markdown(o: Dict) -> str:
+    def p(x):
+        return "-" if x is None or (isinstance(x, float) and not np.isfinite(x)) else f"{100 * x:+.1f}%"
+    def ok(b):
+        return "PASSA" if b else "NAO PASSA"
+    c1 = o["criterion1"]
+    t = o["tests"]
+    L = ["# Holdout da estrategia v3 — selecao ativa por previsao", "",
+         f"Especificacao congelada em `data/strategy_se_v3.json` (`{o['spec']}`), escolhida so com 2010-2019 e "
+         f"avaliada uma unica vez em {o['period'][0]} a {o['period'][1]} (ADR 0007).", "",
+         "## Testes registrados antes da rodada", "",
+         "| Teste | Resultado | Exigido | |", "|---|---:|---:|---|",
+         f"| S1 previsao: IC semanal medio (t Newey-West) | {o['ic_mean']:.4f} (t = {o['ic_t_nw']:.2f}, "
+         f"{o['ic_weeks']} semanas) | t >= 2 | {ok(t['S1_ic_significant'])} |",
+         f"| S2 excesso diario sobre o indice (p bootstrap) | p = {o['excess_p_bootstrap']:.3f} | p < 0,05 | {ok(t['S2_excess_significant'])} |",
+         f"| S3 Deflated Sharpe ({o['dsr_n_trials']} tentativas) | {o['dsr_dsr']:.3f} | > 0,95 | {ok(t['S3_deflated_sharpe'])} |",
+         f"| C1 criterio 1 nos 6 folds (2023-2026) | retorno {p(c1['total_return'])} vs {p(c1['bench_return'])}; "
+         f"folds {c1['positive_folds']}/6; MDD {p(c1['mdd'])} vs {p(c1['bench_mdd'])} | os 3 | {ok(t['C1_criterion1'])} |",
+         "", f"**{'APROVADA para paper trading' if o['pass'] else 'REPROVADA'}**", "",
+         "## Holdout inteiro (2020-01 a 2026-10)", "",
+         f"- CAGR {p(o['cagr'])} · indice {p(o.get('bench_cagr'))} · universo peso igual {p(o['ew_cagr'])}",
+         f"- Max drawdown {p(o['mdd'])} · indice {p(o.get('bench_mdd'))}",
+         f"- Trades por ano: {o['trades_per_year']:.0f} · exposicao media {100 * o['invested']:.0f}%",
+         f"- Trades fechados: {o['trades_closed']} · resultado medio {p(o['trade_mean'])} "
+         f"(p bootstrap {o['trade_p_bootstrap']:.3f})",
+         f"- Diagnostico: excesso sobre o universo de peso igual, p bootstrap {o['diag_excess_vs_universe_p_bootstrap']:.3f} "
+         f"(o quanto vem do sinal, e nao de segurar o universo)",
+         f"- IC positivo em {100 * o['ic_positive_share']:.0f}% das semanas", "",
+         "Arquivos: `equity.csv`, `equity.png`, `trades.csv`, `decisions.csv`, `ic_weekly.csv`, `verdict.json`.", ""]
+    return "\n".join(L)
 
 
 def _chart(res: Result3, bench: pd.Series, path: Path, spec: Spec3) -> None:
