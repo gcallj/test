@@ -171,6 +171,37 @@ and target are placed.
 An input derived only from prices, volumes and other market data available on
 the day, never from a model output or a fact learned later.
 
+### Strategy v2
+
+**Rotation**:
+The monthly strategy: rank the universe, hold the best few names, replace the
+ones that fall out of the ranking.
+_Avoid_: swing trade (that is v1)
+
+**Momentum (12-1)**:
+A ticker's return over the last twelve months excluding the most recent
+month; the rotation's ranking score.
+
+**Buffer**:
+How far down the ranking a held name may fall before it is sold; larger
+buffers mean fewer trades.
+
+**Volatility target**:
+The annual volatility the stock basket is scaled to; above it, part of the
+account waits in cash.
+
+**Development period**:
+Data a strategy may be designed and tuned on (for Sweden v2: 2014 to
+2023-10-30).
+
+**Evaluation period**:
+Data a frozen strategy is judged on, once (2023-10-31 to 2026-10-30).
+_Avoid_: test set (when it has been reused)
+
+**Frozen specification**:
+The exact parameters and selection rule committed before the evaluation
+period is touched.
+
 ### Simulation
 
 **Backtest**:

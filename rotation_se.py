@@ -29,6 +29,7 @@ ajustados por dividendos (prices_se.py).
 
     python rotation_se.py run --start 2014-01-01 --end 2023-10-30 [--spec '{...}']
     python rotation_se.py evaluate      # avaliacao unica da especificacao congelada
+    python rotation_se.py orders --start 2026-09-30 --capital 30000   # carteira e ordens do mes
 """
 
 from __future__ import annotations
@@ -444,6 +445,53 @@ def _chart(res: SimResult, v: Dict, path: Path) -> None:
     plt.close(fig)
 
 
+def next_orders(mkt: Market, spec: Spec, account_start: str, capital: float) -> Tuple[str, Dict]:
+    """Ordens para a abertura seguinte ao ultimo pregao com dados.
+
+    A conta e o replay da especificacao desde `account_start` (sem estado
+    escondido). Se o ultimo pregao e fim de mes, decide o rebalanceamento como
+    em qualquer mes do replay; se nao, so lista a carteira atual.
+    """
+    last = mkt.days[-1]
+    res = simulate(mkt, spec, account_start, last, capital=capital)
+    held = list(res.holdings)
+    equity = float(res.equity.iloc[-1])
+    is_month_end = last == mkt.month_ends(last - pd.Timedelta(days=40), last)[-1] and \
+        (last + pd.offsets.BDay(1)).month != last.month
+    L = [f"# Rotacao mensal — situacao em {last.date()}", "",
+         f"Conta desde {account_start}: patrimonio {equity:,.0f} SEK · {len(held)} acoes · "
+         f"especificacao `{spec.label()}`", ""]
+    L += ["## Carteira atual", "", "| Acao | Desde | Preco de compra | Ultimo | Valor (SEK) |", "|---|---|---:|---:|---:|"]
+    for t, h in res.holdings.items():
+        L.append(f"| {t} | {h['since']} | {h['entry_px']:.2f} | {h['last']:.2f} | {h['shares'] * h['last']:,.0f} |")
+    info: Dict = {}
+    if is_month_end:
+        target, exposure, info = target_portfolio(mkt, spec, last, held)
+        slot = equity * exposure / spec.k
+        L += ["", f"## Ordens para a abertura do proximo pregao (rebalanceamento de {last.date()})", "",
+              f"Regime: {info['regime']} · exposicao em acoes: {100 * exposure:.0f}% · valor por acao: {slot:,.0f} SEK", ""]
+        for t in info.get("sell", []):
+            L.append(f"- VENDER tudo de {t} (saiu das {spec.buffer} melhores)")
+        for t in target:
+            px_last = float(mkt.adj.at[last, t])
+            have = res.holdings.get(t, {}).get("shares", 0.0) * px_last
+            if t not in res.holdings:
+                L.append(f"- COMPRAR {t}: ~{slot:,.0f} SEK (~{slot / px_last:.0f} acoes a mercado na abertura)")
+            elif have > slot * (1 + spec.resize_band):
+                L.append(f"- REDUZIR {t} para ~{slot:,.0f} SEK (hoje {have:,.0f})")
+            elif have < slot * (1 - spec.resize_band):
+                L.append(f"- AUMENTAR {t} para ~{slot:,.0f} SEK (hoje {have:,.0f})")
+            else:
+                L.append(f"- manter {t}")
+        n_empty = spec.k - len(target)
+        if n_empty and spec.fill == "index" and not info["regime"].startswith("risk-off"):
+            L.append(f"- fundo de indice: {n_empty} vaga(s) sem acao -> ~{n_empty * slot:,.0f} SEK")
+    else:
+        L += ["", "Hoje nao e o ultimo pregao do mes: nenhuma ordem. O proximo rebalanceamento e no ultimo "
+              "pregao do mes, depois do fechamento."]
+    return "\n".join(L) + "\n", info
+
+
 def load_market() -> Market:
     import prices_se
     return Market(prices_se.load())
@@ -457,8 +505,24 @@ def main(argv=None) -> int:
     r.add_argument("--end", required=True)
     r.add_argument("--spec", help="JSON com campos de Spec")
     sub.add_parser("evaluate", help="avaliacao unica da especificacao congelada (ADR 0006)")
+    o = sub.add_parser("orders", help="carteira atual e ordens do proximo rebalanceamento")
+    o.add_argument("--start", help="inicio da conta (padrao: data/paper/se_account.json)")
+    o.add_argument("--capital", type=float, help="capital inicial (padrao: conta)")
     args = ap.parse_args(argv)
     mkt = load_market()
+    if args.cmd == "orders":
+        start, capital = args.start, args.capital
+        if start is None or capital is None:
+            import paper_se
+            acct = paper_se.load_account()
+            start = start or acct["start"]
+            capital = capital or float(acct["capital"])
+        text, _ = next_orders(mkt, frozen_spec(), start, capital)
+        out = REPORT_DIR / "orders" / f"{mkt.days[-1].date()}.md"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(text, encoding="utf-8")
+        print(text)
+        return 0
     if args.cmd == "evaluate":
         v = evaluate(mkt, frozen_spec())
         print((REPORT_DIR / "verdict.md").read_text(encoding="utf-8"))

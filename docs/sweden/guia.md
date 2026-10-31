@@ -4,7 +4,48 @@ Este guia explica como o sistema decide, como instalar no Windows, como ver as
 simulações e como operar no dia a dia. As decisões de projeto estão em
 `docs/sweden/plano.md` e `docs/adr/`; o vocabulário em `CONTEXT.md`.
 
-## 1. O que o sistema faz, em uma página
+## 0. Estratégia atual: v2, rotação mensal por momentum
+
+A v2 (`rotation_se.py`, ADR 0005) substituiu o swing trade das seções 1, 3 e
+4, que ficam como histórico. Ela foi avaliada fora da amostra e **reprovada no
+critério de retorno** (+35,7% contra +63,6% do índice em 3 anos), com drawdown
+menor que o do índice — detalhes em `docs/sweden/plano.md`.
+
+### Como ela decide (no último pregão de cada mês, depois do fechamento)
+
+1. **Quem pode entrar**: ações do universo com ~1 ano de histórico e giro
+   mediano de 60 dias ≥ 10 MSEK.
+2. **Ranking**: retorno dos últimos 12 meses, ignorando o último mês
+   (momentum 12-1).
+3. **Carteira**: as 6 melhores, peso igual. Uma ação já na carteira só sai
+   quando cai para fora das 20 melhores — isso evita girar por pouca diferença.
+4. **Exposição**: se a volatilidade de 63 dias da cesta passar de 20% ao ano,
+   a parte em ações é reduzida na proporção (20% ÷ vol) e o resto fica em
+   caixa. Posições mantidas só são ajustadas se se afastarem mais de 25% do
+   tamanho-alvo.
+5. **Execução**: ordens a mercado na abertura do pregão seguinte (custos:
+   0,25% de courtage + 0,10% de slippage por ordem).
+
+Preços ajustados por dividendos; vagas sem ação iriam para um fundo de índice.
+
+### Comandos
+
+```bash
+python prices_se.py download                 # preços ajustados (~2 min)
+python rotation_se.py run --start 2014-01-01 --end 2023-10-30   # simular um período
+python rotation_se.py evaluate               # a avaliação registrada (não refazer: ADR 0006)
+python rotation_se.py orders --start 2026-10-30 --capital 30000 # carteira e ordens do mês
+```
+
+`run` aceita `--spec '{"k": 8, "vol_target": 0.15}'` para estudar variações —
+em períodos de desenvolvimento ou em dados novos, nunca para escolher pelo
+resultado nos 3 anos já avaliados.
+
+`reports/se_v2/rebalances.csv` mostra, mês a mês, o regime, a exposição, as
+ações mantidas, compradas e vendidas e o ranking das 20 melhores — é o
+"porquê" de cada decisão.
+
+## 1. O que o sistema faz, em uma página (v1, histórico)
 
 ```
 Yahoo Finance ──► ETL ──► payloads ──► motor ──► ordens do dia
@@ -107,7 +148,7 @@ núcleos e o ambiente é igual ao do CI.
 Trabalhe dentro de `~/` (sistema de arquivos do Linux), não em `/mnt/c/`:
 é muito mais rápido.
 
-## 3. Ver as simulações
+## 3. Ver as simulações (v1, histórico)
 
 ```bash
 # 1) Dados e payloads (~15 min)
@@ -157,7 +198,7 @@ que o fundo de índice (`^OMXSBGI`, com dividendos) depois de custos, ter
 expectancy positiva em pelo menos 4 dos 6 folds e drawdown da conta menor que
 o do índice. **Se não passar, a resposta honesta é o fundo de índice.**
 
-## 4. Operar no dia a dia
+## 4. Operar no dia a dia (v1, histórico)
 
 1. **Genoma de uso diário** (a cada 6 meses): treine e, depois de ler o replay, aceite.
    ```bash

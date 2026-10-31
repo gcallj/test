@@ -1,5 +1,7 @@
 # Plano — mercado sueco
 
+> **Estado em 31/out/2026**: v1 (swing) e v2 (rotação por momentum) avaliadas fora da amostra; ambas reprovadas no critério de retorno. Ver "Estratégia v2".
+
 Decisões tomadas em sessão de design em 30/out/2026. Termos em negrito seguem
 o glossário em `CONTEXT.md`; decisões difíceis de reverter estão em
 `docs/adr/`.
@@ -81,6 +83,50 @@ antes de qualquer dinheiro real. O Brasil fica congelado como está.
 - **Corte de 80 features pela variância dos 3 primeiros anos**: antes usava o
   histórico inteiro, e um fold (histórico truncado) podia escolher features
   diferentes das do replay.
+
+## Estratégia v2 — rotação mensal por momentum (31/out/2026)
+
+O swing trade (v1) foi reprovado por causas estruturais, medidas em
+`docs/sweden/diagnostico.md`. A v2 (`rotation_se.py`, ADR 0005) troca o
+estilo: rotação mensal entre as ações do universo pelo momentum de 12 meses,
+6 posições, buffer de 20, volatility target de 20%, execução na abertura.
+
+**Protocolo (ADR 0006)**: desenhada e escolhida só com dados de 2014 a
+30/10/2023 (`reports/se_v2/dev_grid.csv`, 216 variações), congelada em
+`data/strategy_se_v2.json` (commit `cf9e269`) e avaliada **uma vez** nos 3
+anos fora da amostra.
+
+| Critério 1 | v1 | **v2** | Índice `^OMXSBGI` | v2 |
+|---|---:|---:|---:|---|
+| Retorno em 3 anos, depois de custos | −26,2% | **+35,7%** | +63,6% | não passa |
+| Folds com expectancy positiva | 2 de 6 | **5 de 6** | precisa ≥ 4 | passa |
+| Max drawdown da conta | −45,6% | **−20,7%** | −21,3% | passa |
+
+**Veredito: reprovada no critério de retorno.** Relatórios em `reports/se_v2/`.
+
+O que a avaliação mostra:
+
+- **A v2 corrigiu o que o diagnóstico apontou**: ~11 posições novas por ano
+  (contra ~180 trades), 90% investida, quedas menores que as do índice.
+- **Ficou à frente do índice por quase dois anos** (meados de 2024 a abril
+  de 2026, pico de ~51 kSEK) e perdeu a vantagem no fold 6 (mai–out/2026,
+  −14,3% contra +7,3%): uma quebra típica de momentum, quando as líderes
+  recentes caem e o resto do mercado sobe. O fold 1 (rali de nov/2023) é o
+  mesmo fenômeno ao contrário.
+- **A falha é da família, não da escolha**: das 216 variações do
+  desenvolvimento rodadas nos 3 anos de avaliação (só como distribuição,
+  `reports/se_v2/eval_family_distribution.csv`), **3 (1%)** bateram o
+  índice em retorno; a mediana fez +37,5% — a escolhida fez +35,7%. Já o
+  drawdown menor que o do índice apareceu em 176 (81%). Escolher agora uma
+  das 3 seria seleção pelo teste (ADR 0006).
+- **O índice foi difícil de bater**: +17,8% ao ano, alta ampla (o universo
+  com pesos iguais subiu igual ao índice, +63,9%), sem as grandes dispersões
+  que favorecem momentum.
+
+**Pela regra do plano, a resposta para o objetivo de retorno é o fundo de
+índice.** O que a v2 entrega de forma consistente é retorno positivo com
+drawdown menor que o do índice — um objetivo diferente do critério 1, que
+só pode ser adotado como critério novo, validado em dados novos.
 
 ## Resultado do walk-forward (31/out/2026)
 

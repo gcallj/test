@@ -3,16 +3,27 @@
 This branch runs the system on Nasdaq Stockholm. `main` holds the frozen
 Brazilian (B3) version; do not port changes between them.
 
-A genetic algorithm tunes a 38-gene trading policy for 120 Swedish Large Cap
-tickers. One engine executes that policy everywhere: GA training, the
-walk-forward replays that validate it, and the daily orders. Costs model an
-ISK account (0.25% brokerage per order, 0.10% slippage per side, no per-trade
-tax).
+The current Swedish strategy is v2 (`rotation_se.py`, ADR 0005): a monthly
+rotation into the six Large Cap names with the best 12-1 month momentum, a
+20-name buffer and a 20% volatility target, on dividend-adjusted prices
+(`prices_se.py`). Costs model an ISK account (0.25% brokerage per order,
+0.10% slippage per side, no per-trade tax). Both v1 (the 38-gene GA swing
+engine, `ga_run*.py`) and v2 failed the return criterion out of sample; the
+results and the reasons are in `docs/sweden/plano.md` and
+`docs/sweden/diagnostico.md`.
 
 Code comments, log lines and user-facing strings are predominantly Portuguese.
 Match the surrounding language when editing a file.
 
 ## Repo guides
+
+### Evaluation protocol
+
+The three years 2023-10-31..2026-10-30 have been used to judge both v1 and
+v2. Changing a strategy and re-running it there until it passes manufactures
+a result (ADR 0006). Develop on data up to 2023-10-30, freeze the spec, and
+judge it on data that has not been used yet (paper trading or future data).
+Read before proposing any strategy change.
 
 ### Swedish plan and guide
 
@@ -25,8 +36,9 @@ costs, the walk-forward or the daily run.
 
 Entry points, env knobs, CI topology, and which artifacts are generated versus
 committed, written for the Brazilian pipeline on `main`; the Swedish entry
-points (`walkforward.py`, `replay_se.py`, `portfolio_se.py`, `daily_se.py`,
-`paper_se.py`) are in the guide: `docs/agents/pipeline.md`.
+points — v2: `prices_se.py`, `rotation_se.py`; v1: `walkforward.py`,
+`replay_se.py`, `portfolio_se.py`, `daily_se.py`, `paper_se.py` — are in the
+guide: `docs/agents/pipeline.md`.
 
 ### Promotion gates
 
@@ -44,7 +56,10 @@ you.
 
 - Market definitions live only in `market_se.py`: universe, suffix, index,
   benchmark, costs, tax, order validity, account size.
-- One engine: `ga_run_modular_final._backtest_stats_global_intraday`.
+- v2 decisions come only from `rotation_se.py`; the frozen spec is
+  `data/strategy_se_v2.json`. `tests/test_rotation_se.py` checks that no
+  decision reads a future price; keep it green.
+- v1 (historical) has one engine: `ga_run_modular_final._backtest_stats_global_intraday`.
   `ga_run.backtest_stats_global_intraday` only applies the optional stage gate
   and delegates. A rule that is not inside the engine is not validated.
 - The engine follows the real execution rule (ADR 0001) and uses no future
