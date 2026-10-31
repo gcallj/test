@@ -12,6 +12,7 @@
       "source": "FI insynshandel",
       "nature": ["Förvärv"],
       "instrument_type": ["Aktie"],
+      "empty_instrument_type_as_share": true,
       "status": ["Aktuell"],
       "volume_unit": ["Antal"],
       "currency": ["SEK"],
@@ -28,6 +29,8 @@
       "name": "posicao vendida divulgada alta",
       "source": "FI blankningsregistret",
       "publication_lag_sessions": 2,
+      "holder_names": "normalizados (caixa, pontuacao e palavras genericas como LLP, Capital, Management)",
+      "stale_days": 365,
       "covered_isin_prefix": ["SE"],
       "rebalance": "semanal (ultimo pregao da semana), entrada no pregao seguinte",
       "top_fraction": 0.1,
@@ -97,6 +100,10 @@
     "carteira com H1+H3+H4 e filtro H2 independentemente dos testes (criterio 1), so informativo",
     "retorno anormal medio contra o universo de peso igual (sem o controle por quintil)",
     "retorno anormal medio por ano"
+  ],
+  "amendments_before_first_run": [
+    "2026-10-31, depois do dry-run (so contagens de eventos, nenhum retorno): H1 nao tinha eventos antes de 2018-09 porque o FI deixava o tipo de instrumento vazio ate 2018; tipo vazio passa a valer como acao quando o ISIN e de acao.",
+    "2026-10-31, depois do dry-run: a soma das posicoes vendidas chegava a 27% porque o mesmo detentor aparece com grafias diferentes e alguns encerramentos faltam; nomes de detentor normalizados e posicao sem notificacao ha mais de 365 dias zera (97% das posicoes atuais do FI foram notificadas no ultimo ano)."
   ],
   "data_vintage": {
     "downloaded": "2026-10-31",

@@ -255,22 +255,41 @@ def map_shorts(df: pd.DataFrame, imap: IssuerMap) -> pd.DataFrame:
     return df
 
 
-def short_interest_panel(df: pd.DataFrame, days: pd.DatetimeIndex, tickers: List[str]) -> pd.DataFrame:
+SHORT_STALE_DAYS = 365   # posicao sem notificacao ha mais de um ano conta como encerrada
+
+
+def norm_holder(h: str) -> str:
+    """Nome do detentor sem caixa, pontuacao e palavras genericas: o FI grafa o mesmo fundo de varios jeitos."""
+    h = unicodedata.normalize("NFKD", str(h)).encode("ascii", "ignore").decode().lower()
+    h = re.sub(r"\b(llp|llc|lp|l p|ltd|limited|inc|sa|ab|ag|plc|uk|the|co|company|corp|corporation|management|"
+               r"asset|capital|partners|investments?|advisors?|fund|fonder)\b", " ", h)
+    return re.sub(r"[^a-z0-9]", "", h)
+
+
+def short_interest_panel(df: pd.DataFrame, days: pd.DatetimeIndex, tickers: List[str],
+                         stale_days: int = SHORT_STALE_DAYS) -> pd.DataFrame:
     """Soma das posicoes vendidas divulgadas (% do capital) por ticker, conhecida na abertura de cada pregao.
 
     Cada detentor mantem a ultima posicao informada ate a proxima; "<0,5" zera a
     posicao. A posicao da data T entra na abertura de T+2 (publicacao em T+1).
+    O historico do FI tem posicoes que nunca recebem o aviso de encerramento
+    (grafias diferentes do detentor, avisos faltando): o nome do detentor e
+    normalizado e uma posicao sem notificacao ha mais de `stale_days` dias zera.
+    No arquivo de posicoes atuais, 97% foram notificadas no ultimo ano.
     """
     d = df.dropna(subset=["ticker"]).copy()
+    d["holder"] = d["holder"].map(norm_holder)
     d["avail"] = next_session_after(days, d["position_date"], lag_sessions=2)
     d = d.dropna(subset=["avail"]).sort_values(["avail", "position_date"])
     out = pd.DataFrame(0.0, index=days, columns=tickers)
     for tk, g in d.groupby("ticker"):
         if tk not in out.columns:
             continue
-        # ultima posicao de cada detentor em cada data de disponibilidade
-        last = g.groupby(["avail", "holder"])["pct"].last().unstack("holder")
-        last = last.reindex(days).ffill().fillna(0.0)
+        # ultima posicao de cada detentor em cada data de disponibilidade, e a data da notificacao
+        last = g.groupby(["avail", "holder"])["pct"].last().unstack("holder").reindex(days).ffill()
+        when = g.groupby(["avail", "holder"])["position_date"].last().unstack("holder").reindex(days).ffill()
+        age = (when.rsub(days.to_series(), axis=0)).apply(lambda c: c.dt.days)
+        last = last.where(age <= stale_days).fillna(0.0)
         out[tk] = last.sum(axis=1)
     return out
 

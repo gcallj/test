@@ -119,7 +119,14 @@ def insider_events(ins: pd.DataFrame, mkt: Mkt, s: Dict) -> pd.DataFrame:
     c = s["signals"]["H1"]
     x = ins.dropna(subset=["ticker"]).copy()
     x = x[x["ticker"].isin(mkt.tickers)]
-    ok = (x["nature"].isin(c["nature"]) & x["instrument_type"].isin(c["instrument_type"])
+    # O FI so passou a preencher o tipo de instrumento em 2018: tipo vazio vale como acao
+    # quando o ISIN e de acao (aparece como "Aktie" em outra linha ou e o ISIN do universo).
+    itype = x["instrument_type"].fillna("").str.strip()
+    share_isins = set(ins.loc[ins["instrument_type"].isin(c["instrument_type"]), "isin"]) | set(mkt.isin.values())
+    type_ok = itype.isin(c["instrument_type"])
+    if c.get("empty_instrument_type_as_share", False):
+        type_ok |= (itype == "") & x["isin"].isin(share_isins)
+    ok = (x["nature"].isin(c["nature"]) & type_ok
           & (x["status"].isin(c["status"])) & (x["volume_unit"].isin(c["volume_unit"]))
           & (x["currency"].isin(c["currency"])) & ~x["venue"].fillna("").str.strip().str.lower().isin(
               [v.lower() for v in c["exclude_venue"]]))

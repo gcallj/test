@@ -68,6 +68,17 @@ class TimingTest(unittest.TestCase):
         self.assertAlmostEqual(panel.loc["2024-03-07"], 1.4)
         self.assertAlmostEqual(panel.loc["2024-03-13"], 0.6)    # A fell below 0.5% on 03-11
 
+    def test_holder_spellings_merge_and_stale_positions_expire(self):
+        days = pd.bdate_range("2020-01-01", "2021-06-30")
+        df = pd.DataFrame({"holder": ["MARSHALL WACE LLP", "Marshall Wace LLP", "Old Fund Ltd"], "ticker": ["X.ST"] * 3,
+                           "pct": [1.0, 0.0, 0.7],
+                           "position_date": pd.to_datetime(["2020-01-06", "2020-03-02", "2020-01-06"])})
+        panel = alt.short_interest_panel(df, days, ["X.ST"])["X.ST"]
+        self.assertAlmostEqual(panel.loc["2020-02-03"], 1.7)
+        self.assertAlmostEqual(panel.loc["2020-03-05"], 0.7)    # the other spelling closed it
+        self.assertAlmostEqual(panel.loc["2020-12-31"], 0.7)
+        self.assertAlmostEqual(panel.loc["2021-01-11"], 0.0)    # no notification for > 365 days
+
     def test_reaction_session_after_the_close_moves_to_the_next_day(self):
         days = pd.bdate_range("2024-04-01", periods=10)
         rel = pd.Series(pd.to_datetime(["2024-04-02 07:00", "2024-04-02 17:45", "2024-04-06 09:00"]))
@@ -121,9 +132,19 @@ class EventRuleTest(unittest.TestCase):
                 self._ins(m, venue="Utanför handelsplats", ticker=m.tickers[2]),
                 self._ins(m, volume=1000.0, ticker=m.tickers[3]),         # 50k SEK: too small
                 self._ins(m, published=pd.Timestamp(m.days[330]))]        # inside cooldown of the first
+        rows = [dict(r, isin=m.isin[r["ticker"]]) for r in rows]
         ev = v4.insider_events(pd.DataFrame(rows), m, _spec())
         self.assertEqual(list(ev["ticker"]), [m.tickers[0]])
         self.assertEqual(ev["entry"].iloc[0], m.days[301])
+
+    def test_empty_instrument_type_counts_only_for_share_isins(self):
+        m = _mkt()
+        s = _spec()
+        s["signals"]["H1"]["empty_instrument_type_as_share"] = True
+        rows = [dict(self._ins(m, ticker=m.tickers[5], instrument_type=""), isin=m.isin[m.tickers[5]]),
+                dict(self._ins(m, ticker=m.tickers[6], instrument_type=""), isin="SE9999999999")]  # warrant ISIN
+        ev = v4.insider_events(pd.DataFrame(rows), m, s)
+        self.assertEqual(list(ev["ticker"]), [m.tickers[5]])
 
     def test_earnings_events_use_closes_up_to_r_plus_1_and_enter_at_r_plus_2(self):
         m = _mkt()
