@@ -357,9 +357,17 @@ class Result4:
 def simulate(mkt: Mkt, events: pd.DataFrame, horizons: Dict[str, int], start, end, k: int = market_se.MAX_POSITIONS,
              priority: Tuple[str, ...] = ("H1", "H4", "H3"), blocked: Optional[pd.DataFrame] = None,
              capital: float = market_se.CAPITAL_SEK, brokerage: float = market_se.BROKERAGE_PCT_PER_ORDER,
-             slippage: float = market_se.SLIPPAGE_PCT_PER_SIDE) -> Result4:
+             slippage: float = market_se.SLIPPAGE_PCT_PER_SIDE,
+             block_windows: Optional[pd.DataFrame] = None) -> Result4:
     """Conta unica. Um evento com entrada em D compra na abertura de D (decidido no fechamento de D-1)
-    e vende na abertura de D+H. Vagas livres ficam no fundo de indice (sem courtage, cota do dia)."""
+    e vende na abertura de D+H. Vagas livres ficam no fundo de indice (sem courtage, cota do dia).
+
+    `blocked`: grupos semanais (H2 da v4). `block_windows`: janelas por ticker (colunas ticker,
+    start, end) em que o nome nao e comprado (rebaixamentos da v5)."""
+    windows: Dict[str, List[Tuple[pd.Timestamp, pd.Timestamp]]] = {}
+    if block_windows is not None and not block_windows.empty:
+        for r in block_windows.itertuples():
+            windows.setdefault(r.ticker, []).append((pd.Timestamp(r.start), pd.Timestamp(r.end)))
     start, end = pd.Timestamp(start), pd.Timestamp(end)
     days = mkt.days[(mkt.days >= start) & (mkt.days <= end)]
     rank = {f: i for i, f in enumerate(priority)}
@@ -419,6 +427,9 @@ def simulate(mkt: Mkt, events: pd.DataFrame, horizons: Dict[str, int], start, en
                     continue
                 if r.ticker in cur_block:
                     log.append({"date": str(d.date()), "ticker": r.ticker, "family": r.family, "why": "bloqueado H2"})
+                    continue
+                if any(a <= d <= b for a, b in windows.get(r.ticker, ())):
+                    log.append({"date": str(d.date()), "ticker": r.ticker, "family": r.family, "why": "bloqueado"})
                     continue
                 p = open_px(r.ticker, d)
                 if not np.isfinite(p):
