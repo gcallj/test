@@ -17,7 +17,9 @@ Depois dela, foram testadas e reprovadas:
   comunicados e balanços, com dados de `altdata_se.py`; fontes em
   `docs/sweden/dados_alternativos.md`);
 - a v5 (`revisions_se.py`, revisões de analistas do Börsvärlden coletadas por
-  `analyst_se.py`).
+  `analyst_se.py`);
+- a v6 (`swing_se.py`, swing derivado da v1 numa conta única, com CMA-ES e as
+  entradas da v4/v5).
 
 A v2 continua sendo a referência. Para atualizar os dados alternativos e
 refazer as contagens sem olhar retornos:

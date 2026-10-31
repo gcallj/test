@@ -1,6 +1,6 @@
 # Plano — mercado sueco
 
-> **Estado em 31/out/2026**: v1 (swing), v2 (rotação por momentum), v3 (seleção ativa por previsão), v4 (eventos de informação pública: insiders, posições vendidas, tom dos comunicados, balanços) e v5 (revisões de analistas) avaliadas; as cinco reprovadas. Ver "Estratégia v5", "Estratégia v4", "Estratégia v3" e "Estratégia v2".
+> **Estado em 31/out/2026**: v1 (swing), v2 (rotação por momentum), v3 (seleção ativa por previsão), v4 (eventos de informação pública: insiders, posições vendidas, tom dos comunicados, balanços) v5 (revisões de analistas) e v6 (swing derivado da v1 com CMA-ES e entradas novas) avaliadas; as seis reprovadas. Ver "Estratégia v6", "Estratégia v5", "Estratégia v4", "Estratégia v3" e "Estratégia v2".
 
 Decisões tomadas em sessão de design em 30/out/2026. Termos em negrito seguem
 o glossário em `CONTEXT.md`; decisões difíceis de reverter estão em
@@ -83,6 +83,42 @@ antes de qualquer dinheiro real. O Brasil fica congelado como está.
 - **Corte de 80 features pela variância dos 3 primeiros anos**: antes usava o
   histórico inteiro, e um fold (histórico truncado) podia escolher features
   diferentes das do replay.
+
+## Estratégia v6 — swing derivado da v1, otimizador robusto e entradas novas (31/out/2026)
+
+Pedido: uma estratégia derivada da v1, com busca por um otimizador mais
+robusto e mais dados de entrada relevantes. Desenho em `swing_se.py` (ADR
+0010), congelado em `data/strategy_se_v6.json` antes da rodada (commit
+`473b7fd`).
+
+Da v1, a v6 mantém a regra de execução (limite válido 3 pregões, stop, alvo
+e time stop em ATR) e o walk-forward de 6 folds com 4 anos de treino. As
+mudanças atacam as causas de `diagnostico.md`:
+- uma conta com 6 vagas e o fundo de índice nas vagas livres;
+- score ranqueado entre as ações, com 13 entradas: 6 fatores de preço,
+  insiders, posições vendidas, analistas, tom e reação a balanços;
+- prazo mínimo de 10 pregões;
+- 19 genes otimizados por CMA-ES (600 trials por fold);
+- fitness da carteira robusta entre anos, com seleção do ótimo mais estável
+  sob perturbação.
+
+| | Resultado | Exigido | |
+|---|---:|---:|---|
+| Retorno 2023–2026 | +54,5% vs +63,6% | > índice | não passa |
+| Folds com expectativa positiva | 3/6 | ≥ 4 | não passa |
+| Max drawdown | −19,0% vs −21,3% | < índice | passa |
+| Excesso diário (bootstrap) | p = 0,55 | < 0,05 | não passa |
+
+**v6 reprovada.** Contra a v1, as correções funcionaram:
+- 41 trades/ano em vez de 183;
+- prazo médio de 32 pregões em vez de 4;
+- exposição em ações de 89%;
+- resultado bruto por trade de +2,65% em vez de +0,42%, e líquido positivo.
+
+Mesmo assim, ela rende menos que o índice (15,6% contra 17,8% ao ano), e a
+vantagem decai: +10,2% por trade no fold 1, negativa nos folds 4 a 6. Os pesos
+trocam de sinal entre folds, ou seja, o otimizador ajusta ruído. Só a posição
+vendida alta e a reação forte ao balanço ficam negativas em todos os folds.
 
 ## Estratégia v5 — revisões de analistas (31/out/2026)
 

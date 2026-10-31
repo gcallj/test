@@ -636,8 +636,28 @@ def verdict_markdown(o: Dict, w: pd.DataFrame) -> str:
          "## Treino por fold", "", "| Fold | Treino | Fitness | Robusta | Tempo |", "|---|---|---:|---:|---:|"]
     for f in o["folds"]:
         L.append(f"| {f['fold']} | {f['train'][0]} a {f['train'][1]} | {f['fitness']:+.3f} | {f['robust_fitness']:+.3f} | {f['seconds']:.0f}s |")
-    L += ["", "## Genomas (pesos das entradas e genes de operacao)", "", w.round(3).T.to_markdown(), ""]
+    L += ["", "## Genomas (pesos das entradas e genes de operacao)", "", _md_table(w.T), ""]
     return "\n".join(L)
+
+
+def _md_table(df: pd.DataFrame) -> str:
+    """Tabela markdown sem dependencia externa (pandas.to_markdown exige tabulate)."""
+    def cell(v):
+        return f"{v:.3f}" if isinstance(v, (float, np.floating)) else str(v)
+    head = "| | " + " | ".join(map(str, df.columns)) + " |"
+    sep = "|---|" + "---:|" * len(df.columns)
+    rows = ["| " + str(i) + " | " + " | ".join(cell(v) for v in r) + " |" for i, r in zip(df.index, df.to_numpy())]
+    return "\n".join([head, sep] + rows)
+
+
+def report(out_dir: Path = REPORT_DIR) -> None:
+    """Refaz verdict.md e o grafico a partir dos arquivos da rodada (sem otimizar de novo)."""
+    o = json.loads((out_dir / "verdict.json").read_text(encoding="utf-8"))
+    w = pd.read_csv(out_dir / "genomes.csv", index_col=0)
+    (out_dir / "verdict.md").write_text(verdict_markdown(o, w), encoding="utf-8")
+    e = pd.read_csv(out_dir / "equity.csv", index_col=0, parse_dates=True)
+    _chart(Run(e["sistema"], pd.Series(dtype=float), pd.Series(dtype=float), pd.DataFrame()), e["indice"],
+           out_dir / "equity.png")
 
 
 def _chart(res: Run, bench_eq: pd.Series, path: Path) -> None:
@@ -658,11 +678,15 @@ def _chart(res: Run, bench_eq: pd.Series, path: Path) -> None:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("cmd", choices=["download", "smoke", "evaluate"])
+    ap.add_argument("cmd", choices=["download", "smoke", "evaluate", "report"])
     a = ap.parse_args(argv)
     if a.cmd == "download":
         raw = download_hl()
         print(f"maximas/minimas: {raw.shape} -> {HL_CACHE}")
+        return 0
+    if a.cmd == "report":
+        report()
+        print((REPORT_DIR / "verdict.md").read_text(encoding="utf-8"))
         return 0
     s = spec()
     panel = load_panel()
