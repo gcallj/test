@@ -1,0 +1,73 @@
+{
+  "version": 7,
+  "frozen_on": "2026-10-31",
+  "adr": "docs/adr/0011-strategy-v7-calendar-frozen-before-first-run.md",
+  "note": "Pedido: uma alternativa, mesmo com menos trades. Duas hipoteses de calendario da literatura, sem nenhum parametro a ajustar, congeladas antes de qualquer retorno ser calculado. Uma unica rodada de `python seasonal_se.py evaluate`.",
+  "period": ["2013-04-01", "2026-10-30"],
+  "period_rule": "do primeiro mes completo com ^OMXSPI/^OMXSBGI no Yahoo (2013-03-05) ate o fim dos dados",
+  "signals": {
+    "T1": {
+      "name": "Halloween: fundo de indice de novembro a abril, caixa de maio a outubro",
+      "winter_months": [11, 12, 1, 2, 3, 4],
+      "execution": "troca na cota (NAV) do primeiro pregao de novembro e de maio, decidida no fechamento anterior; sem courtage nem spread no fundo",
+      "cash": "juro do Riksbank (policy rate, serie SECBREPOEFF) acumulado por pregao (r/252), com piso em 0% (contas de deposito nao cobraram juro negativo do varejo)",
+      "literature": "Bouman & Jacobsen 2002 (AER); Jacobsen & Zhang 2012; Dichtl & Drobetz 2015 (enfraquecimento recente)"
+    },
+    "T2": {
+      "name": "mes do dividendo: acoes com ex-dividendo esperado no mes",
+      "ex_dividend": "salto do fator Adj Close/Close do Yahoo >= 0,2% no dia",
+      "prediction": "a acao teve ex-dividendo no mesmo mes do calendario no ano anterior",
+      "selection": "no fechamento do ultimo pregao do mes anterior, entre as elegiveis previstas, as 6 de maior dividend yield de 252 pregoes (desempate alfabetico)",
+      "execution": "compra na abertura do primeiro pregao do mes; venda na abertura do primeiro pregao do mes seguinte; custos de market_se nos dois lados; o resto do capital no fundo de indice",
+      "literature": "Hartzmark & Solomon 2013 (JFE), 'The dividend month premium'"
+    }
+  },
+  "tests": {
+    "T1": {
+      "series": "retornos log mensais do ^OMXSPI (indice de precos: os dividendos, pagos sobretudo no inverno, ficam de fora, o que joga contra a hipotese)",
+      "statistic": "z = +r nos meses de inverno, -r no verao; H0: media(z) <= 0",
+      "nw_lags": 6,
+      "bootstrap_block": 6,
+      "diag_start": "2006-07-01",
+      "diag": "mesma estatistica no retorno do universo de peso igual (sobrevivente) desde 2006-07, so informativo"
+    },
+    "T2": {
+      "series": "media mensal do retorno anormal dos eventos (abertura a abertura, menos o mesmo quintil de retorno de 63 dias no fechamento da decisao)",
+      "nw_lags": 1,
+      "bootstrap_block": 3
+    },
+    "bootstrap_reps": 5000,
+    "alpha": 0.05,
+    "multiple_testing": "Holm sobre T1 e T2",
+    "nw_t_min": 2.0,
+    "min_mean_ar_long": 0.007,
+    "pass_rule": "uma hipotese passa se Holm(p) < 0,05 e t NW >= 2; T2 tambem precisa de retorno anormal medio >= 0,70% (custo de ida e volta)"
+  },
+  "strategy": {
+    "k": 6,
+    "combination": "so as hipoteses que passaram: T1 sozinha = fundo/caixa por estacao; T2 sozinha = posicoes mensais com o resto no fundo; as duas = posicoes de T2 com o capital ocioso seguindo T1",
+    "costs": "market_se nas acoes; fundo sem courtage; caixa ao juro do Riksbank"
+  },
+  "criterion1": "docs/sweden/plano.md nos 6 folds (2023-10-31 a 2026-10-30): render mais que o ^OMXSBGI, expectativa positiva em >= 4 de 6 folds e max drawdown menor que o do indice",
+  "criterion1_T1": {
+    "note": "T1 nao gera trades: a regra dos folds e adaptada antes da rodada",
+    "fold_rule": "fold positivo = excesso sobre o indice > 0 nos pregoes em caixa; so os folds com pregoes em caixa contam (3 folds de verao)",
+    "min_positive_summer_folds": 2
+  },
+  "overall_pass": "pelo menos uma hipotese passa E o criterio 1 da carteira resultante passa -> paper trading; senao reprovada",
+  "diagnostics_announced": [
+    "T1 no universo de peso igual desde 2006-07",
+    "cada hipotese sozinha e as duas juntas no criterio 1 e no periodo inteiro, independentemente dos testes",
+    "T1 por ano (inverno e verao); T2 por ano e por mes do calendario"
+  ],
+  "caveats": [
+    "o historico de precos 2013-2026 ja foi visto por v1-v6; aqui nao ha parametro a ajustar, mas uma aprovacao so leva ao paper trading",
+    "13,5 anos de indice dao pouco poder ao teste T1: so um efeito grande (como o reportado para a Suecia em 1970-1998) seria detectado",
+    "T2 e concentrada em marco-maio e setembro-novembro na Suecia; dry-run (so contagens, antes da rodada): posicoes em 121 dos 163 meses, ~36 trades/ano, 162 meses de indice para T1; T1 faz 2 trocas de fundo por ano"
+  ],
+  "data_vintage": {
+    "downloaded": "2026-10-31",
+    "prices_se.parquet_sha256_16": "a773d44491513e6e",
+    "riksbank_policy_rate": "output/riksbank_policy_rate.parquet (2005-01-03 a 2026-10-30)"
+  }
+}
