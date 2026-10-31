@@ -3,7 +3,10 @@
 This branch runs the system on Nasdaq Stockholm. `main` holds the frozen
 Brazilian (B3) version; do not port changes between them.
 
-The current Swedish strategy is v2 (`rotation_se.py`, ADR 0005): a monthly
+Three Swedish strategies have been built and judged out of sample, and all
+three failed: v1 swing GA (`ga_run*.py`), v2 monthly momentum rotation
+(`rotation_se.py`, ADR 0005) and v3 active selection by forecasts
+(`selective_se.py`, ADR 0007). v2 is the reference strategy: a monthly
 rotation into the six Large Cap names with the best 12-1 month momentum, a
 20-name buffer and a 20% volatility target, on dividend-adjusted prices
 (`prices_se.py`). Costs model an ISK account (0.25% brokerage per order,
@@ -19,10 +22,11 @@ Match the surrounding language when editing a file.
 
 ### Evaluation protocol
 
-The three years 2023-10-31..2026-10-30 have been used to judge both v1 and
-v2. Changing a strategy and re-running it there until it passes manufactures
-a result (ADR 0006). Develop on data up to 2023-10-30, freeze the spec, and
-judge it on data that has not been used yet (paper trading or future data).
+All Swedish history from 2010 to 2026-10-30 has now been used to develop or
+judge v1–v3 (ADR 0006, 0007). Changing a strategy and re-running it on that
+history until it passes manufactures a result. A new idea needs data that has
+not been used yet (paper trading, future data) or information prices do not
+already contain, with its spec and tests frozen before the first run.
 Read before proposing any strategy change.
 
 ### Swedish plan and guide
@@ -36,7 +40,7 @@ costs, the walk-forward or the daily run.
 
 Entry points, env knobs, CI topology, and which artifacts are generated versus
 committed, written for the Brazilian pipeline on `main`; the Swedish entry
-points — v2: `prices_se.py`, `rotation_se.py`; v1: `walkforward.py`,
+points — v3: `selective_se.py`; v2: `prices_se.py`, `rotation_se.py`; v1: `walkforward.py`,
 `replay_se.py`, `portfolio_se.py`, `daily_se.py`, `paper_se.py` — are in the
 guide: `docs/agents/pipeline.md`.
 

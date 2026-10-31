@@ -1,0 +1,104 @@
+{
+  "spec": "combo5-H20-q3-K6",
+  "period": [
+    "2020-01-01",
+    "2026-10-30"
+  ],
+  "cagr": 0.04758930797331984,
+  "mdd": -0.3667920380514287,
+  "trades_per_year": 45.71119133574007,
+  "invested": 0.9795487815394155,
+  "ew_cagr": 0.11979863543585134,
+  "bench_cagr": 0.10666850112267401,
+  "cagr_vs_bench_window": 0.04758930797331984,
+  "bench_mdd": -0.3315637267855237,
+  "excess_sr_daily": -0.021941973602888333,
+  "ic_mean": 0.0040381622114973835,
+  "ic_t_nw": 0.34550182443698246,
+  "ic_weeks": 353,
+  "ic_positive_share": 0.4985835694050991,
+  "excess_daily_mean": -0.00019613852490571592,
+  "excess_p_bootstrap": 0.881623675264947,
+  "dsr_sr_daily": -0.021941973602888333,
+  "dsr_sr_annual": -0.34831803256311866,
+  "dsr_sr0_daily": 0.059998374310273564,
+  "dsr_n_trials": 40,
+  "dsr_dsr": 0.0003385654978623272,
+  "trade_mean": 0.009167139825338597,
+  "trade_p_bootstrap": 0.12917416516696661,
+  "trades_closed": 306,
+  "criterion1": {
+    "start": "2023-10-31",
+    "end": "2026-10-30",
+    "final_equity": 40270.124611243504,
+    "total_return": 0.3423374870414502,
+    "cagr": 0.10318859940191816,
+    "mdd": -0.20753067786301782,
+    "bench_final": 49079.609539789824,
+    "bench_return": 0.6359869846596609,
+    "bench_cagr": 0.17844347553324313,
+    "bench_mdd": -0.21291241085656065,
+    "trades": 140,
+    "skipped": 0,
+    "avg_slots": 5.94813829787234,
+    "per_fold": [
+      {
+        "fold": 1,
+        "trades": 26,
+        "expectancy": 0.04299227769290851,
+        "win_rate": 0.7307692307692307,
+        "mdd": -0.09257850849043425
+      },
+      {
+        "fold": 2,
+        "trades": 24,
+        "expectancy": 0.013126444753531807,
+        "win_rate": 0.4166666666666667,
+        "mdd": -0.11691364721820197
+      },
+      {
+        "fold": 3,
+        "trades": 23,
+        "expectancy": 0.008822282430798344,
+        "win_rate": 0.5652173913043478,
+        "mdd": -0.20753067786301782
+      },
+      {
+        "fold": 4,
+        "trades": 21,
+        "expectancy": -0.002496897265882922,
+        "win_rate": 0.5714285714285714,
+        "mdd": -0.0931413387398019
+      },
+      {
+        "fold": 5,
+        "trades": 22,
+        "expectancy": 0.004604822620644756,
+        "win_rate": 0.5454545454545454,
+        "mdd": -0.11399749558172434
+      },
+      {
+        "fold": 6,
+        "trades": 24,
+        "expectancy": 0.013452988194154825,
+        "win_rate": 0.5416666666666666,
+        "mdd": -0.09544116726550822
+      }
+    ],
+    "positive_folds": 5,
+    "worst_fold_mdd": -0.20753067786301782,
+    "crit_beats_index": false,
+    "crit_folds": true,
+    "crit_mdd": true,
+    "pass": false
+  },
+  "tests": {
+    "S1_ic_significant": false,
+    "S2_excess_significant": false,
+    "S3_deflated_sharpe": false,
+    "C1_criterion1": false
+  },
+  "pass": false,
+  "diag_excess_vs_universe_daily_mean": -0.0002536166803681407,
+  "diag_excess_vs_universe_p_bootstrap": 0.9398120375924816
+}

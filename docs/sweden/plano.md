@@ -1,6 +1,6 @@
 # Plano — mercado sueco
 
-> **Estado em 31/out/2026**: v1 (swing) e v2 (rotação por momentum) avaliadas fora da amostra; ambas reprovadas no critério de retorno. Ver "Estratégia v2".
+> **Estado em 31/out/2026**: v1 (swing), v2 (rotação por momentum) e v3 (seleção ativa por previsão) avaliadas fora da amostra; as três reprovadas. Ver "Estratégia v3" e "Estratégia v2".
 
 Decisões tomadas em sessão de design em 30/out/2026. Termos em negrito seguem
 o glossário em `CONTEXT.md`; decisões difíceis de reverter estão em
@@ -83,6 +83,47 @@ antes de qualquer dinheiro real. O Brasil fica congelado como está.
 - **Corte de 80 features pela variância dos 3 primeiros anos**: antes usava o
   histórico inteiro, e um fold (histórico truncado) podia escolher features
   diferentes das do replay.
+
+## Estratégia v3 — seleção ativa por previsão (31/out/2026)
+
+Pedido: estratégia ativa como a v1, que antecipe altas e quedas, faça poucos
+trades e tenha relevância estatística. Desenho (`selective_se.py`, ADR 0007):
+previsão semanal do retorno de cada ação nas próximas 2–4 semanas contra o
+universo; entrada só no topo das previsões, permanência mínima de H pregões,
+saída quando a previsão cai abaixo da mediana; filtro opcional de queda do
+mercado (long-only).
+
+**Protocolo**: sem histórico limpo restante, desenvolvimento só em 2010–2019
+(40 variações, `reports/se_v3/dev_grid.csv`); especificação e 4 testes
+congelados em `data/strategy_se_v3.json` (commit `6a6a7bb`); uma rodada no
+holdout 2020-01 a 2026-10.
+
+Desenvolvimento: os modelos ajustados (ridge, LightGBM) não passaram no teste
+de previsão; composições de sinais da literatura com sinais fixos passaram
+(t 3,2–3,7). A escolhida pela regra foi `combo5-H20-q3` (reversão de 1 semana
+e de 1 mês, momentum 12-1, volatilidade baixa, giro sem picos; ~47 trades/ano).
+
+| Holdout 2020–2026 | Resultado | Exigido | |
+|---|---:|---:|---|
+| S1 previsão (IC semanal) | 0,004, t = 0,35 | t ≥ 2 | não passa |
+| S2 excesso sobre o índice | p = 0,88 | p < 0,05 | não passa |
+| S3 Deflated Sharpe | 0,00 | > 0,95 | não passa |
+| C1 critério 1 (2023–2026) | +34,2% vs +63,6%; MDD −20,8% vs −21,3%; 5/6 folds | os 3 | não passa |
+
+CAGR no holdout: 4,8% contra 10,7% do índice e 12,0% do universo com peso
+igual. **O sinal sumiu fora da amostra**: a correlação, positiva em todos os
+10 anos do desenvolvimento, oscilou em torno de zero em 2020–2026 (50% das
+semanas positivas). Explicações compatíveis: viés de sobrevivência inflando a
+reversão no passado (as empresas que caíram e sumiram não estão no universo) e
+o enfraquecimento documentado da reversão de curto prazo.
+
+**Conclusão das três tentativas**: com preço e volume diários de ~120 large
+caps suecas e custos de varejo (0,70% ida e volta), não há evidência de uma
+vantagem ativa que sobreviva fora da amostra. Todo o histórico de 2010 a 2026
+já foi usado para desenvolver ou julgar v1–v3; uma nova estratégia precisa
+de **dados novos** (paper trading, o futuro) ou de **informação nova** que o
+preço ainda não contém (por exemplo, os registros públicos da
+Finansinspektionen de negociação de insiders e de posições vendidas).
 
 ## Estratégia v2 — rotação mensal por momentum (31/out/2026)
 
