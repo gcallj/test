@@ -138,8 +138,8 @@ Dá para vender e comprar a classe certa sem custo nem imposto dentro da ISK.
   30.000 SEK não há imposto algum. Acima disso, a taxa fica perto de 1% ao ano
   sobre o excesso. Confira as regras do ano no Skatteverket.
 - **O risco real é o preço do dia.** Se precisar vender logo depois de uma
-  queda da bolsa, você realiza a perda. O índice sueco já caiu 33% de pico a
-  vale neste período de dados (2020) e o MDD recente foi −21% (2023–2026).
+  queda da bolsa, você realiza a perda. Desde 2013, o índice sueco chegou a
+  cair 33% do pico ao fundo; em 2023–2026 a maior queda foi de 21%.
   Ele costuma levar de 1 a 3 anos para se recuperar. Por isso:
   - deixe uma reserva de emergência (3–6 meses de gastos) fora da bolsa, numa
     conta poupança ou no Nordea Obligationsfond korta Placeringar;
