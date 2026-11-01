@@ -1,5 +1,7 @@
 # Plano — mercado sueco
 
+> **Decisão em 1/nov/2026 (ADR 0012)**: investir num fundo de índice sueco amplo; ver `docs/sweden/conclusao.md`.
+>
 > **Estado em 31/out/2026**: v1 (swing), v2 (rotação por momentum), v3 (seleção ativa por previsão), v4 (eventos de informação pública: insiders, posições vendidas, tom dos comunicados, balanços) v5 (revisões de analistas) v6 (swing derivado da v1 com CMA-ES e entradas novas) e v7 (calendário: Halloween e mês do dividendo) avaliadas; as sete reprovadas. Ver "Estratégia v7", "Estratégia v6", "Estratégia v5", "Estratégia v4", "Estratégia v3" e "Estratégia v2".
 
 Decisões tomadas em sessão de design em 30/out/2026. Termos em negrito seguem

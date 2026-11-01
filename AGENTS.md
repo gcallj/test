@@ -3,6 +3,10 @@
 This branch runs the system on Nasdaq Stockholm. `main` holds the frozen
 Brazilian (B3) version; do not port changes between them.
 
+**Decision (ADR 0012): the owner invests in a broad Swedish index fund; active
+strategy development is closed.** Findings, lessons and how to invest are in
+`docs/sweden/conclusao.md` — read it first.
+
 Seven Swedish strategies have been built and judged out of sample, and all
 seven failed:
 - v1, swing GA (`ga_run*.py`);
