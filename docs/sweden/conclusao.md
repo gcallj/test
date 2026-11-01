@@ -74,5 +74,7 @@ Detalhes em `docs/sweden/possibilidades_v5.md` e nos relatórios
    Länsförsäkringar Global Indexnära) ao lado do sueco reduz o risco de um
    único país.
 
+Fundos da Nordea (custo, retorno, classe que reinveste dividendos, resgate): `docs/sweden/fundos_nordea.md`.
+
 Isto é uma conclusão de pesquisa sobre dados históricos, não aconselhamento
 financeiro personalizado.

@@ -5,7 +5,9 @@ Brazilian (B3) version; do not port changes between them.
 
 **Decision (ADR 0012): the owner invests in a broad Swedish index fund; active
 strategy development is closed.** Findings, lessons and how to invest are in
-`docs/sweden/conclusao.md` — read it first.
+`docs/sweden/conclusao.md` — read it first. Nordea fund comparison (fees,
+annualized returns, accumulating share classes, withdrawals):
+`docs/sweden/fundos_nordea.md`.
 
 Seven Swedish strategies have been built and judged out of sample, and all
 seven failed:
