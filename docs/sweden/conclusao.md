@@ -59,6 +59,12 @@ Detalhes em `docs/sweden/possibilidades_v5.md` e nos relatórios
      0,17% de custo total, só na Avanza.
    - **Länsförsäkringar Sverige Indexnära** — ~0,15%, inclui mid e small cap,
      disponível na Nordnet e na Avanza.
+   - **Se a conta for na Nordea**: **Nordea Sverige Passiv** (versão
+     acumulante, "icke-utd."), que segue o OMX Stockholm Benchmark Cap
+     (~0,19–0,25% ao ano; a Nordea cortou as taxas dos indexnära para 0,19%
+     em 2025, confirme no factsheet). Para diversificar: **Nordea Global
+     Passiv** (~0,19%). Evite os fundos ativos da Nordea (1–1,5% ao ano): a
+     diferença de taxa acumulada em décadas é grande.
 3. **Compra**: fundos não pagam courtage. Compre com o valor inteiro (30.000
    SEK) ou em parcelas mensais se preferir suavizar o ponto de entrada.
 4. **Manutenção**: nenhuma. Não troque de fundo por desempenho recente, não
